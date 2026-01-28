@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          # Se elimina la línea "cache: npm" porque causa error si no existe package-lock.json
 
       - name: Instalar dependencias
         run: npm install
