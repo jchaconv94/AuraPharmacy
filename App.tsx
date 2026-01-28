@@ -173,6 +173,9 @@ const AnalysisModule: React.FC = () => {
     }
   });
 
+  // --- NEW: LIFTED STATE FOR INPUT DATA ---
+  const [inputData, setInputData] = useState<MedicationInput[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -234,6 +237,7 @@ const AnalysisModule: React.FC = () => {
     setQuickFilter('ALL');
     setAdditionalItems([]);
     setShowSuccessModal(false);
+    setInputData([]); // Clear input data on reset
   }, []);
 
   // UPDATED HANDLER: Now accepts CPA Mode
@@ -421,6 +425,8 @@ const AnalysisModule: React.FC = () => {
                 isAnalyzing={loading} 
                 onReset={handleReset} 
                 hasAnalyzedData={!!result}
+                currentItems={inputData}
+                onItemsChange={setInputData}
             />
         </div>
 

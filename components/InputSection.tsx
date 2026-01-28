@@ -9,6 +9,9 @@ interface InputSectionProps {
   onReset: () => void;
   isAnalyzing: boolean;
   hasAnalyzedData: boolean; // Prop to know if there is active data
+  // PROPS FOR LIFTED STATE
+  currentItems: MedicationInput[];
+  onItemsChange: (items: MedicationInput[]) => void;
 }
 
 // Sample data with spikes for demonstration
@@ -48,8 +51,18 @@ const SAMPLE_DATA: MedicationInput[] = [
   }
 ];
 
-export const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, onReset, isAnalyzing, hasAnalyzedData }) => {
-  const [items, setItems] = useState<MedicationInput[]>([]);
+export const InputSection: React.FC<InputSectionProps> = ({ 
+    onAnalyze, 
+    onReset, 
+    isAnalyzing, 
+    hasAnalyzedData,
+    currentItems,
+    onItemsChange
+}) => {
+  // Use Props instead of Local State
+  const items = currentItems;
+  const setItems = onItemsChange;
+
   const [tempItems, setTempItems] = useState<MedicationInput[]>([]); // Store items temporarily while asking for date
   
   // Modal State
@@ -69,7 +82,7 @@ export const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, onReset, 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processData = (parsedItems: MedicationInput[]) => {
-      onReset(); // Clear previous analysis when new data is processed
+      onReset(); // Clear previous analysis (and items via App.tsx logic) when new data is processed
       setTempItems(parsedItems);
       setIsDateModalOpen(true); // Open modal immediately after parsing
   };
@@ -198,8 +211,8 @@ export const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, onReset, 
   };
 
   const confirmClearAll = () => {
-      setItems([]);
-      onReset(); // This clears the Analysis Result in App.tsx
+      setItems([]); // Clear input items
+      onReset(); // Clear analysis result
       setShowClearWarning(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
