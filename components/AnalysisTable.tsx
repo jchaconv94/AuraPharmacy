@@ -28,7 +28,7 @@ interface AnalysisTableProps {
   medications: AnalyzedMedication[]; // The FILTERED list to display
   allMedications: AnalyzedMedication[]; // The FULL list for generating filter options
   referenceDate?: string;
-  onMedicationUpdate: (id: string, quantity: number) => void;
+  onMedicationUpdate: (id: string, quantity: number, mode?: 'ADJUSTED' | 'SIMPLE') => void;
   
   // Lifted State Props
   searchTerm: string;
@@ -63,6 +63,32 @@ interface AnalysisTableProps {
 
 // Columns that can be filtered
 type FilterKey = 'ff' | 'medtip' | 'medpet' | 'medest' | 'status' | 'currentStock' | 'cpm' | 'monthsOfProvision' | 'anomalyDetails' | 'quantityToOrder' | 'isSporadic';
+
+// --- HELPER: Recalculate Status Dynamically ---
+const calculateDynamicMetrics = (item: AnalyzedMedication) => {
+    const activeCpm = item.selectedCpaMode === 'SIMPLE' ? item.rawCpm : item.cpm;
+    
+    // Calculate Months
+    const activeMonths = activeCpm > 0 
+        ? item.currentStock / activeCpm 
+        : (item.currentStock > 0 ? Infinity : 0);
+
+    // Calculate Status
+    let activeStatus = StockStatus.NORMOSTOCK;
+    if (item.currentStock === 0) {
+        activeStatus = StockStatus.DESABASTECIDO;
+    } else if (activeCpm === 0 && item.currentStock > 0) {
+        activeStatus = StockStatus.SIN_ROTACION;
+    } else if (activeMonths > 6) {
+        activeStatus = StockStatus.SOBRESTOCK;
+    } else if (activeMonths >= 2 && activeMonths <= 6) {
+        activeStatus = StockStatus.NORMOSTOCK;
+    } else {
+        activeStatus = StockStatus.SUBSTOCK;
+    }
+
+    return { activeCpm, activeMonths, activeStatus };
+};
 
 export const AnalysisTable: React.FC<AnalysisTableProps> = ({ 
   medications, 
@@ -210,7 +236,9 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
 
   const handleExportExcel = () => {
     const exportData = filteredItems.map(m => {
+      const { activeCpm, activeMonths, activeStatus } = calculateDynamicMetrics(m);
       const totalConsumption = m.originalHistory ? m.originalHistory.reduce((a, b) => a + b, 0) : 0;
+      
       const row: any = {
         CODIGO: m.id,
         MEDICAMENTO: m.name,
@@ -227,16 +255,19 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
       row.PRECIO_UNIT = m.unitPrice;
       row.STOCK_ACTUAL = m.currentStock;
       row.SUMA_CONSUMO = totalConsumption;
-      row.CPA_AJUSTADO = m.cpm; 
-      row.CPM_SIMPLE = m.rawCpm;
+      
+      // Export Dynamic Values
+      row.CPA_UTILIZADO = activeCpm;
+      row.MESES_DISPONIBLES = isFinite(activeMonths) ? activeMonths : "Infinito";
+      row.ESTADO_CALCULADO = activeStatus;
+
       row.ES_BAJA_ROTACION = m.isSporadic ? "SI" : "NO";
       row.TIENE_PICOS = m.hasSpikes ? "SI" : "NO";
-      row.MESES_DISPONIBLES = isFinite(m.monthsOfProvision) ? m.monthsOfProvision : "Infinito";
-      row.ESTADO_IPRESS = m.status;
       row.RIESGO_VENC = m.expirationRisk;
       row.REQUERIMIENTO = m.quantityToOrder;
       row.INVERSION_EST = m.estimatedInvestment;
       row.DETALLE_AJUSTE = m.anomalyDetails || "-";
+      row.MODO_CPA_SELECCIONADO = m.selectedCpaMode || "AUTO";
       row.REVISADO = reviewedIds.has(m.id) ? "SI" : "NO";
 
       return row;
@@ -250,8 +281,9 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
       {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, 
       {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8},
       {wch: 12}, {wch: 12}, {wch: 12}, {wch: 15}, 
+      {wch: 15}, {wch: 15}, // CPA & Meses
       {wch: 12}, {wch: 12}, {wch: 10},
-      {wch: 12}, {wch: 20}, {wch: 12}, {wch: 15}, {wch: 15}, {wch: 50}, {wch: 10}
+      {wch: 12}, {wch: 20}, {wch: 12}, {wch: 15}, {wch: 15}, {wch: 50}, {wch: 15}, {wch: 10}
     ];
     ws['!cols'] = wscols;
     writeFile(wb, `Requerimiento_IPRESS_CPA_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -357,10 +389,12 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   return (
     <>
     <div className={containerClasses}>
+      {/* ... (Header code remains unchanged) ... */}
       
       {/* FULL SCREEN DEDICATED HEADER */}
       {isFullScreen && (
           <div className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between shadow-md shrink-0 border-b border-gray-800">
+              {/* ... (Full screen header code) ... */}
               <div className="flex items-center gap-6 flex-1">
                   <div className="flex items-center gap-2">
                       <div className="bg-teal-500/20 p-2 rounded-lg">
@@ -371,8 +405,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                           <p className="text-xs text-gray-400 mt-0.5">{filteredItems.length} ítems listados</p>
                       </div>
                   </div>
-
-                  {/* Integrated Search Bar for Zen Mode */}
+                  {/* ... (Search and Filters) ... */}
                   <div className="relative max-w-md w-full ml-4 hidden md:block">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                       <input 
@@ -387,9 +420,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                         autoFocus
                       />
                   </div>
-
-                  {/* Main Filter Dropdown in Full Screen */}
-                  <div className="relative" ref={mainFilterRef}>
+                   {/* ... (Remaining Full Screen Header) ... */}
+                    <div className="relative" ref={mainFilterRef}>
                       <button 
                         onClick={() => setIsMainFilterOpen(!isMainFilterOpen)}
                         className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
@@ -441,9 +473,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                           </div>
                       )}
                   </div>
-
-                  {/* ADDITIONAL ITEMS BUTTON IN FULL SCREEN - NEW */}
-                  {onOpenAdditionalModal && (
+                  {/* ... (Additional Items Button) ... */}
+                   {onOpenAdditionalModal && (
                       <button 
                         onClick={onOpenAdditionalModal}
                         className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ml-2 ${
@@ -463,8 +494,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                       </button>
                   )}
               </div>
-
-              {/* Progress Bar Widget */}
+              {/* ... (Progress Bar) ... */}
               <div className="hidden lg:flex items-center gap-6 mr-6">
                   <div className="text-right">
                       <div className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">
@@ -510,7 +540,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           </div>
       )}
 
-      {/* STANDARD HEADER (Hidden in Full Screen) - RESPONSIVE FIX */}
+      {/* STANDARD HEADER (Hidden in Full Screen) */}
       {!isFullScreen && (
         <div className="px-4 py-4 border-b border-gray-200 bg-gray-50 flex flex-col gap-4">
             {/* Top Row: Title */}
@@ -526,7 +556,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
             {/* Bottom Row: Search & Actions */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 w-full">
                 
-                {/* Search Bar: Fixed width on Desktop (approx 384px) */}
+                {/* Search Bar */}
                 <div className="relative w-full lg:w-96">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-6 text-gray-400" />
                     <input 
@@ -541,9 +571,9 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     />
                 </div>
                 
-                {/* Buttons: Pushed to the right end */}
+                {/* Buttons */}
                 <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 shrink-0 lg:ml-auto">
-                     {/* ADDED: Manual Entry Button */}
+                     {/* Manual Entry Button */}
                     {onOpenAdditionalModal && (
                         <button 
                             onClick={onOpenAdditionalModal}
@@ -582,6 +612,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
         </div>
       )}
 
+      {/* TABLE */}
       <div className={`overflow-x-auto ${isFullScreen ? 'flex-1 overflow-y-auto bg-white p-4' : 'min-h-[400px]'}`}>
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50 relative z-10">
@@ -612,14 +643,16 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           <tbody className="bg-white divide-y divide-gray-200 relative z-0">
             {currentItems.length > 0 ? (
               currentItems.map((item) => {
-                const isOverstock = item.status === StockStatus.SOBRESTOCK;
-                const isNoRotation = item.status === StockStatus.SIN_ROTACION;
+                // CALCULATE DYNAMIC METRICS FOR DISPLAY
+                const { activeMonths, activeStatus } = calculateDynamicMetrics(item);
+
+                const isOverstock = activeStatus === StockStatus.SOBRESTOCK;
+                const isNoRotation = activeStatus === StockStatus.SIN_ROTACION;
+                // Use original status for review logic to ensure stability, or dynamic?
+                // Logic: Reviews should persist. Display relies on dynamic.
                 
-                // Needs Review if NOT Overstock AND NOT No Rotation
                 const needsReview = !isOverstock && !isNoRotation;
-                
                 const isReviewed = reviewedIds.has(item.id);
-                // Visual checked state only applies if it actively needs review
                 const showReviewedState = isReviewed && needsReview;
                 
                 return (
@@ -642,12 +675,20 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                                 Baja Rotación
                             </span>
                         )}
+                        {/* CPA Selection Indicator */}
+                        {item.selectedCpaMode === 'SIMPLE' && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200 whitespace-nowrap">
+                                MANUAL
+                            </span>
+                        )}
                     </div>
+                    {/* ... (Price) ... */}
                     <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
                        <span>S/ {(item.unitPrice || 0).toFixed(2)}</span>
                     </div>
                   </td>
 
+                  {/* ... (FF, Type, Pet, Est) ... */}
                   <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-xs text-gray-600">
                     {item.ff ? <span className="bg-gray-100 px-2 py-1 rounded border border-gray-200">{item.ff}</span> : '-'}
                   </td>
@@ -665,30 +706,45 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     <span className="text-base font-bold">{(item.currentStock || 0).toLocaleString()}</span>
                   </td>
                   
+                  {/* CPA Column */}
                   <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-right">
                     <div className="flex flex-col items-end">
-                        <span className="text-base font-bold text-teal-700 font-mono">
-                            {(item.cpm || 0).toFixed(1)}
-                        </span>
-                        {item.hasSpikes && (
-                             <span className="text-xs text-gray-400 line-through decoration-red-400" title={`Promedio Simple (con picos): ${(item.rawCpm || 0).toFixed(1)}`}>
-                                {(item.rawCpm || 0).toFixed(1)}
-                             </span>
+                        {/* Logic: Show the Active CPA bigger */}
+                        {item.selectedCpaMode === 'SIMPLE' ? (
+                             <>
+                                <span className="text-base font-bold text-blue-700 font-mono">
+                                    {(item.rawCpm || 0).toFixed(1)}
+                                </span>
+                                <span className="text-xs text-gray-400" title="CPA Ajustado (Automático)">
+                                    Ajust: {(item.cpm || 0).toFixed(1)}
+                                </span>
+                             </>
+                        ) : (
+                             <>
+                                <span className="text-base font-bold text-teal-700 font-mono">
+                                    {(item.cpm || 0).toFixed(1)}
+                                </span>
+                                {item.hasSpikes && (
+                                     <span className="text-xs text-gray-400 line-through decoration-red-400" title={`Promedio Simple (con picos): ${(item.rawCpm || 0).toFixed(1)}`}>
+                                        {(item.rawCpm || 0).toFixed(1)}
+                                     </span>
+                                )}
+                             </>
                         )}
                     </div>
                   </td>
 
                   <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-right font-mono">
                     <span className={`text-base font-bold ${
-                        item.monthsOfProvision < 2 ? 'text-amber-600' : 
-                        item.monthsOfProvision > 12 ? 'text-blue-600' : 'text-gray-600'
+                        activeMonths < 2 ? 'text-amber-600' : 
+                        activeMonths > 12 ? 'text-blue-600' : 'text-gray-600'
                     }`}>
-                        {isFinite(item.monthsOfProvision || 0) ? (item.monthsOfProvision || 0).toFixed(1) : '∞'}
+                        {isFinite(activeMonths || 0) ? (activeMonths || 0).toFixed(1) : '∞'}
                     </span>
                   </td>
 
                   <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-center">
-                    {getStatusBadge(item.status)}
+                    {getStatusBadge(activeStatus)}
                   </td>
                   
                   <td className="px-2 sm:px-3 py-3 whitespace-nowrap">
@@ -761,60 +817,62 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
         </table>
       </div>
 
+      {/* Pagination (Unchanged) */}
       {totalPages > 1 && (
         <div className={`${isFullScreen ? 'bg-white border-t border-gray-200 px-6 py-4' : 'bg-gray-50 px-4 sm:px-6 py-3 border-t border-gray-200'} flex items-center justify-between shrink-0`}>
-          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-700">
-                Mostrando <span className="font-medium">{startIndex + 1}</span> a <span className="font-medium">{Math.min(startIndex + itemsPerPage, filteredItems.length)}</span> de <span className="font-medium">{filteredItems.length}</span>
-              </p>
-            </div>
-            <div>
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+             {/* ... (Pagination Code) ... */}
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Mostrando <span className="font-medium">{startIndex + 1}</span> a <span className="font-medium">{Math.min(startIndex + itemsPerPage, filteredItems.length)}</span> de <span className="font-medium">{filteredItems.length}</span>
+                  </p>
+                </div>
+                <div>
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${currentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      <span className="sr-only">Anterior</span>
+                      <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                    
+                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                      {currentPage} / {totalPages}
+                    </span>
+
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                      <span className="sr-only">Siguiente</span>
+                      <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  </nav>
+                </div>
+              </div>
+              {/* Mobile Pagination */}
+              <div className="flex sm:hidden justify-between w-full items-center">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${currentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}`}
+                  className={`relative inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${currentPage === 1 ? 'opacity-50' : ''}`}
                 >
-                  <span className="sr-only">Anterior</span>
-                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                  Anterior
                 </button>
-                
-                <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                <span className="text-xs text-gray-700 font-medium">
                   {currentPage} / {totalPages}
                 </span>
-
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}`}
+                  className={`ml-3 relative inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${currentPage === totalPages ? 'opacity-50' : ''}`}
                 >
-                  <span className="sr-only">Siguiente</span>
-                  <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                  Siguiente
                 </button>
-              </nav>
-            </div>
-          </div>
-          {/* Mobile Pagination */}
-          <div className="flex sm:hidden justify-between w-full items-center">
-            <button
-               onClick={() => handlePageChange(currentPage - 1)}
-               disabled={currentPage === 1}
-               className={`relative inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${currentPage === 1 ? 'opacity-50' : ''}`}
-            >
-              Anterior
-            </button>
-            <span className="text-xs text-gray-700 font-medium">
-               {currentPage} / {totalPages}
-            </span>
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className={`ml-3 relative inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 ${currentPage === totalPages ? 'opacity-50' : ''}`}
-            >
-              Siguiente
-            </button>
-          </div>
+              </div>
         </div>
       )}
     </div>

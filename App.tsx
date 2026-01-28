@@ -236,7 +236,8 @@ const AnalysisModule: React.FC = () => {
     setShowSuccessModal(false);
   }, []);
 
-  const handleMedicationUpdate = (id: string, newQuantity: number) => {
+  // UPDATED HANDLER: Now accepts CPA Mode
+  const handleMedicationUpdate = (id: string, newQuantity: number, mode?: 'ADJUSTED' | 'SIMPLE') => {
     if (!result) return;
     setResult((prev) => {
       if (!prev) return null;
@@ -246,6 +247,7 @@ const AnalysisModule: React.FC = () => {
               ...m,
               quantityToOrder: newQuantity,
               estimatedInvestment: newQuantity * m.unitPrice,
+              selectedCpaMode: mode || m.selectedCpaMode // Save the mode
             }
           : m
       );

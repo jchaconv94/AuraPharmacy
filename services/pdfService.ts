@@ -28,10 +28,15 @@ const COLORS = {
   BG_RED_LIGHT: [254, 242, 242] as [number, number, number], 
   BG_GREEN_LIGHT: [236, 253, 245] as [number, number, number], 
   
-  // Table
+  // Table Highlights
   YELLOW_HIGHLIGHT: [255, 215, 0] as [number, number, number],
   BG_GREEN_CELL: [220, 252, 231] as [number, number, number], // Green-100
   TEXT_GREEN_DARK: [20, 83, 45] as [number, number, number], // Green-900
+  
+  // CPA Active Backgrounds
+  BG_ACTIVE_SIMPLE: [239, 246, 255] as [number, number, number], // Blue-50
+  BG_ACTIVE_ADJUSTED: [240, 253, 250] as [number, number, number], // Teal-50
+  TEXT_INACTIVE: [156, 163, 175] as [number, number, number], // Gray-400
 };
 
 const formatCurrency = (val: number) => `S/ ${val.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -49,6 +54,32 @@ const getMonthHeaders = (refDate?: string) => {
         headers.push(`${mName}-${yShort}`);
     }
     return headers;
+};
+
+// --- HELPER: Replicate Logic for PDF Dynamic Calculation ---
+const calculateDynamicMetricsPDF = (item: AnalyzedMedication) => {
+    const activeCpm = item.selectedCpaMode === 'SIMPLE' ? item.rawCpm : item.cpm;
+    
+    // Calculate Months
+    const activeMonths = activeCpm > 0 
+        ? item.currentStock / activeCpm 
+        : (item.currentStock > 0 ? Infinity : 0);
+
+    // Calculate Status
+    let activeStatus = StockStatus.NORMOSTOCK;
+    if (item.currentStock === 0) {
+        activeStatus = StockStatus.DESABASTECIDO;
+    } else if (activeCpm === 0 && item.currentStock > 0) {
+        activeStatus = StockStatus.SIN_ROTACION;
+    } else if (activeMonths > 6) {
+        activeStatus = StockStatus.SOBRESTOCK;
+    } else if (activeMonths >= 2 && activeMonths <= 6) {
+        activeStatus = StockStatus.NORMOSTOCK;
+    } else {
+        activeStatus = StockStatus.SUBSTOCK;
+    }
+
+    return { activeCpm, activeMonths, activeStatus };
 };
 
 export const generateFullReportPDF = (
@@ -337,6 +368,9 @@ export const generateFullReportPDF = (
       const itemsToRender = filteredTableItems || result.medications;
 
       const tableData = itemsToRender.map(item => {
+        // --- KEY CHANGE: Use Dynamic Metrics for PDF Report ---
+        const { activeMonths, activeStatus } = calculateDynamicMetricsPDF(item);
+        
         const row: any = {
             id: item.id,
             name: item.name,
@@ -345,12 +379,14 @@ export const generateFullReportPDF = (
             stock: item.currentStock.toLocaleString(),
             rawCpm: item.rawCpm.toFixed(1),
             cpm: item.cpm.toFixed(1),
-            monthsProvision: isFinite(item.monthsOfProvision) ? item.monthsOfProvision.toFixed(1) : '∞',
-            status: item.status,
+            // Use active calculated values
+            monthsProvision: isFinite(activeMonths) ? activeMonths.toFixed(1) : '∞',
+            status: activeStatus,
             req: item.quantityToOrder > 0 ? item.quantityToOrder : '-',
             _spikeThreshold: item.spikeThreshold,
             _history: item.originalHistory,
-            _statusEnum: item.status
+            _statusEnum: activeStatus, // Use active status for coloring
+            _selectedMode: item.selectedCpaMode || 'ADJUSTED' // Pass mode to parse cell
         };
         item.originalHistory.forEach((val, idx) => { row[`m${idx}`] = val; });
         return row;
@@ -376,8 +412,8 @@ export const generateFullReportPDF = (
             ff: { cellWidth: 12 },
             type: { cellWidth: 8 },
             stock: { cellWidth: 10, fontStyle: 'bold' },
-            rawCpm: { cellWidth: 10, textColor: 100 },
-            cpm: { cellWidth: 10, fontStyle: 'bold', textColor: COLORS.TEAL_DARK },
+            rawCpm: { cellWidth: 10 },
+            cpm: { cellWidth: 10 },
             monthsProvision: { cellWidth: 10, fontStyle: 'bold' },
             status: { cellWidth: 18, fontSize: 5 },
             req: { cellWidth: 10, fontStyle: 'bold', textColor: COLORS.PIE_BLUE }
@@ -386,6 +422,7 @@ export const generateFullReportPDF = (
             if (data.section !== 'body') return;
             const row = data.row.raw;
             
+            // Highlight Months
             if (data.column.dataKey && String(data.column.dataKey).startsWith('m')) {
                 const idx = parseInt(String(data.column.dataKey).substring(1));
                 const val = row._history ? row._history[idx] : 0;
@@ -402,6 +439,29 @@ export const generateFullReportPDF = (
                     if (val === 0) data.cell.styles.textColor = [200, 200, 200];
                 }
             }
+
+            // Highlight Active CPA Column
+            if (data.column.dataKey === 'rawCpm') { // CPA Simple
+                if (row._selectedMode === 'SIMPLE') {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.textColor = COLORS.PIE_BLUE; // Active Color
+                    data.cell.styles.fillColor = COLORS.BG_ACTIVE_SIMPLE;
+                } else {
+                    data.cell.styles.textColor = COLORS.TEXT_INACTIVE;
+                }
+            }
+
+            if (data.column.dataKey === 'cpm') { // CPA Adjusted
+                if (row._selectedMode === 'ADJUSTED') {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.textColor = COLORS.TEAL_DARK; // Active Color
+                    data.cell.styles.fillColor = COLORS.BG_ACTIVE_ADJUSTED;
+                } else {
+                    data.cell.styles.textColor = COLORS.TEXT_INACTIVE;
+                }
+            }
+
+            // Color Status
             if (data.column.dataKey === 'status') {
                  if (row._statusEnum === StockStatus.DESABASTECIDO) {
                      data.cell.styles.fillColor = [254, 226, 226]; 

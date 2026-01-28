@@ -2,7 +2,7 @@
 /**
  * AURA PHARMA BACKEND - GOOGLE APPS SCRIPT
  * 
- * v2.2 - System Config Support, User Management & Session Refresh
+ * v2.3 - Dynamic API URL Support
  */
 
 // ----------------------------------------------------------------------------
@@ -42,7 +42,7 @@ function handleRequest(e) {
       case 'login':
         result = handleLogin(ss, params.username, params.password);
         break;
-      case 'refreshUser': // NUEVO: Actualizar datos sin password (para F5/Reload)
+      case 'refreshUser': 
         result = handleRefreshUser(ss, params.username);
         break;
       case 'getUsers':
@@ -321,7 +321,10 @@ function setupDatabase() {
   createTableIfNotExists(ss, 'USERS', ['Username', 'Password', 'Role', 'PersonnelID', 'Active'], [['admin', 'admin123', 'ADMIN', 'P001', true]]);
   
   // Tabla CONFIG (NUEVA) - Aquí se guardan tus parámetros globales
-  createTableIfNotExists(ss, 'CONFIG', ['Key', 'Value'], [['verificationDelaySeconds', 5]]);
+  createTableIfNotExists(ss, 'CONFIG', ['Key', 'Value'], [
+      ['verificationDelaySeconds', 5],
+      ['apiUrl', ''] // Campo vacío por defecto
+  ]);
   
   Logger.log("Base de datos actualizada correctamente.");
 }

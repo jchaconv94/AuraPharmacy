@@ -49,6 +49,9 @@ export interface AnalyzedMedication {
   // Low Rotation Flag
   isSporadic: boolean; // NEW: Indica si es de baja rotación para mostrar etiqueta visual
 
+  // User Selection Memory
+  selectedCpaMode?: 'ADJUSTED' | 'SIMPLE'; // Persist user choice
+
   // Historical context for export
   originalHistory: number[];
 }
@@ -118,6 +121,7 @@ export interface User {
 
 export interface SystemConfig {
   verificationDelaySeconds: number; // Tiempo de espera para el botón de validar
+  apiUrl?: string; // NUEVO: URL dinámica del backend
 }
 
 export interface AuthState {

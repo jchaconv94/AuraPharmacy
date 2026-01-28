@@ -71,6 +71,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
   }, []);
 
+  // --- PRE-FETCHING / CACHE WARMING ---
+  // Cuando el usuario es ADMIN, descargamos la lista de usuarios en segundo plano.
+  // Así, cuando haga clic en "Gestión de Usuarios", los datos ya estarán en memoria.
+  useEffect(() => {
+      if (state.isAuthenticated && state.user?.role === 'ADMIN') {
+          // No usamos 'await' para no bloquear la UI. Dejamos que corra en background.
+          api.getUsers().catch(err => console.warn("Background fetch failed", err));
+      }
+  }, [state.isAuthenticated, state.user]);
+
   const login = async (u: string, p: string) => {
     setState(prev => ({ ...prev, isLoading: true }));
     const result = await api.login(u, p);

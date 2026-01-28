@@ -1,8 +1,17 @@
 
 import { User, UserRole, Personnel, HealthFacility, RoleConfig, SystemConfig } from "../types";
 
-// URL DEL BACKEND (Google Apps Script)
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzxolzhHYg1U2geauXStygZ5ITD8zkOY17MM_4Ylzy6yPvsaXFWCdM4IWTjJUelEee8/exec"; 
+// URL DE ARRANQUE (BOOTSTRAP)
+// Esta URL se usa SOLO para la primera conexión y pedir la configuración.
+// Si cambias el script, puedes actualizar la URL nueva en el Panel de Admin (BD) y la app la usará.
+const BOOTSTRAP_URL = "https://script.google.com/macros/s/AKfycbzxolzhHYg1U2geauXStygZ5ITD8zkOY17MM_4Ylzy6yPvsaXFWCdM4IWTjJUelEee8/exec"; 
+
+// Variable mutable para almacenar la URL activa
+let activeApiUrl = BOOTSTRAP_URL;
+
+// --- CACHÉ EN MEMORIA ---
+// Esto evita llamadas repetitivas a Google Apps Script
+let usersCache: any[] | null = null;
 
 // --- MOCK DATA (Respaldo en caso de error de conexión) ---
 const MOCK_DB = {
@@ -24,17 +33,18 @@ const MOCK_DB = {
     ],
     // Default System Config (Solo si falla la red totalmente)
     defaultConfig: {
-        verificationDelaySeconds: 5
+        verificationDelaySeconds: 5,
+        apiUrl: BOOTSTRAP_URL
     } as SystemConfig
 };
 
 // --- HELPER PARA CONEXIÓN A GOOGLE APPS SCRIPT ---
 const sendRequest = async (action: string, payload: any = {}) => {
-    if (!GOOGLE_SCRIPT_URL) throw new Error("URL de Backend no configurada");
-    
+    // Usamos la URL activa (puede ser la de bootstrap o la que vino de la BD)
+    const targetUrl = activeApiUrl || BOOTSTRAP_URL;
+
     // Usamos POST con cuerpo JSON string.
-    // IMPORTANTE: 'Content-Type': 'text/plain' evita el preflight OPTIONS CORS de Google Apps Script
-    const response = await fetch(GOOGLE_SCRIPT_URL, {
+    const response = await fetch(targetUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'text/plain;charset=utf-8',
@@ -53,14 +63,12 @@ const sendRequest = async (action: string, payload: any = {}) => {
 export const api = {
     
     login: async (username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> => {
-        // 1. INTENTO DE CONEXIÓN REAL (CLOUD)
         try {
             const result = await sendRequest('login', { username, password });
             return result;
         } catch (e) {
             console.warn("Error conectando al backend, intentando modo offline...", e);
             
-            // 2. FALLBACK A MOCK (OFFLINE)
             const authUser = MOCK_DB.users.find(u => u.username === username && u.password === password);
             if (authUser) {
                 const personnel = MOCK_DB.personnel.find(p => p.id === authUser.personnelId);
@@ -85,14 +93,12 @@ export const api = {
         }
     },
 
-    // NUEVO MÉTODO PARA REFRESCAR DATOS AL RECARGAR PÁGINA
     refreshSession: async (username: string): Promise<{ success: boolean; user?: User; message?: string }> => {
         try {
             const result = await sendRequest('refreshUser', { username });
             return result;
         } catch (e) {
             console.warn("Error refrescando sesión, usando caché local...", e);
-            // Si falla (offline), retornamos falso para que el AuthContext use lo que tiene en localStorage
             
             // MOCK Fallback for refresh
             const authUser = MOCK_DB.users.find(u => u.username === username);
@@ -120,6 +126,8 @@ export const api = {
 
     updateProfile: async (personnelId: string, data: any) => {
         try {
+            // Invalidamos caché para forzar recarga la próxima vez si editamos un usuario
+            usersCache = null; 
             return await sendRequest('updateProfile', { personnelId, data });
         } catch (e) {
             console.error(e);
@@ -127,14 +135,21 @@ export const api = {
         }
     },
 
-    getUsers: async () => {
+    getUsers: async (forceRefresh = false) => {
+        // 1. Si tenemos datos en memoria y no forzamos refresco, retornamos INSTANTÁNEAMENTE
+        if (usersCache && !forceRefresh) {
+            return usersCache;
+        }
+
         try {
             const result = await sendRequest('getUsers');
-            if (result.success) return result.data;
+            if (result.success) {
+                usersCache = result.data; // Guardamos en memoria
+                return result.data;
+            }
             return [];
         } catch (e) {
             console.error(e);
-             // Fallback Mock
              return MOCK_DB.users.map(u => ({
                 ...u,
                 personnel: MOCK_DB.personnel.find(p => p.id === u.personnelId)
@@ -146,33 +161,41 @@ export const api = {
         return MOCK_DB.roles as RoleConfig[];
     },
 
-    // --- SYSTEM CONFIG METHODS (GLOBAL / CLOUD ONLY) ---
+    // --- SYSTEM CONFIG METHODS ---
     
     getSystemConfig: async (): Promise<SystemConfig> => {
         try {
-            // SOLICITUD REAL AL SERVIDOR
-            // Esto asegura que obtengamos la configuración que el Admin definió para TODOS.
             const result = await sendRequest('getSystemConfig');
             
             if (result.success && result.data) {
-                // Convertir valores string a número si es necesario (Google Sheets a veces devuelve strings)
-                return {
-                    verificationDelaySeconds: Number(result.data.verificationDelaySeconds) || 5
+                const config = {
+                    verificationDelaySeconds: Number(result.data.verificationDelaySeconds) || 5,
+                    apiUrl: result.data.apiUrl || BOOTSTRAP_URL
                 };
+
+                // CRITICAL: Update the active URL immediately if one is found in the DB
+                if (config.apiUrl && config.apiUrl.startsWith('http')) {
+                    activeApiUrl = config.apiUrl;
+                    console.log("Aura API URL updated from Remote Config:", activeApiUrl);
+                }
+
+                return config;
             }
             
             return MOCK_DB.defaultConfig;
         } catch (e) {
             console.error("Error obteniendo configuración global:", e);
-            // Solo si no hay internet usamos el default local para que la app no rompa
             return MOCK_DB.defaultConfig;
         }
     },
 
     updateSystemConfig: async (newConfig: SystemConfig): Promise<{ success: boolean; message?: string }> => {
         try {
-             // GUARDADO REAL EN EL SERVIDOR
-             // Al guardar aquí, cualquier otro usuario que recargue la página obtendrá estos nuevos valores.
+             // Si el usuario está actualizando la URL, actualizamos la variable local inmediatamente también
+             if (newConfig.apiUrl && newConfig.apiUrl.startsWith('http')) {
+                 activeApiUrl = newConfig.apiUrl;
+             }
+
              const result = await sendRequest('updateSystemConfig', { config: newConfig });
              return result;
         } catch (e) {
