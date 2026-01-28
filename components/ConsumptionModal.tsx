@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, AlertTriangle, CheckCircle, Calculator, ArrowRight, Save, ShieldCheck, ChevronLeft, ChevronRight, FastForward, SkipForward } from 'lucide-react';
+import { X, AlertTriangle, CheckCircle, Calculator, ArrowRight, Save, ShieldCheck, ChevronLeft, ChevronRight, FastForward, SkipForward, Timer, Lock, Clock } from 'lucide-react';
 import { AnalyzedMedication, StockStatus } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ConsumptionModalProps {
   medication: AnalyzedMedication | null;
@@ -35,16 +36,51 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     prevItemId,
     nextItemId
 }) => {
+  const { systemConfig } = useAuth(); // Access global config
   const [reqQuantity, setReqQuantity] = useState<number>(0);
   const [initialQuantity, setInitialQuantity] = useState<number | null>(null);
+  
+  // Security Timer State
+  const [lockTimer, setLockTimer] = useState(0);
 
-  // Initialize state when medication opens
+  // Check if this item is eligible for review (Everything except SOBRESTOCK and SIN_ROTACION)
+  const needsReview = medication ? (
+      medication.status !== StockStatus.SOBRESTOCK && 
+      medication.status !== StockStatus.SIN_ROTACION
+  ) : false;
+
+  // Should we lock the UI? Only if it needs review and hasn't been reviewed yet.
+  const isLocked = lockTimer > 0 && needsReview && !isReviewed;
+
+  // Initialize state when medication opens or changes
   useEffect(() => {
     if (medication) {
         setReqQuantity(medication.quantityToOrder);
-        setInitialQuantity(medication.quantityToOrder); // Reset initial on ID change
+        setInitialQuantity(medication.quantityToOrder); 
+
+        // Start Countdown ONLY if it needs review and is not validated yet
+        if (needsReview && !isReviewed) {
+            // Use config value, default to 5 if undefined for some reason
+            const delay = systemConfig?.verificationDelaySeconds ?? 5;
+            setLockTimer(delay); 
+            
+            if (delay > 0) {
+                const timer = setInterval(() => {
+                    setLockTimer((prev) => {
+                        if (prev <= 1) {
+                            clearInterval(timer);
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+                return () => clearInterval(timer);
+            }
+        } else {
+            setLockTimer(0);
+        }
     }
-  }, [medication]);
+  }, [medication?.id, needsReview, isReviewed, systemConfig.verificationDelaySeconds]); // Dependency on ID triggers reset on navigation
 
   const handleQuantityChange = (val: number) => {
     setReqQuantity(val);
@@ -54,7 +90,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   };
 
   const handleConfirmAndNext = useCallback(() => {
-      if (!medication) return;
+      if (!medication || isLocked) return;
       
       // 1. Confirm current item
       onToggleReview(medication.id, true);
@@ -65,7 +101,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       } else {
           onClose();
       }
-  }, [medication, nextReviewId, onNavigate, onToggleReview, onClose]);
+  }, [medication, nextReviewId, onNavigate, onToggleReview, onClose, isLocked]);
 
   const handleUncheck = () => {
       if (medication) {
@@ -77,9 +113,12 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
           if (!isOpen || !medication) return;
+          
+          // BLOCK ALL SHORTCUTS IF LOCKED
+          if (isLocked) return;
 
           // Enter to Confirm & Next (only if it needs review)
-          if (e.key === 'Enter' && medication.quantityToOrder > 0) {
+          if (e.key === 'Enter' && needsReview) {
               e.preventDefault();
               handleConfirmAndNext();
           }
@@ -96,12 +135,10 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, medication, nextItemId, prevItemId, onNavigate, handleConfirmAndNext]);
+  }, [isOpen, medication, nextItemId, prevItemId, onNavigate, handleConfirmAndNext, needsReview, isLocked]);
 
 
   if (!isOpen || !medication) return null;
-
-  const needsReview = reqQuantity > 0;
 
   // Logic to generate dynamic headers
   const generateMonthLabels = (): string[] => {
@@ -150,6 +187,14 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
   const statusConfig = getStatusConfig(medication.status);
 
+  // Helper function to handle close (respecting lock)
+  const handleCloseAttempt = () => {
+      if (!isLocked) onClose();
+  };
+
+  // Max Delay Reference for progress bar calculation
+  const maxDelay = systemConfig?.verificationDelaySeconds || 5;
+
   // Use React Portal to render the modal at document.body level
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4 animate-in fade-in duration-200 overflow-y-auto">
@@ -167,6 +212,11 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 {medication.hasSpikes && (
                     <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded font-black whitespace-nowrap shadow-sm">
                     PICO ANORMAL DETECTADO
+                    </span>
+                )}
+                {medication.isSporadic && (
+                    <span className="bg-purple-200 text-purple-900 text-[10px] px-2 py-0.5 rounded font-black whitespace-nowrap shadow-sm flex items-center gap-1">
+                        <Timer className="h-3 w-3" /> BAJA ROTACIÓN
                     </span>
                 )}
                 {isReviewed && (
@@ -199,8 +249,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
             {onNavigate && (
                 <div className="flex bg-white/10 rounded-lg mr-2">
                     <button 
-                        onClick={() => prevItemId && onNavigate(prevItemId)}
-                        disabled={!prevItemId}
+                        onClick={() => prevItemId && !isLocked && onNavigate(prevItemId)}
+                        disabled={!prevItemId || isLocked}
                         className="p-2 text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent rounded-l-lg transition-colors"
                         title="Anterior (Flecha Izq)"
                     >
@@ -208,8 +258,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     </button>
                     <div className="w-px bg-white/20 my-2"></div>
                     <button 
-                        onClick={() => nextItemId && onNavigate(nextItemId)}
-                        disabled={!nextItemId}
+                        onClick={() => nextItemId && !isLocked && onNavigate(nextItemId)}
+                        disabled={!nextItemId || isLocked}
                         className="p-2 text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent rounded-r-lg transition-colors"
                         title="Siguiente (Flecha Der)"
                     >
@@ -218,8 +268,12 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 </div>
             )}
             
-            <button onClick={onClose} className="text-gray-400 hover:text-white hover:bg-white/10 transition-all p-2 rounded-full">
-                <X className="h-6 w-6" />
+            <button 
+                onClick={handleCloseAttempt} 
+                disabled={isLocked}
+                className={`transition-all p-2 rounded-full ${isLocked ? 'text-gray-600 opacity-50 cursor-not-allowed' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
+            >
+                {isLocked ? <Lock className="h-6 w-6" /> : <X className="h-6 w-6" />}
             </button>
           </div>
         </div>
@@ -354,20 +408,32 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
         <div className="bg-gray-50 p-4 border-t border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
             <div className="text-xs text-gray-500 hidden sm:block">
                 {needsReview ? (
-                   <span className="flex items-center gap-2">
-                       <span className="bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-300 font-mono">ENTER</span>
-                       <span>para confirmar y avanzar</span>
-                   </span>
+                   !isLocked ? (
+                       <span className="flex items-center gap-2">
+                           <span className="bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-300 font-mono">ENTER</span>
+                           <span>para confirmar y avanzar</span>
+                       </span>
+                   ) : (
+                       <span className="flex items-center gap-2 text-amber-600 font-medium">
+                           <Clock className="h-3.5 w-3.5" />
+                           <span>Por favor, revise los datos antes de validar.</span>
+                       </span>
+                   )
                 ) : (
-                   "Este ítem no requiere compra."
+                   "Este ítem no requiere validación (Sobrestock/Sin Rotación)."
                 )}
             </div>
 
             <div className="flex w-full sm:w-auto gap-3">
                 {/* Secondary Button for simple close */}
                 <button 
-                    onClick={onClose}
-                    className="flex-1 sm:flex-none px-4 py-3 sm:py-2 rounded-lg text-gray-700 bg-white border border-gray-300 font-medium text-sm hover:bg-gray-100 transition-all"
+                    onClick={handleCloseAttempt}
+                    disabled={isLocked}
+                    className={`flex-1 sm:flex-none px-4 py-3 sm:py-2 rounded-lg border font-medium text-sm transition-all ${
+                        isLocked 
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                        : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-100'
+                    }`}
                 >
                     Cancelar
                 </button>
@@ -385,13 +451,33 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                         </button>
                     ) : (
                         // If pending review, Primary Action is Confirm & Next (if applicable)
+                        // WITH LOCK LOGIC
                         <button 
                             onClick={handleConfirmAndNext}
-                            className="flex-1 sm:flex-none px-6 py-3 sm:py-2 rounded-lg text-white font-bold text-sm transition-all flex justify-center items-center gap-2 shadow-md bg-teal-600 hover:bg-teal-700 hover:scale-[1.02] active:scale-95"
+                            disabled={isLocked}
+                            className={`flex-1 sm:flex-none px-6 py-3 sm:py-2 rounded-lg font-bold text-sm transition-all flex justify-center items-center gap-2 shadow-md relative overflow-hidden ${
+                                isLocked 
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                : 'bg-teal-600 text-white hover:bg-teal-700 hover:scale-[1.02] active:scale-95'
+                            }`}
                         >
-                            <ShieldCheck className="h-4 w-4" />
-                            {nextReviewId ? "VALIDAR Y SIGUIENTE" : "VALIDAR Y FINALIZAR"}
-                            {nextReviewId && <SkipForward className="h-4 w-4 ml-1 opacity-70" />}
+                            {isLocked ? (
+                                <>
+                                    <Clock className="h-4 w-4 animate-pulse" />
+                                    <span>ESPERE ({lockTimer}s)</span>
+                                    {/* Progress Bar Background */}
+                                    <div 
+                                        className="absolute bottom-0 left-0 h-1 bg-amber-400 transition-all duration-1000 ease-linear"
+                                        style={{ width: `${(lockTimer / maxDelay) * 100}%` }}
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <ShieldCheck className="h-4 w-4" />
+                                    {nextReviewId ? "VALIDAR Y SIGUIENTE" : "VALIDAR Y FINALIZAR"}
+                                    {nextReviewId && <SkipForward className="h-4 w-4 ml-1 opacity-70" />}
+                                </>
+                            )}
                         </button>
                     )
                 ) : (

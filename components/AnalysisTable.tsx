@@ -17,7 +17,8 @@ import {
   Minimize2,
   Layout,
   ListFilter,
-  ShoppingCart
+  ShoppingCart,
+  Timer // New Icon
 } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
 import { ConsumptionModal } from './ConsumptionModal';
@@ -60,7 +61,7 @@ interface AnalysisTableProps {
 }
 
 // Columns that can be filtered
-type FilterKey = 'ff' | 'medtip' | 'medpet' | 'medest' | 'status';
+type FilterKey = 'ff' | 'medtip' | 'medpet' | 'medest' | 'status' | 'currentStock' | 'cpm' | 'monthsOfProvision' | 'anomalyDetails' | 'quantityToOrder' | 'isSporadic';
 
 export const AnalysisTable: React.FC<AnalysisTableProps> = ({ 
   medications, 
@@ -123,7 +124,13 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
 
   // Get Unique Values for Filters (Using ALL medications to show all options)
   const getUniqueValues = (key: FilterKey): { value: string; count: number }[] => {
-    const values = allMedications.map(m => String((m as any)[key] || '-'));
+    const values = allMedications.map(m => {
+        if (key === 'isSporadic') {
+             return m.isSporadic ? "Baja Rotación" : "Rotación Normal";
+        }
+        return String((m as any)[key] || '-');
+    });
+    
     const unique = Array.from(new Set(values)).sort();
     // Count occurrences in the FULL list
     return unique.map((val: string) => ({
@@ -173,10 +180,13 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
       ? filteredItems[currentIndex + 1].id 
       : null;
 
-  // 2. Smart "Next To Review" (Skip to next req > 0)
+  // 2. Smart "Next To Review" (Skip to next item that is NOT Sobrestock AND NOT Sin Rotacion)
   // Look ahead from current index
   const nextReviewItem = currentIndex >= 0 
-      ? filteredItems.slice(currentIndex + 1).find(m => m.quantityToOrder > 0)
+      ? filteredItems.slice(currentIndex + 1).find(m => 
+          m.status !== StockStatus.SOBRESTOCK && 
+          m.status !== StockStatus.SIN_ROTACION
+        )
       : null;
 
   const selectedMedication = selectedMedicationId 
@@ -211,6 +221,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
       row.SUMA_CONSUMO = totalConsumption;
       row.CPA_AJUSTADO = m.cpm; 
       row.CPM_SIMPLE = m.rawCpm;
+      row.ES_BAJA_ROTACION = m.isSporadic ? "SI" : "NO";
       row.TIENE_PICOS = m.hasSpikes ? "SI" : "NO";
       row.MESES_DISPONIBLES = isFinite(m.monthsOfProvision) ? m.monthsOfProvision : "Infinito";
       row.ESTADO_IPRESS = m.status;
@@ -230,7 +241,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
       {wch: 12}, {wch: 40}, {wch: 15}, {wch: 8}, {wch: 8}, {wch: 8},
       {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, 
       {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 8},
-      {wch: 12}, {wch: 12}, {wch: 12}, 
+      {wch: 12}, {wch: 12}, {wch: 12}, {wch: 15}, 
       {wch: 12}, {wch: 12}, {wch: 10},
       {wch: 12}, {wch: 20}, {wch: 12}, {wch: 15}, {wch: 15}, {wch: 50}, {wch: 10}
     ];
@@ -256,12 +267,24 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   };
 
   // Helper to render sortable/filterable headers
-  const RenderHeader = ({ label, field, align = 'left' }: { label: string, field?: FilterKey, align?: 'left'|'center'|'right' }) => {
+  const RenderHeader = ({ 
+      label, 
+      field, 
+      align = 'left',
+      className = '',
+      textColor = 'text-gray-500'
+  }: { 
+      label: string, 
+      field?: FilterKey, 
+      align?: 'left'|'center'|'right',
+      className?: string,
+      textColor?: string
+  }) => {
     const isActive = field && activeFilters[field]?.length > 0;
     const isOpen = openFilterDropdown === field;
     
     return (
-        <th scope="col" className={`px-4 sm:px-6 py-3 text-${align} text-xs font-bold text-gray-500 uppercase tracking-wider relative`}>
+        <th scope="col" className={`px-4 sm:px-6 py-3 text-${align} text-xs font-bold ${textColor} uppercase tracking-wider relative ${className}`}>
             <div className={`flex items-center gap-2 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
                 <span className="whitespace-nowrap">{label}</span>
                 {field && (
@@ -293,7 +316,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                             <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer text-xs text-gray-600">
                                 <input 
                                     type="checkbox" 
-                                    className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 bg-white accent-teal-600"
+                                    className="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500 bg-white accent-teal-600 cursor-pointer shadow-sm"
+                                    style={{ colorScheme: 'light' }}
                                     checked={activeFilters[field]?.includes(opt.value) || false}
                                     onChange={() => handleFilterToggle(field, opt.value)}
                                 />
@@ -422,7 +446,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center justify-between animate-in slide-in-from-top-2">
               <span className="text-amber-800 text-xs font-bold flex items-center gap-2">
                   <ListFilter className="h-4 w-4" />
-                  Mostrando únicamente {filteredItems.length} ítems pendientes de validar.
+                  Mostrando únicamente {filteredItems.length} ítems pendientes de validar (se excluye sobrestock y sin rotación).
               </span>
               {onTogglePending && (
                   <button onClick={onTogglePending} className="text-xs text-amber-900 underline hover:text-amber-700">
@@ -500,28 +524,39 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           <thead className="bg-gray-50 relative z-10">
             <tr>
               <RenderHeader label="Código" />
-              <RenderHeader label="Medicamento" />
+              <RenderHeader label="Medicamento" field="isSporadic" />
               <RenderHeader label="F.F." field="ff" />
               <RenderHeader label="Tipo" field="medtip" />
               <RenderHeader label="Pet" field="medpet" />
               <RenderHeader label="Est" field="medest" />
               
-              <RenderHeader label="Stock" align="right" />
-              <th scope="col" className="px-4 sm:px-6 py-3 text-right text-xs font-bold text-teal-600 uppercase tracking-wider border-b-2 border-teal-500 whitespace-nowrap">
-                CPA (Ajust.)
-              </th>
-              <RenderHeader label="Meses Prov." align="right" />
+              <RenderHeader label="Stock" field="currentStock" align="right" />
+              
+              <RenderHeader 
+                label="CPA (Ajust.)" 
+                field="cpm" 
+                align="right" 
+                className="border-b-2 border-teal-500 whitespace-nowrap" 
+                textColor="text-teal-600" 
+              />
+              
+              <RenderHeader label="Meses Prov." field="monthsOfProvision" align="right" />
               <RenderHeader label="Estado" field="status" align="center" />
-              <RenderHeader label="Detalle Ajuste" />
-              <RenderHeader label="Requerimiento" align="right" />
+              <RenderHeader label="Detalle Ajuste" field="anomalyDetails" />
+              <RenderHeader label="Requerimiento" field="quantityToOrder" align="right" />
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200 relative z-0">
             {currentItems.length > 0 ? (
               currentItems.map((item) => {
-                const needsReview = item.quantityToOrder > 0;
+                const isOverstock = item.status === StockStatus.SOBRESTOCK;
+                const isNoRotation = item.status === StockStatus.SIN_ROTACION;
+                
+                // Needs Review if NOT Overstock AND NOT No Rotation
+                const needsReview = !isOverstock && !isNoRotation;
+                
                 const isReviewed = reviewedIds.has(item.id);
-                // Visual checked state only applies if it actively needs review (qty > 0)
+                // Visual checked state only applies if it actively needs review
                 const showReviewedState = isReviewed && needsReview;
                 
                 return (
@@ -536,7 +571,15 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     {item.id}
                   </td>
                   <td className="px-4 sm:px-6 py-3 whitespace-nowrap">
-                    <div className="text-sm font-semibold text-gray-900 truncate max-w-[200px] sm:max-w-[300px]" title={item.name}>{item.name}</div>
+                    <div className="flex items-center gap-2">
+                        <div className="text-sm font-semibold text-gray-900 truncate max-w-[200px] sm:max-w-[300px]" title={item.name}>{item.name}</div>
+                        {item.isSporadic && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200 whitespace-nowrap gap-1">
+                                <Timer className="h-3 w-3" />
+                                Baja Rotación
+                            </span>
+                        )}
+                    </div>
                     <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
                        <span>S/ {item.unitPrice.toFixed(2)}</span>
                     </div>
@@ -626,8 +669,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                                   </div>
 
                                   {/* Min width on quantity to prevent icon shift */}
-                                  <span className="text-sm font-bold text-teal-700 bg-teal-50 px-2 rounded min-w-[3.5rem] text-right block">
-                                      +{item.quantityToOrder.toLocaleString()}
+                                  <span className={`text-sm font-bold px-2 rounded min-w-[3.5rem] text-right block ${item.quantityToOrder > 0 ? 'text-teal-700 bg-teal-50' : 'text-gray-500 bg-gray-100'}`}>
+                                      {item.quantityToOrder > 0 ? `+${item.quantityToOrder.toLocaleString()}` : '0'}
                                   </span>
                               </div>
                               <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
@@ -713,7 +756,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
       )}
     </div>
     
-    {/* Use conditional rendering to force unmount/remount on open/close for fresh state */}
+    {/* Use conditional rendering to force unmount on open/close for fresh state */}
     {selectedMedication && (
         <ConsumptionModal 
             medication={selectedMedication} 

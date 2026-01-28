@@ -84,7 +84,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                         </label>
                         <input 
                             type="text" 
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm font-mono"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm font-mono bg-white text-gray-900 placeholder-gray-400"
                             placeholder="Ej. 12345"
                             value={sismedCode}
                             onChange={(e) => setSismedCode(e.target.value)}
@@ -94,7 +94,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Descripción del Ítem <span className="text-red-500">*</span></label>
                         <input 
                             type="text" 
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm bg-white text-gray-900 placeholder-gray-400"
                             placeholder="Ej. Alcohol Etílico 70°"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
@@ -112,7 +112,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                         </label>
                         <input 
                             type="text" 
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm bg-white text-gray-900 placeholder-gray-400"
                             placeholder="Ej. FRASCO x 1L"
                             value={ff}
                             onChange={(e) => setFf(e.target.value)}
@@ -123,7 +123,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                         <input 
                             type="number" 
                             min="1"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm font-bold text-center"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm font-bold text-center bg-white text-gray-900 placeholder-gray-400"
                             placeholder="0"
                             value={quantity}
                             onChange={(e) => setQuantity(e.target.value)}
@@ -139,7 +139,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                     </label>
                     <input 
                         type="text" 
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-sm bg-white text-gray-900 placeholder-gray-400"
                         placeholder="Ej. Para campaña de vacunación"
                         value={observation}
                         onChange={(e) => setObservation(e.target.value)}

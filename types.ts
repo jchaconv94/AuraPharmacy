@@ -46,6 +46,9 @@ export interface AnalyzedMedication {
   spikesCount: number; // Cuántos meses se eliminaron
   spikeThreshold: number; // El valor máximo permitido (Valores mayores a este se pintan de amarillo)
   
+  // Low Rotation Flag
+  isSporadic: boolean; // NEW: Indica si es de baja rotación para mostrar etiqueta visual
+
   // Historical context for export
   originalHistory: number[];
 }
@@ -78,4 +81,54 @@ export interface AuraAnalysisResult {
 export interface ChartDataPoint {
   name: string;
   value: number;
+}
+
+// --- NEW AUTHENTICATION & ADMIN TYPES ---
+
+export type UserRole = 'ADMIN' | 'FARMACIA' | 'INVITADO';
+
+export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'PROFILE';
+
+export interface HealthFacility {
+  code: string; // Codigo IPRESS
+  name: string;
+  category: string;
+}
+
+export interface Personnel {
+  id: string; // Internal ID
+  firstName: string;
+  lastName: string;
+  dni: string;
+  phone?: string;
+  email?: string;
+  birthDate?: string;
+  facilityCode: string; // Link to HealthFacility
+}
+
+export interface User {
+  username: string;
+  role: UserRole;
+  personnelId: string;
+  isActive: boolean;
+  personnelData?: Personnel; // Hydrated data
+  facilityData?: HealthFacility; // Hydrated data
+  permissions: AppModule[]; // Computed from Role
+}
+
+export interface SystemConfig {
+  verificationDelaySeconds: number; // Tiempo de espera para el botón de validar
+}
+
+export interface AuthState {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  systemConfig: SystemConfig; // Configuración global disponible en el contexto
+}
+
+export interface RoleConfig {
+  role: UserRole;
+  label: string;
+  allowedModules: AppModule[];
 }

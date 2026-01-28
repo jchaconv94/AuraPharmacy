@@ -10,19 +10,39 @@ const calculateMedian = (values: number[]): number => {
 };
 
 // 1. Math Helpers (SISMED + Spike Detection)
-const calculateAdjustedCPM = (history: number[]): { adjusted: number; raw: number; spikes: number; details: string; threshold: number } => {
+const calculateAdjustedCPM = (history: number[]): { adjusted: number; raw: number; spikes: number; details: string; threshold: number; isSporadic: boolean } => {
   const nonZeroMonths = history.filter(val => val > 0);
+  const frequency = nonZeroMonths.length;
   
-  if (nonZeroMonths.length === 0) {
-    return { adjusted: 0, raw: 0, spikes: 0, details: "Sin consumo histórico", threshold: 0 };
+  if (frequency === 0) {
+    return { adjusted: 0, raw: 0, spikes: 0, details: "Sin consumo histórico", threshold: 0, isSporadic: false };
   }
 
   const rawSum = nonZeroMonths.reduce((a, b) => a + b, 0);
-  const rawAvg = rawSum / nonZeroMonths.length;
 
+  // --- LOGIC CHANGE: SPORADIC CONSUMPTION ---
+  // RULE: Frequency <= 5 is considered Sporadic (Low Rotation).
+  if (frequency <= 5) {
+      const activeMonthsAverage = rawSum / frequency;
+      return {
+          adjusted: activeMonthsAverage,
+          raw: activeMonthsAverage, 
+          spikes: 0,
+          details: `Consumo Esporádico (${frequency} salidas/año). CPA basado en meses activos.`,
+          threshold: 5, 
+          isSporadic: true
+      };
+  }
+
+  // --- NORMAL LOGIC (High Frequency > 5 months) ---
+  const rawAvg = rawSum / frequency;
   const median = calculateMedian(nonZeroMonths);
-  // Threshold logic: If median is very low (<5), tolerance is higher (3x). Otherwise 1.5x.
-  const threshold = median < 5 ? median * 3 : median * 1.5;
+  
+  // Threshold logic: 
+  let calculatedThreshold = median < 5 ? median * 3 : median * 1.5;
+  if (calculatedThreshold < 3.5) calculatedThreshold = 3.5; 
+  
+  const threshold = calculatedThreshold;
 
   // Identify normal values vs spikes
   const validMonths = nonZeroMonths.filter(val => val <= threshold);
@@ -32,7 +52,6 @@ const calculateAdjustedCPM = (history: number[]): { adjusted: number; raw: numbe
   if (validMonths.length > 0) {
     adjustedAvg = validMonths.reduce((a, b) => a + b, 0) / validMonths.length;
   } else {
-    // Fallback if all values are spikes (rare but possible in erratic items)
     adjustedAvg = median;
   }
 
@@ -46,16 +65,18 @@ const calculateAdjustedCPM = (history: number[]): { adjusted: number; raw: numbe
     raw: rawAvg, 
     spikes: spikes.length, 
     details,
-    threshold 
+    threshold,
+    isSporadic: false
   };
 };
 
 const analyzeItemLocally = (item: MedicationInput): AnalyzedMedication => {
   const history = item.monthlyConsumption;
-  const { adjusted: cpm, raw: rawCpm, spikes, details, threshold } = calculateAdjustedCPM(history);
+  const { adjusted: cpm, raw: rawCpm, spikes, details, threshold, isSporadic } = calculateAdjustedCPM(history);
   
   const monthsOfProvision = cpm > 0 ? item.currentStock / cpm : (item.currentStock > 0 ? Infinity : 0);
 
+  // 1. Initial Status Calculation
   let status = StockStatus.NORMOSTOCK;
   if (item.currentStock === 0) {
     status = StockStatus.DESABASTECIDO; 
@@ -66,24 +87,57 @@ const analyzeItemLocally = (item: MedicationInput): AnalyzedMedication => {
   } else if (monthsOfProvision >= 2 && monthsOfProvision <= 6) {
     status = StockStatus.NORMOSTOCK; 
   } else {
+    // Covers monthsOfProvision < 2
     status = StockStatus.SUBSTOCK;
   }
 
+  // 2. Anomaly Details Appending
+  let finalAnomalyDetails = details;
+  
   // Detect special handling items
   const upperName = item.name.toUpperCase();
   const isVaccineOrDiluent = upperName.includes("VACUNA") || upperName.includes("DILUYENTE");
 
-  // Suggest Order Quantity to reach 6 months coverage
+  // Suggest Order Quantity
   let quantityToOrder = 0;
 
-  // CRITICAL CHANGE: If it is a Vaccine or Diluent, we do NOT calculate requirement (it is 0).
-  // Otherwise, proceed with normal logic.
   if (!isVaccineOrDiluent && status !== StockStatus.SOBRESTOCK && status !== StockStatus.SIN_ROTACION) {
-     const targetStock = cpm * 6;
+     
+     const MIN_SAFETY_STOCK = 2; // Always maintain at least 2 units physically
+     let targetStock = 0;
+
+     if (isSporadic) {
+        // --- SPORADIC LOGIC (BAJA ROTACIÓN) ---
+        // Frequency <= 5 months.
+        // STRATEGY: Aim for 3 months coverage (Buffer Zone).
+        // Why? User request: 2 months is too risky. If we order just enough for 2 months, 
+        // a single consumption event drops the item back into Substock immediately.
+        // 3 months provides a buffer to stay within Normostock (2-6) after a sale.
+        
+        targetStock = cpm * 3; 
+
+        // Hard Floor: Never aim for less than 2 units physically.
+        targetStock = Math.max(targetStock, MIN_SAFETY_STOCK);
+
+        if (item.currentStock < targetStock) {
+            if (!finalAnomalyDetails.includes("Normostock")) {
+                 finalAnomalyDetails += " | Ajuste: Cobertura Estratégica (3 meses)";
+             }
+        }
+
+     } else {
+        // --- NORMAL LOGIC (ALTA ROTACIÓN) ---
+        // Frequency > 5 months.
+        // STRATEGY: Build stock for 6 months coverage (Normostock Ceiling).
+        targetStock = cpm * 6;
+        targetStock = Math.max(targetStock, MIN_SAFETY_STOCK);
+     }
+
      if (item.currentStock < targetStock) {
         quantityToOrder = Math.ceil(targetStock - item.currentStock);
      }
   }
+  
   if (quantityToOrder < 0) quantityToOrder = 0;
 
   let expirationRisk = "BAJO";
@@ -93,8 +147,6 @@ const analyzeItemLocally = (item: MedicationInput): AnalyzedMedication => {
     expirationRisk = "MEDIO";
   }
 
-  // Add a note in anomalyDetails if it was excluded from ordering logic
-  let finalAnomalyDetails = details;
   if (isVaccineOrDiluent) {
       finalAnomalyDetails = "Item de Inmunizaciones (No genera req.)";
   }
@@ -123,6 +175,7 @@ const analyzeItemLocally = (item: MedicationInput): AnalyzedMedication => {
     spikesCount: spikes,
     spikeThreshold: threshold, 
     
+    isSporadic: isSporadic,
     originalHistory: history
   };
 };
@@ -132,8 +185,6 @@ export const analyzeInventoryWithAura = async (
   referenceDate?: string,
   vaccinesExcluded: boolean = false
 ): Promise<AuraAnalysisResult> => {
-  // NOTE: This function is now fully local and deterministic. No API Key required.
-
   try {
     const analyzedMedications = inventory.map(analyzeItemLocally);
 
@@ -153,38 +204,20 @@ export const analyzeInventoryWithAura = async (
     else if (dmeScore >= 70) indicatorStatus = 'REGULAR';
     else indicatorStatus = 'BAJO';
 
-    // Calculate Stats for Summary (Deterministic)
+    // Calculate Stats for Summary
     const spikesFound = analyzedMedications.filter(m => m.hasSpikes).length;
     const itemsDesabastecidos = analyzedMedications.filter(m => m.status === StockStatus.DESABASTECIDO).length;
     
-    const savings = analyzedMedications.reduce((acc, m) => {
-         if (m.hasSpikes && m.quantityToOrder > 0) {
-            const inflatedTarget = m.rawCpm * 6;
-            const inflatedOrder = Math.max(0, inflatedTarget - m.currentStock);
-            const diff = inflatedOrder - m.quantityToOrder;
-            return acc + (diff * m.unitPrice);
-         }
-         return acc;
-    }, 0);
-
     const investment = analyzedMedications.reduce((sum, m) => sum + m.estimatedInvestment, 0);
 
-    // DETERMINISTIC SUMMARY GENERATOR
     let summary = `Resumen Ejecutivo Aura (${new Date().toLocaleDateString()}):\n\n`;
-    summary += `Se han analizado ${totalItems} ítems con fecha de corte ${referenceDate || 'Actual'}. `;
-    summary += `El indicador de Disponibilidad (DME) es del ${dmeScore.toFixed(1)}% (${indicatorStatus}).\n\n`;
+    summary += `Se han analizado ${totalItems} ítems. Disponibilidad (DME): ${dmeScore.toFixed(1)}% (${indicatorStatus}).\n\n`;
     
     if (spikesFound > 0) {
-        summary += `DETECCIÓN DE ANOMALÍAS:\n`;
-        summary += `Se identificaron ${spikesFound} medicamentos con picos de consumo atípicos. `;
-        summary += `Aura ha ajustado el cálculo (CPA) excluyendo estos picos, lo que representa un AHORRO ESTIMADO de S/ ${savings.toLocaleString('es-PE', { minimumFractionDigits: 2 })} al evitar compras infladas por sobrestock proyectado.\n\n`;
-    } else {
-        summary += `El consumo histórico presenta un comportamiento estable sin picos atípicos significativos.\n\n`;
+        summary += `Aura ajustó ${spikesFound} ítems con picos atípicos para evitar sobrestock.\n`;
     }
-
-    summary += `ESTADO DE INVENTARIO:\n`;
-    summary += `- Críticos (Desabastecidos): ${itemsDesabastecidos} ítems.\n`;
-    summary += `- Inversión Sugerida Total: S/ ${investment.toLocaleString('es-PE', { minimumFractionDigits: 2 })} para asegurar 6 meses de abastecimiento (Normostock).`;
+    summary += `Estrategia Baja Rotación (< 6 meses/año): Se asegura cobertura de 3 meses. Esto evita caer en desabastecimiento inmediato tras una salida, manteniéndose en rango Normostock.\n`;
+    summary += `ESTADO: ${itemsDesabastecidos} ítems críticos. Inversión Sugerida: S/ ${investment.toLocaleString('es-PE', { minimumFractionDigits: 2 })}.`;
 
     return {
       medications: analyzedMedications,
@@ -198,13 +231,12 @@ export const analyzeInventoryWithAura = async (
       timestamp: new Date().toISOString(),
       referenceDate: referenceDate,
       analysisConfig: {
-        vaccinesExcluded // Store the decision
+        vaccinesExcluded 
       }
     };
 
   } catch (error) {
     console.error("Aura analysis failed:", error);
-    // Fallback logic
     const analyzed = inventory.map(analyzeItemLocally);
     return {
         medications: analyzed,
