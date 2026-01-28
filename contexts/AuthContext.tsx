@@ -54,7 +54,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     if (result.success && result.user) {
         localStorage.setItem('aura_auth_user', JSON.stringify(result.user));
-        setState(prev => ({ ...prev, user: result.user, isAuthenticated: true, isLoading: false }));
+        // Casteamos explícitamente a User para evitar error de 'undefined' vs 'null'
+        const authenticatedUser = result.user as User;
+        setState(prev => ({ ...prev, user: authenticatedUser, isAuthenticated: true, isLoading: false }));
     } else {
         setState(prev => ({ ...prev, isLoading: false }));
     }
