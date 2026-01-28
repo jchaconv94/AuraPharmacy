@@ -33,11 +33,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // 2. Check local storage for persisted session
         const savedUser = localStorage.getItem('aura_auth_user');
+        
         if (savedUser) {
             try {
-                const user = JSON.parse(savedUser);
-                setState(prev => ({ ...prev, user, isAuthenticated: true, isLoading: false }));
+                const parsedUser = JSON.parse(savedUser) as User;
+                
+                // 2a. Optimistic UI: Set state immediately with cached data so app feels fast
+                setState(prev => ({ ...prev, user: parsedUser, isAuthenticated: true, isLoading: false }));
+                
+                // 2b. Silent Refresh: Check with DB if data changed (e.g. facility updated)
+                try {
+                    const freshData = await api.refreshSession(parsedUser.username);
+                    
+                    if (freshData.success && freshData.user) {
+                        // Data changed or user confirmed valid -> Update State & Storage
+                        localStorage.setItem('aura_auth_user', JSON.stringify(freshData.user));
+                        setState(prev => ({ ...prev, user: freshData.user as User }));
+                    } else if (freshData.message === 'Usuario no encontrado o eliminado') {
+                        // Critical security check: User deleted in DB? Force Logout
+                         localStorage.removeItem('aura_auth_user');
+                         setState(prev => ({ ...prev, user: null, isAuthenticated: false }));
+                    }
+                } catch (refreshError) {
+                    console.warn("Could not refresh session (Offline?), using cached data.", refreshError);
+                }
+
             } catch {
+                // Parse error, clear storage
+                localStorage.removeItem('aura_auth_user');
                 setState(prev => ({ ...prev, user: null, isAuthenticated: false, isLoading: false }));
             }
         } else {

@@ -1,17 +1,16 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Header } from './components/Header';
 import { InputSection } from './components/InputSection';
 import { Dashboard } from './components/Dashboard';
 import { AnalysisTable } from './components/AnalysisTable';
-import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppModule } from './types';
+import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppModule, QuickFilterOption } from './types';
 import { analyzeInventoryWithAura } from './services/auraService';
 import { generateFullReportPDF } from './services/pdfService';
 import { ReportOptionsModal } from './components/ReportOptionsModal';
 import { ReviewWarningModal } from './components/ReviewWarningModal';
 import { ManualEntryModal } from './components/ManualEntryModal';
 import { SuccessModal } from './components/SuccessModal';
-import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle, LogOut, Settings } from 'lucide-react';
+import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle, LogOut, Settings, BarChart2, LayoutGrid, ChevronDown } from 'lucide-react';
 
 // NEW IMPORTS
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -52,67 +51,97 @@ const AuthenticatedApp: React.FC = () => {
     // --- RENDER MAIN LAYOUT ---
     return (
         <div className="min-h-screen bg-gray-50/50">
-            {/* Header with Navigation */}
-            <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-                <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
-                        {/* Brand */}
-                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentView('DASHBOARD')}>
-                            <div className="bg-teal-100 p-1.5 sm:p-2 rounded-lg">
-                                {/* Using existing imports for brevity, normally separate icons */}
-                                <ShieldCheck className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" />
+            {/* PREMIUM HEADER */}
+            <header className="bg-gray-950 border-b border-white/5 sticky top-0 z-50 backdrop-blur-md bg-opacity-95 shadow-xl">
+                <div className="max-w-[98%] mx-auto px-4 sm:px-6">
+                    <div className="flex justify-between items-center h-18 py-3">
+                        
+                        {/* LEFT: BRANDING */}
+                        <div 
+                            className="flex items-center gap-3 cursor-pointer group" 
+                            onClick={() => setCurrentView('DASHBOARD')}
+                        >
+                            <div className="relative">
+                                <div className="absolute inset-0 bg-teal-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
+                                <div className="bg-gray-900 border border-white/10 p-2 rounded-xl relative">
+                                    <ShieldCheck className="h-6 w-6 text-teal-400" />
+                                </div>
                             </div>
-                            <div>
-                                <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight leading-none">Aura</h1>
-                                <p className="text-[10px] sm:text-xs text-teal-600 font-medium leading-none mt-0.5">
+                            <div className="flex flex-col">
+                                <h1 className="text-xl font-black text-white tracking-tight leading-none flex items-center gap-1">
+                                    AURA <span className="text-teal-500 text-xs font-bold px-1.5 py-0.5 bg-teal-500/10 rounded-md border border-teal-500/20">PRO</span>
+                                </h1>
+                                <p className="text-[10px] text-gray-400 font-medium leading-none mt-1 tracking-wide uppercase">
                                     {user?.facilityData?.name || 'Logística Farmacéutica'}
                                 </p>
                             </div>
                         </div>
 
-                        {/* Navigation */}
-                        <div className="flex items-center gap-4">
-                            {hasPermission('DASHBOARD') && (
-                                <button 
-                                    onClick={() => setCurrentView('DASHBOARD')}
-                                    className={`text-sm font-medium ${currentView === 'DASHBOARD' ? 'text-teal-600' : 'text-gray-500 hover:text-gray-900'}`}
-                                >
-                                    Análisis
-                                </button>
-                            )}
-                            
-                            {(hasPermission('ADMIN_USERS') || hasPermission('ADMIN_ROLES')) && (
-                                <button 
-                                    onClick={() => setCurrentView('ADMIN_USERS')}
-                                    className={`flex items-center gap-1 text-sm font-medium ${currentView.startsWith('ADMIN') ? 'text-teal-600' : 'text-gray-500 hover:text-gray-900'}`}
-                                >
-                                    <Settings className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Admin</span>
-                                </button>
-                            )}
+                        {/* CENTER: FLOATING NAVIGATION PILL */}
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:block">
+                            <nav className="flex items-center gap-1 bg-gray-900/80 border border-white/5 p-1.5 rounded-full shadow-inner">
+                                {hasPermission('DASHBOARD') && (
+                                    <button 
+                                        onClick={() => setCurrentView('DASHBOARD')}
+                                        className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
+                                            currentView === 'DASHBOARD' 
+                                            ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/50' 
+                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                        }`}
+                                    >
+                                        <BarChart2 className="h-5 w-5" />
+                                        Análisis de Requerimiento
+                                    </button>
+                                )}
+                                
+                                {(hasPermission('ADMIN_USERS') || hasPermission('ADMIN_ROLES')) && (
+                                    <button 
+                                        onClick={() => setCurrentView('ADMIN_USERS')}
+                                        className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
+                                            currentView.startsWith('ADMIN') 
+                                            ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/50' 
+                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                        }`}
+                                    >
+                                        <Settings className="h-5 w-5" />
+                                        Admin
+                                    </button>
+                                )}
+                            </nav>
+                        </div>
 
-                            {/* User Menu */}
-                            <div className="h-8 w-px bg-gray-200 mx-1"></div>
+                        {/* RIGHT: USER PROFILE & ACTIONS */}
+                        <div className="flex items-center gap-4">
                             
-                            <div className="flex items-center gap-3">
+                            {/* Mobile Nav Toggle could go here */}
+
+                            <div className="flex items-center gap-3 pl-4 border-l border-white/5">
                                 <button 
                                     onClick={() => setCurrentView('PROFILE')}
-                                    className="flex items-center gap-2 group"
+                                    className="flex items-center gap-3 group p-1.5 pr-3 rounded-full hover:bg-white/5 transition-all border border-transparent hover:border-white/5"
                                 >
+                                    <div className="bg-gradient-to-br from-teal-500 to-emerald-600 p-[2px] rounded-full">
+                                        <div className="bg-gray-900 rounded-full p-1">
+                                            <UserCircle className="h-6 w-6 text-gray-200" />
+                                        </div>
+                                    </div>
                                     <div className="text-right hidden sm:block">
-                                        <div className="text-xs font-bold text-gray-900">{user?.personnelData?.firstName}</div>
-                                        <div className="text-[10px] text-gray-500 uppercase">{user?.role}</div>
+                                        <div className="text-xs font-bold text-white group-hover:text-teal-400 transition-colors">
+                                            {user?.personnelData?.firstName}
+                                        </div>
+                                        <div className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">
+                                            {user?.role}
+                                        </div>
                                     </div>
-                                    <div className="bg-gray-100 p-2 rounded-full group-hover:bg-gray-200 transition-colors">
-                                        <UserCircle className="h-5 w-5 text-gray-600" />
-                                    </div>
+                                    <ChevronDown className="h-3 w-3 text-gray-500 group-hover:text-white transition-colors hidden sm:block" />
                                 </button>
+                                
                                 <button 
                                     onClick={logout} 
-                                    className="text-gray-400 hover:text-red-500 transition-colors"
+                                    className="bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 p-2.5 rounded-xl transition-all border border-transparent hover:border-red-500/30"
                                     title="Cerrar Sesión"
                                 >
-                                    <LogOut className="h-5 w-5" />
+                                    <LogOut className="h-4 w-4" />
                                 </button>
                             </div>
                         </div>
@@ -150,7 +179,9 @@ const AnalysisModule: React.FC = () => {
   // --- LIFTED STATE FOR FILTERING ---
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilters, setActiveFilters] = useState<Record<string, string[]>>({});
-  const [showOnlyPending, setShowOnlyPending] = useState(false);
+  
+  // NEW: Quick Filter State replacing showOnlyPending
+  const [quickFilter, setQuickFilter] = useState<QuickFilterOption>('ALL');
 
   // --- REVIEW SYSTEM STATE ---
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
@@ -182,7 +213,7 @@ const AnalysisModule: React.FC = () => {
       setSearchTerm('');
       setActiveFilters({});
       setReviewedIds(new Set());
-      setShowOnlyPending(false);
+      setQuickFilter('ALL');
       setAdditionalItems([]);
       setShowSuccessModal(false);
     } catch (err: any) {
@@ -200,7 +231,7 @@ const AnalysisModule: React.FC = () => {
     setError(null);
     setReviewedIds(new Set());
     setIsFullScreen(false);
-    setShowOnlyPending(false);
+    setQuickFilter('ALL');
     setAdditionalItems([]);
     setShowSuccessModal(false);
   }, []);
@@ -246,12 +277,17 @@ const AnalysisModule: React.FC = () => {
     if (!result) return [];
     let items = result.medications;
 
-    if (showOnlyPending) {
+    // QUICK FILTER LOGIC
+    if (quickFilter === 'PENDING') {
         items = items.filter(m => 
             m.status !== StockStatus.SOBRESTOCK && 
             m.status !== StockStatus.SIN_ROTACION &&
             !reviewedIds.has(m.id)
         );
+    } else if (quickFilter === 'REQ_POSITIVE') {
+        items = items.filter(m => m.quantityToOrder > 0);
+    } else if (quickFilter === 'REQ_ZERO') {
+        items = items.filter(m => m.quantityToOrder === 0);
     }
 
     if (searchTerm) {
@@ -276,18 +312,24 @@ const AnalysisModule: React.FC = () => {
         });
     }
     return items;
-  }, [result, searchTerm, activeFilters, showOnlyPending, reviewedIds]);
+  }, [result, searchTerm, activeFilters, quickFilter, reviewedIds]);
 
+  // UPDATE: Now depends on filteredMedications to update charts dynamically
   const dashboardResult = useMemo(() => {
     if (!result) return null;
-    const totalItems = result.medications.length;
-    const availableItems = result.medications.filter(m => 
+
+    // Use filtered data for dashboard statistics
+    const currentItems = filteredMedications;
+    const totalItems = currentItems.length;
+    
+    const availableItems = currentItems.filter(m => 
         m.status === StockStatus.NORMOSTOCK || 
         m.status === StockStatus.SOBRESTOCK || 
         m.status === StockStatus.SIN_ROTACION
     ).length;
     
     const dmeScore = totalItems > 0 ? (availableItems / totalItems) * 100 : 0;
+    
     let indicatorStatus: 'OPTIMO' | 'ALTO' | 'REGULAR' | 'BAJO' = 'BAJO';
     if (dmeScore >= 90) indicatorStatus = 'OPTIMO';
     else if (dmeScore >= 80) indicatorStatus = 'ALTO';
@@ -295,7 +337,7 @@ const AnalysisModule: React.FC = () => {
 
     return {
         ...result,
-        medications: result.medications,
+        medications: currentItems, // Pass filtered items to dashboard components
         indicators: {
             dmeScore,
             status: indicatorStatus,
@@ -303,7 +345,7 @@ const AnalysisModule: React.FC = () => {
             availableItems
         }
     };
-  }, [result]);
+  }, [result, filteredMedications]);
 
   const { reviewProgress, isReviewComplete, reviewedCount, totalToReview } = useMemo(() => {
       if (!result) return { reviewProgress: 0, isReviewComplete: false, reviewedCount: 0, totalToReview: 0 };
@@ -417,9 +459,9 @@ const AnalysisModule: React.FC = () => {
                                 <div className={`h-full transition-all duration-500 rounded-full ${isReviewComplete ? 'bg-teal-500' : 'bg-amber-500'}`} style={{ width: `${reviewProgress}%` }} />
                             </div>
                             {!isReviewComplete && (
-                                <button onClick={() => setShowOnlyPending(!showOnlyPending)} className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${showOnlyPending ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-gray-50 text-gray-600 hover:bg-amber-50 hover:text-amber-700 border border-gray-200 hover:border-amber-200'}`}>
+                                <button onClick={() => setQuickFilter(quickFilter === 'PENDING' ? 'ALL' : 'PENDING')} className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${quickFilter === 'PENDING' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-gray-50 text-gray-600 hover:bg-amber-50 hover:text-amber-700 border border-gray-200 hover:border-amber-200'}`}>
                                     <ListFilter className="h-3.5 w-3.5" />
-                                    {showOnlyPending ? "Mostrando Solo Pendientes" : "Filtrar Pendientes de Validar"}
+                                    {quickFilter === 'PENDING' ? "Mostrando Solo Pendientes" : "Filtrar Pendientes de Validar"}
                                 </button>
                             )}
                         </div>
@@ -455,8 +497,8 @@ const AnalysisModule: React.FC = () => {
                 totalToReview={totalToReview}
                 isFullScreen={isFullScreen}
                 onToggleFullScreen={setIsFullScreen}
-                showOnlyPending={showOnlyPending}
-                onTogglePending={() => setShowOnlyPending(!showOnlyPending)}
+                quickFilter={quickFilter}
+                onQuickFilterChange={setQuickFilter}
                 additionalItemsCount={additionalItems.length}
                 onOpenAdditionalModal={() => setIsManualEntryModalOpen(true)}
             />

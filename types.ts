@@ -132,3 +132,6 @@ export interface RoleConfig {
   label: string;
   allowedModules: AppModule[];
 }
+
+// --- FILTER TYPES ---
+export type QuickFilterOption = 'ALL' | 'PENDING' | 'REQ_POSITIVE' | 'REQ_ZERO';

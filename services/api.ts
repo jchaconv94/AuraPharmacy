@@ -85,6 +85,39 @@ export const api = {
         }
     },
 
+    // NUEVO MÉTODO PARA REFRESCAR DATOS AL RECARGAR PÁGINA
+    refreshSession: async (username: string): Promise<{ success: boolean; user?: User; message?: string }> => {
+        try {
+            const result = await sendRequest('refreshUser', { username });
+            return result;
+        } catch (e) {
+            console.warn("Error refrescando sesión, usando caché local...", e);
+            // Si falla (offline), retornamos falso para que el AuthContext use lo que tiene en localStorage
+            
+            // MOCK Fallback for refresh
+            const authUser = MOCK_DB.users.find(u => u.username === username);
+            if (authUser) {
+                 const personnel = MOCK_DB.personnel.find(p => p.id === authUser.personnelId);
+                 const facility = MOCK_DB.facilities.find(f => f.code === personnel?.facilityCode);
+                 const roleConfig = MOCK_DB.roles.find(r => r.role === authUser.role);
+                 return {
+                    success: true,
+                    user: {
+                        username: authUser.username,
+                        role: authUser.role as UserRole,
+                        personnelId: authUser.personnelId,
+                        isActive: authUser.isActive,
+                        personnelData: personnel as Personnel,
+                        facilityData: facility as HealthFacility,
+                        permissions: roleConfig ? roleConfig.allowedModules as any : []
+                    }
+                 };
+            }
+
+            return { success: false, message: "No se pudo actualizar sesión" };
+        }
+    },
+
     updateProfile: async (personnelId: string, data: any) => {
         try {
             return await sendRequest('updateProfile', { personnelId, data });

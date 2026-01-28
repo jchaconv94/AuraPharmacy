@@ -2,7 +2,7 @@
 /**
  * AURA PHARMA BACKEND - GOOGLE APPS SCRIPT
  * 
- * v2.1 - System Config Support & User Management
+ * v2.2 - System Config Support, User Management & Session Refresh
  */
 
 // ----------------------------------------------------------------------------
@@ -42,13 +42,15 @@ function handleRequest(e) {
       case 'login':
         result = handleLogin(ss, params.username, params.password);
         break;
+      case 'refreshUser': // NUEVO: Actualizar datos sin password (para F5/Reload)
+        result = handleRefreshUser(ss, params.username);
+        break;
       case 'getUsers':
          result = handleGetUsers(ss);
          break;
       case 'updateProfile':
          result = handleUpdateProfile(ss, params.personnelId, params.data);
          break;
-      // --- NUEVAS ACCIONES DE CONFIGURACIÓN ---
       case 'getSystemConfig':
          result = handleGetSystemConfig(ss);
          break;
@@ -89,35 +91,54 @@ function handleLogin(ss, username, password) {
   for (let i = 1; i < data.length; i++) {
     // Columna 0: Username, Columna 1: Password
     if (String(data[i][0]).toLowerCase() === String(username).toLowerCase() && String(data[i][1]) === String(password)) {
-        
-        // Verificar si está activo (Columna 4)
-        if (data[i][4] !== true && String(data[i][4]).toLowerCase() !== 'true') {
-             return { success: false, message: 'Usuario inactivo/bloqueado' };
-        }
-        
-        const personnelId = data[i][3];
-        const personnelData = getPersonnelData(ss, personnelId);
-        
-        if (!personnelData) return { success: false, message: 'Error de integridad: Personal no encontrado' };
-
-        const facilityData = getFacilityData(ss, personnelData.facilityCode);
-        const rolePermissions = getRolePermissions(ss, data[i][2]);
-        
-        return {
-          success: true,
-          user: {
-            username: data[i][0],
-            role: data[i][2],
-            personnelId: personnelId,
-            isActive: true,
-            personnelData: personnelData,
-            facilityData: facilityData,
-            permissions: rolePermissions
-          }
-        };
+        return buildUserResponse(ss, data[i]);
     }
   }
   return { success: false, message: 'Usuario o contraseña incorrectos' };
+}
+
+function handleRefreshUser(ss, username) {
+  const sheet = ss.getSheetByName('USERS');
+  if (!sheet) return { success: false, message: "DB Error" };
+  
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    // Solo validamos el Username (asumiendo que ya tiene sesión válida en frontend)
+    if (String(data[i][0]).toLowerCase() === String(username).toLowerCase()) {
+        return buildUserResponse(ss, data[i]);
+    }
+  }
+  return { success: false, message: 'Usuario no encontrado o eliminado' };
+}
+
+// Helper para construir el objeto User completo (Login y Refresh usan esto)
+function buildUserResponse(ss, userRow) {
+    // Verificar si está activo (Columna 4)
+    if (userRow[4] !== true && String(userRow[4]).toLowerCase() !== 'true') {
+            return { success: false, message: 'Usuario inactivo/bloqueado' };
+    }
+    
+    const personnelId = userRow[3];
+    const personnelData = getPersonnelData(ss, personnelId);
+    
+    if (!personnelData) return { success: false, message: 'Error de integridad: Personal no encontrado' };
+
+    const facilityData = getFacilityData(ss, personnelData.facilityCode);
+    const rolePermissions = getRolePermissions(ss, userRow[2]);
+    
+    return {
+        success: true,
+        user: {
+        username: userRow[0],
+        role: userRow[2],
+        personnelId: personnelId,
+        isActive: true,
+        personnelData: personnelData,
+        facilityData: facilityData,
+        permissions: rolePermissions
+        }
+    };
 }
 
 function handleGetUsers(ss) {

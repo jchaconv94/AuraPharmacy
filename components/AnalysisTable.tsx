@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { AnalyzedMedication, StockStatus } from '../types';
+import { AnalyzedMedication, StockStatus, QuickFilterOption } from '../types';
 import { 
   Zap, 
   TrendingUp, 
@@ -18,7 +18,8 @@ import {
   Layout,
   ListFilter,
   ShoppingCart,
-  Timer
+  Timer,
+  ChevronDown
 } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
 import { ConsumptionModal } from './ConsumptionModal';
@@ -51,9 +52,9 @@ interface AnalysisTableProps {
   isFullScreen: boolean;
   onToggleFullScreen: (isFull: boolean) => void;
 
-  // Pending Filter Props
-  showOnlyPending?: boolean;
-  onTogglePending?: () => void;
+  // Quick Filter Props
+  quickFilter: QuickFilterOption;
+  onQuickFilterChange: (filter: QuickFilterOption) => void;
   
   // Additional Items Props
   additionalItemsCount?: number;
@@ -80,17 +81,19 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   totalToReview,
   isFullScreen,
   onToggleFullScreen,
-  showOnlyPending,
-  onTogglePending,
+  quickFilter,
+  onQuickFilterChange,
   additionalItemsCount = 0,
   onOpenAdditionalModal
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedMedicationId, setSelectedMedicationId] = useState<string | null>(null);
   const [openFilterDropdown, setOpenFilterDropdown] = useState<string | null>(null);
+  const [isMainFilterOpen, setIsMainFilterOpen] = useState(false); // State for the main header filter dropdown
   
   const itemsPerPage = isFullScreen ? 15 : 10; // Show more items in full screen
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const mainFilterRef = useRef<HTMLDivElement>(null); // Ref for main header filter
 
   // 'medications' prop is already filtered. We just handle pagination here.
   const filteredItems = medications;
@@ -100,11 +103,16 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentItems = filteredItems.slice(startIndex, startIndex + itemsPerPage);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // Column filters
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setOpenFilterDropdown(null);
+      }
+      // Main header filter
+      if (mainFilterRef.current && !mainFilterRef.current.contains(event.target as Node)) {
+          setIsMainFilterOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -332,6 +340,16 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
     );
   };
 
+  // Main Filter Display Label Logic
+  const getFilterLabel = (filter: QuickFilterOption) => {
+      switch(filter) {
+          case 'PENDING': return 'Pendientes de Validar';
+          case 'REQ_POSITIVE': return 'Con Requerimiento (>0)';
+          case 'REQ_ZERO': return 'Sin Requerimiento (0)';
+          default: return 'Todos';
+      }
+  };
+
   const containerClasses = isFullScreen 
     ? "fixed inset-0 z-[100] bg-white flex flex-col h-screen w-screen animate-in fade-in duration-200"
     : "bg-white shadow-lg rounded-xl border border-gray-200 overflow-visible flex flex-col transition-colors duration-300";
@@ -370,21 +388,59 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                       />
                   </div>
 
-                  {/* Pending Toggle in Full Screen */}
-                  {onTogglePending && (
+                  {/* Main Filter Dropdown in Full Screen */}
+                  <div className="relative" ref={mainFilterRef}>
                       <button 
-                        onClick={onTogglePending}
+                        onClick={() => setIsMainFilterOpen(!isMainFilterOpen)}
                         className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                            showOnlyPending 
+                            quickFilter !== 'ALL'
                             ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' 
                             : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
                         }`}
-                        title={showOnlyPending ? "Mostrar Todo" : "Filtrar Pendientes"}
+                        title="Filtrar Lista"
                       >
                          <ListFilter className="h-4 w-4" />
-                         {showOnlyPending ? "Solo Pendientes" : "Todos"}
+                         {getFilterLabel(quickFilter)}
+                         <ChevronDown className={`h-3 w-3 transition-transform ${isMainFilterOpen ? 'rotate-180' : ''}`} />
                       </button>
-                  )}
+
+                      {isMainFilterOpen && (
+                          <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 text-gray-900 animate-in fade-in zoom-in-95 duration-100">
+                              <div className="px-3 py-2 border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                  Vistas Disponibles
+                              </div>
+                              <button 
+                                  onClick={() => { onQuickFilterChange('ALL'); setIsMainFilterOpen(false); }}
+                                  className={`w-full text-left px-4 py-2.5 text-xs font-medium hover:bg-gray-50 transition-colors flex items-center justify-between ${quickFilter === 'ALL' ? 'text-teal-600 bg-teal-50' : 'text-gray-700'}`}
+                              >
+                                  Todos
+                                  {quickFilter === 'ALL' && <CheckCircle className="h-3.5 w-3.5" />}
+                              </button>
+                              <button 
+                                  onClick={() => { onQuickFilterChange('PENDING'); setIsMainFilterOpen(false); }}
+                                  className={`w-full text-left px-4 py-2.5 text-xs font-medium hover:bg-gray-50 transition-colors flex items-center justify-between ${quickFilter === 'PENDING' ? 'text-amber-600 bg-amber-50' : 'text-gray-700'}`}
+                              >
+                                  Pendientes de Validar
+                                  {quickFilter === 'PENDING' && <CheckCircle className="h-3.5 w-3.5" />}
+                              </button>
+                              <div className="border-t border-gray-100 my-1"></div>
+                              <button 
+                                  onClick={() => { onQuickFilterChange('REQ_POSITIVE'); setIsMainFilterOpen(false); }}
+                                  className={`w-full text-left px-4 py-2.5 text-xs font-medium hover:bg-gray-50 transition-colors flex items-center justify-between ${quickFilter === 'REQ_POSITIVE' ? 'text-teal-600 bg-teal-50' : 'text-gray-700'}`}
+                              >
+                                  Con Requerimiento ({'>'}0)
+                                  {quickFilter === 'REQ_POSITIVE' && <CheckCircle className="h-3.5 w-3.5" />}
+                              </button>
+                              <button 
+                                  onClick={() => { onQuickFilterChange('REQ_ZERO'); setIsMainFilterOpen(false); }}
+                                  className={`w-full text-left px-4 py-2.5 text-xs font-medium hover:bg-gray-50 transition-colors flex items-center justify-between ${quickFilter === 'REQ_ZERO' ? 'text-gray-800 bg-gray-100' : 'text-gray-700'}`}
+                              >
+                                  Sin Requerimiento (0)
+                                  {quickFilter === 'REQ_ZERO' && <CheckCircle className="h-3.5 w-3.5" />}
+                              </button>
+                          </div>
+                      )}
+                  </div>
 
                   {/* ADDITIONAL ITEMS BUTTON IN FULL SCREEN - NEW */}
                   {onOpenAdditionalModal && (
@@ -442,17 +498,15 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
       )}
 
       {/* FILTER ACTIVE BANNER (For Normal View) */}
-      {!isFullScreen && showOnlyPending && (
+      {!isFullScreen && quickFilter !== 'ALL' && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center justify-between animate-in slide-in-from-top-2">
               <span className="text-amber-800 text-xs font-bold flex items-center gap-2">
                   <ListFilter className="h-4 w-4" />
-                  Mostrando únicamente {filteredItems.length} ítems pendientes de validar.
+                  Filtro activo: {getFilterLabel(quickFilter)} ({filteredItems.length} ítems)
               </span>
-              {onTogglePending && (
-                  <button onClick={onTogglePending} className="text-xs text-amber-900 underline hover:text-amber-700">
-                      Mostrar Todos
-                  </button>
-              )}
+              <button onClick={() => onQuickFilterChange('ALL')} className="text-xs text-amber-900 underline hover:text-amber-700">
+                  Mostrar Todos
+              </button>
           </div>
       )}
 
