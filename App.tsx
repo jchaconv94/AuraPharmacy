@@ -54,7 +54,7 @@ const AuthenticatedApp: React.FC = () => {
             {/* PREMIUM HEADER */}
             <header className="bg-gray-950 border-b border-white/5 sticky top-0 z-50 backdrop-blur-md bg-opacity-95 shadow-xl">
                 <div className="max-w-[98%] mx-auto px-4 sm:px-6">
-                    <div className="flex justify-between items-center h-18 py-3">
+                    <div className="flex justify-between items-center h-16 2xl:h-18 py-2 2xl:py-3">
                         
                         {/* LEFT: BRANDING */}
                         <div 
@@ -64,14 +64,14 @@ const AuthenticatedApp: React.FC = () => {
                             <div className="relative">
                                 <div className="absolute inset-0 bg-teal-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
                                 <div className="bg-gray-900 border border-white/10 p-2 rounded-xl relative">
-                                    <ShieldCheck className="h-6 w-6 text-teal-400" />
+                                    <ShieldCheck className="h-5 w-5 2xl:h-6 2xl:w-6 text-teal-400" />
                                 </div>
                             </div>
                             <div className="flex flex-col">
-                                <h1 className="text-xl font-black text-white tracking-tight leading-none flex items-center gap-1">
+                                <h1 className="text-lg 2xl:text-xl font-black text-white tracking-tight leading-none flex items-center gap-1">
                                     AURA <span className="text-teal-500 text-xs font-bold px-1.5 py-0.5 bg-teal-500/10 rounded-md border border-teal-500/20">PRO</span>
                                 </h1>
-                                <p className="text-[10px] text-gray-400 font-medium leading-none mt-1 tracking-wide uppercase">
+                                <p className="text-[9px] 2xl:text-[10px] text-gray-400 font-medium leading-none mt-1 tracking-wide uppercase">
                                     {user?.facilityData?.name || 'Logística Farmacéutica'}
                                 </p>
                             </div>
@@ -79,17 +79,17 @@ const AuthenticatedApp: React.FC = () => {
 
                         {/* CENTER: FLOATING NAVIGATION PILL */}
                         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:block">
-                            <nav className="flex items-center gap-1 bg-gray-900/80 border border-white/5 p-1.5 rounded-full shadow-inner">
+                            <nav className="flex items-center gap-1 bg-gray-900/80 border border-white/5 p-1 rounded-full shadow-inner">
                                 {hasPermission('DASHBOARD') && (
                                     <button 
                                         onClick={() => setCurrentView('DASHBOARD')}
-                                        className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
+                                        className={`flex items-center gap-2 px-4 2xl:px-6 py-2 2xl:py-2.5 rounded-full text-xs 2xl:text-sm font-bold transition-all duration-300 ${
                                             currentView === 'DASHBOARD' 
                                             ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/50' 
                                             : 'text-gray-400 hover:text-white hover:bg-white/5'
                                         }`}
                                     >
-                                        <BarChart2 className="h-5 w-5" />
+                                        <BarChart2 className="h-4 w-4 2xl:h-5 2xl:w-5" />
                                         Análisis de Requerimiento
                                     </button>
                                 )}
@@ -97,13 +97,13 @@ const AuthenticatedApp: React.FC = () => {
                                 {(hasPermission('ADMIN_USERS') || hasPermission('ADMIN_ROLES')) && (
                                     <button 
                                         onClick={() => setCurrentView('ADMIN_USERS')}
-                                        className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
+                                        className={`flex items-center gap-2 px-4 2xl:px-6 py-2 2xl:py-2.5 rounded-full text-xs 2xl:text-sm font-bold transition-all duration-300 ${
                                             currentView.startsWith('ADMIN') 
                                             ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/50' 
                                             : 'text-gray-400 hover:text-white hover:bg-white/5'
                                         }`}
                                     >
-                                        <Settings className="h-5 w-5" />
+                                        <Settings className="h-4 w-4 2xl:h-5 2xl:w-5" />
                                         Admin
                                     </button>
                                 )}
@@ -122,7 +122,7 @@ const AuthenticatedApp: React.FC = () => {
                                 >
                                     <div className="bg-gradient-to-br from-teal-500 to-emerald-600 p-[2px] rounded-full">
                                         <div className="bg-gray-900 rounded-full p-1">
-                                            <UserCircle className="h-6 w-6 text-gray-200" />
+                                            <UserCircle className="h-5 w-5 2xl:h-6 2xl:w-6 text-gray-200" />
                                         </div>
                                     </div>
                                     <div className="text-right hidden sm:block">
@@ -138,7 +138,7 @@ const AuthenticatedApp: React.FC = () => {
                                 
                                 <button 
                                     onClick={logout} 
-                                    className="bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 p-2.5 rounded-xl transition-all border border-transparent hover:border-red-500/30"
+                                    className="bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 p-2 2xl:p-2.5 rounded-xl transition-all border border-transparent hover:border-red-500/30"
                                     title="Cerrar Sesión"
                                 >
                                     <LogOut className="h-4 w-4" />
@@ -196,8 +196,56 @@ const AnalysisModule: React.FC = () => {
   const [additionalItems, setAdditionalItems] = useState<AdditionalItem[]>([]);
   const [isManualEntryModalOpen, setIsManualEntryModalOpen] = useState(false);
 
-  // --- FULL SCREEN STATE ---
+  // --- FULL SCREEN STATE & NATIVE API LOGIC ---
   const [isFullScreen, setIsFullScreen] = useState(false);
+
+  // Handler to toggle NATIVE Fullscreen
+  const handleToggleFullScreen = useCallback((targetState: boolean) => {
+      const elem = document.documentElement; // Target the whole page
+
+      if (targetState) {
+          // Request Native Fullscreen
+          if (elem.requestFullscreen) {
+              elem.requestFullscreen().catch(err => console.error("Error enabling full-screen mode:", err));
+          } else if ((elem as any).webkitRequestFullscreen) { /* Safari */
+              (elem as any).webkitRequestFullscreen();
+          } else if ((elem as any).msRequestFullscreen) { /* IE11 */
+              (elem as any).msRequestFullscreen();
+          }
+      } else {
+          // Exit Native Fullscreen
+          if (document.exitFullscreen && document.fullscreenElement) {
+              document.exitFullscreen().catch(err => console.error("Error exiting full-screen mode:", err));
+          } else if ((document as any).webkitExitFullscreen) { /* Safari */
+              (document as any).webkitExitFullscreen();
+          } else if ((document as any).msExitFullscreen) { /* IE11 */
+              (document as any).msExitFullscreen();
+          }
+      }
+      // Note: Actual state 'isFullScreen' is updated via the event listener below
+      // to ensure sync with "Esc" key presses.
+  }, []);
+
+  // Listen for browser fullscreen changes (e.g. user presses ESC)
+  useEffect(() => {
+      const handleFullScreenChange = () => {
+          const isNativeFullScreen = !!document.fullscreenElement || 
+                                     !!(document as any).webkitFullscreenElement || 
+                                     !!(document as any).msFullscreenElement;
+          setIsFullScreen(isNativeFullScreen);
+      };
+
+      document.addEventListener('fullscreenchange', handleFullScreenChange);
+      document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
+      document.addEventListener('msfullscreenchange', handleFullScreenChange);
+
+      return () => {
+          document.removeEventListener('fullscreenchange', handleFullScreenChange);
+          document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
+          document.removeEventListener('msfullscreenchange', handleFullScreenChange);
+      };
+  }, []);
+
 
   useEffect(() => {
     if (result) {
@@ -233,12 +281,12 @@ const AnalysisModule: React.FC = () => {
     setActiveFilters({});
     setError(null);
     setReviewedIds(new Set());
-    setIsFullScreen(false);
+    handleToggleFullScreen(false); // Exit fullscreen on reset
     setQuickFilter('ALL');
     setAdditionalItems([]);
     setShowSuccessModal(false);
     setInputData([]); // Clear input data on reset
-  }, []);
+  }, [handleToggleFullScreen]);
 
   // UPDATED HANDLER: Now accepts CPA Mode
   const handleMedicationUpdate = (id: string, newQuantity: number, mode?: 'ADJUSTED' | 'SIMPLE') => {
@@ -404,15 +452,15 @@ const AnalysisModule: React.FC = () => {
   };
 
   return (
-    <div className={`pb-12 ${isFullScreen ? 'max-w-none px-0' : 'max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8'}`}>
+    <div className={`pb-12 ${isFullScreen ? 'max-w-none px-0' : 'max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8 py-4 2xl:py-8 space-y-4 2xl:space-y-8'}`}>
         {!isFullScreen && !result && !loading && (
-          <div className="bg-white border border-teal-100 rounded-2xl p-8 flex gap-6 shadow-sm animate-in fade-in slide-in-from-top-4">
+          <div className="bg-white border border-teal-100 rounded-2xl p-6 2xl:p-8 flex gap-6 shadow-sm animate-in fade-in slide-in-from-top-4">
             <div className="bg-teal-50 p-4 rounded-full h-fit shrink-0">
               <Info className="h-8 w-8 text-teal-600" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Módulo de Análisis Inteligente</h2>
-              <p className="text-gray-600 mt-2 max-w-3xl leading-relaxed">
+              <h2 className="text-xl 2xl:text-2xl font-bold text-gray-900">Módulo de Análisis Inteligente</h2>
+              <p className="text-gray-600 mt-2 max-w-3xl leading-relaxed text-sm 2xl:text-base">
                 Ingrese su inventario para recibir un análisis basado en la Ficha Técnica N° 30.
               </p>
             </div>
@@ -438,13 +486,13 @@ const AnalysisModule: React.FC = () => {
         )}
 
         {result && dashboardResult && (
-          <div className={`space-y-8 ${!isFullScreen ? 'animate-in fade-in slide-in-from-bottom-4 duration-700' : ''}`}>
+          <div className={`space-y-4 2xl:space-y-8 ${!isFullScreen ? 'animate-in fade-in slide-in-from-bottom-4 duration-700' : ''}`}>
              {!isFullScreen && (
-                <div className="flex flex-col xl:flex-row items-end xl:items-center justify-between gap-6 border-b border-gray-200 pb-6">
+                <div className="flex flex-col xl:flex-row items-end xl:items-center justify-between gap-6 border-b border-gray-200 pb-4 2xl:pb-6">
                     <div>
-                        <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Resultados del Análisis</h2>
+                        <h2 className="text-2xl 2xl:text-3xl font-bold text-gray-900 tracking-tight">Resultados del Análisis</h2>
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-2">
-                            <span className="text-sm text-gray-500 font-medium">Generado: {new Date(result.timestamp).toLocaleString()}</span>
+                            <span className="text-xs 2xl:text-sm text-gray-500 font-medium">Generado: {new Date(result.timestamp).toLocaleString()}</span>
                             {result.referenceDate && <span className="text-xs font-bold text-teal-700 bg-teal-50 border border-teal-100 px-3 py-1 rounded-full uppercase tracking-wide">Corte: {result.referenceDate}</span>}
                         </div>
                     </div>
@@ -504,7 +552,7 @@ const AnalysisModule: React.FC = () => {
                 reviewedCount={reviewedCount}
                 totalToReview={totalToReview}
                 isFullScreen={isFullScreen}
-                onToggleFullScreen={setIsFullScreen}
+                onToggleFullScreen={handleToggleFullScreen}
                 quickFilter={quickFilter}
                 onQuickFilterChange={setQuickFilter}
                 additionalItemsCount={additionalItems.length}

@@ -145,16 +145,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Listen for ESC key to exit full screen
-  useEffect(() => {
-      const handleEsc = (event: KeyboardEvent) => {
-          if (event.key === "Escape" && isFullScreen) {
-              onToggleFullScreen(false);
-          }
-      };
-      document.addEventListener("keydown", handleEsc);
-      return () => document.removeEventListener("keydown", handleEsc);
-  }, [isFullScreen, onToggleFullScreen]);
+  // NOTE: Manual Escape listener removed. 
+  // We now rely on the 'fullscreenchange' event in the parent component to handle exit.
 
   // Get Unique Values for Filters (Using ALL medications to show all options)
   const getUniqueValues = (key: FilterKey): { value: string; count: number }[] => {
@@ -324,7 +316,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
     const isOpen = openFilterDropdown === field;
     
     return (
-        <th scope="col" className={`px-2 sm:px-3 py-3 text-${align} text-xs font-bold ${textColor} uppercase tracking-wider relative ${className}`}>
+        <th scope="col" className={`px-2 py-2 2xl:px-3 2xl:py-3 text-${align} text-xs font-bold ${textColor} uppercase tracking-wider relative ${className}`}>
             <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
                 <span className="whitespace-nowrap">{label}</span>
                 {field && (
@@ -663,10 +655,10 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                       showReviewedState ? 'bg-teal-50/30 hover:bg-teal-50' : 'hover:bg-gray-50'
                   }`}
                 >
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-sm font-bold text-gray-700 font-mono">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-sm font-bold text-gray-700 font-mono">
                     {item.id}
                   </td>
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                         <div className="text-sm font-semibold text-gray-900 truncate max-w-[200px] sm:max-w-[300px]" title={item.name}>{item.name}</div>
                         {item.isSporadic && (
@@ -689,25 +681,25 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                   </td>
 
                   {/* ... (FF, Type, Pet, Est) ... */}
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-xs text-gray-600">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-xs text-gray-600">
                     {item.ff ? <span className="bg-gray-100 px-2 py-1 rounded border border-gray-200">{item.ff}</span> : '-'}
                   </td>
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-xs text-gray-600">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-xs text-gray-600">
                     {item.medtip || '-'}
                   </td>
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-xs text-gray-600">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-xs text-gray-600">
                     {item.medpet || '-'}
                   </td>
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-xs text-gray-600">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-xs text-gray-600">
                     {item.medest || '-'}
                   </td>
 
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-right text-gray-900 font-mono">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-right text-gray-900 font-mono">
                     <span className="text-base font-bold">{(item.currentStock || 0).toLocaleString()}</span>
                   </td>
                   
                   {/* CPA Column */}
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-right">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-right">
                     <div className="flex flex-col items-end">
                         {/* Logic: Show the Active CPA bigger */}
                         {item.selectedCpaMode === 'SIMPLE' ? (
@@ -734,7 +726,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     </div>
                   </td>
 
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-right font-mono">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-right font-mono">
                     <span className={`text-base font-bold ${
                         activeMonths < 2 ? 'text-amber-600' : 
                         activeMonths > 12 ? 'text-blue-600' : 'text-gray-600'
@@ -743,11 +735,11 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     </span>
                   </td>
 
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-center">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-center">
                     {getStatusBadge(activeStatus)}
                   </td>
                   
-                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap">
+                  <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap">
                     {item.hasSpikes ? (
                       <div 
                         className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-100 w-fit group-hover:bg-amber-100 transition-colors"
@@ -768,7 +760,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     )}
                   </td>
 
-                  <td className={`px-2 sm:px-3 py-3 whitespace-nowrap text-right border-l ${showReviewedState ? 'bg-teal-50 border-teal-200' : 'bg-gray-50/50 border-transparent'}`}>
+                  <td className={`px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-right border-l ${showReviewedState ? 'bg-teal-50 border-teal-200' : 'bg-gray-50/50 border-transparent'}`}>
                       {needsReview ? (
                           <div className="flex flex-col items-end justify-center min-h-[2.5rem]">
                               <div className="flex items-center justify-end gap-3">

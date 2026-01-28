@@ -93,10 +93,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
     if (value === 0) return null;
     return (
       <g>
-        <text x={x + width / 2} y={y - 24} fill="#1F2937" textAnchor="middle" dy={0} fontSize={14} fontWeight="800">
+        <text x={x + width / 2} y={y - 20} fill="#1F2937" textAnchor="middle" dy={0} fontSize={12} fontWeight="800">
           {value}
         </text>
-        <text x={x + width / 2} y={y - 10} fill="#6B7280" textAnchor="middle" dy={0} fontSize={10} fontWeight="600">
+        <text x={x + width / 2} y={y - 8} fill="#6B7280" textAnchor="middle" dy={0} fontSize={9} fontWeight="600">
           {percentage}%
         </text>
       </g>
@@ -141,47 +141,45 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 2xl:space-y-6">
         
         {/* --- TOP SECTION: 3 COLUMNS --- */}
         {/* Layout: Changed to stack on mobile/tablet, and row on XL screens */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_0.8fr_1.1fr] gap-6 items-stretch">
+        <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_0.8fr_1.1fr] gap-4 2xl:gap-6 items-stretch">
             
             {/* 1. LEFT: Availability Bar Chart */}
-            <div className="bg-white p-4 sm:p-8 rounded-2xl border border-gray-100 shadow-sm flex flex-col h-full min-h-[300px] sm:min-h-[380px]">
-                <div className="flex justify-between items-center mb-6">
-                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+            <div className="bg-white p-4 2xl:p-8 rounded-2xl border border-gray-100 shadow-sm flex flex-col h-full min-h-[280px] 2xl:min-h-[380px]">
+                <div className="flex justify-between items-center mb-4 2xl:mb-6">
+                   <h4 className="text-[10px] 2xl:text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                       <BarChart3 className="h-4 w-4" />
                       Distribución de Disponibilidad
                    </h4>
-                   {/* Button moved to Table */}
                 </div>
 
                 <div className="flex-1 w-full min-h-0">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart 
                             data={statusData} 
-                            margin={{ top: 40, right: 10, left: 0, bottom: 5 }} 
-                            barSize={40}
+                            margin={{ top: 30, right: 10, left: 0, bottom: 0 }} 
+                            barSize={30}
                         >
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
                             <XAxis 
                                 dataKey="name" 
                                 axisLine={{ stroke: '#E5E7EB', strokeWidth: 1.5 }} 
                                 tickLine={false} 
-                                tick={{ fill: '#6B7280', fontSize: 10, fontWeight: 600 }} 
+                                tick={{ fill: '#6B7280', fontSize: 9, fontWeight: 600 }} 
                                 dy={10}
                                 interval={0}
-                                // Hide labels on very small screens if needed, or rotate
                             />
                             <YAxis 
                                 axisLine={{ stroke: '#E5E7EB', strokeWidth: 1.5 }}
                                 tickLine={false}
-                                tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 500 }}
+                                tick={{ fill: '#9CA3AF', fontSize: 9, fontWeight: 500 }}
                                 domain={[0, 100]}
                                 ticks={[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]}
                                 tickFormatter={(value) => `${value}%`}
-                                width={35}
+                                width={30}
                             />
                             <Tooltip content={<CustomStatusTooltip />} cursor={{ fill: '#F9FAFB' }} />
                             <Bar dataKey="numericPercentage" radius={[6, 6, 0, 0]}>
@@ -196,26 +194,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
             </div>
 
             {/* 2. CENTER: DME Indicator Card */}
-            <div className={`rounded-2xl p-8 border flex flex-col items-center justify-center text-center shadow-sm relative h-full min-h-[300px] sm:min-h-[380px] ${indicatorStyle.container}`}>
-                <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">% Disponibilidad de Medicamentos</h4>
-                <div className={`text-6xl sm:text-7xl font-black mb-4 ${indicatorStyle.text} tracking-tighter`}>
+            <div className={`rounded-2xl p-6 2xl:p-8 border flex flex-col items-center justify-center text-center shadow-sm relative h-full min-h-[280px] 2xl:min-h-[380px] ${indicatorStyle.container}`}>
+                <h4 className="text-[9px] 2xl:text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 2xl:mb-2">% Disponibilidad de Medicamentos</h4>
+                <div className={`text-5xl 2xl:text-7xl font-black mb-3 2xl:mb-4 ${indicatorStyle.text} tracking-tighter`}>
                     {(indicators.dmeScore || 0).toFixed(1)}%
                 </div>
-                <div className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide mb-4 ${indicatorStyle.badge}`}>
+                <div className={`px-3 py-1 2xl:px-4 2xl:py-1.5 rounded-full text-[9px] 2xl:text-[10px] font-bold uppercase tracking-wide mb-3 2xl:mb-4 ${indicatorStyle.badge}`}>
                     {indicators.status}
                 </div>
-                <p className="text-[10px] text-gray-500 max-w-[220px] leading-relaxed mb-6">
+                <p className="text-[9px] 2xl:text-[10px] text-gray-500 max-w-[200px] leading-relaxed mb-4 2xl:mb-6">
                     Medicamentos e insumos con stock disponible en el establecimiento .
                 </p>
-                <div className="absolute bottom-6 w-full px-8 flex justify-between text-[9px] font-bold uppercase text-gray-400/80">
+                <div className="absolute bottom-4 2xl:bottom-6 w-full px-6 2xl:px-8 flex justify-between text-[8px] 2xl:text-[9px] font-bold uppercase text-gray-400/80">
                       <span>Meta: &gt;90%</span>
                       <span>{result.indicators.availableItems} / {result.indicators.totalItems}</span>
                 </div>
             </div>
 
             {/* 3. RIGHT: Distribution Card */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col h-full min-h-[300px] sm:min-h-[380px]">
-                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+            <div className="bg-white p-4 2xl:p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col h-full min-h-[280px] 2xl:min-h-[380px]">
+                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 2xl:mb-4 flex items-center gap-2">
                     <Package className="h-3.5 w-3.5 text-purple-500" />
                     Distribución de Ítems
                 </h4>
@@ -225,7 +223,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
                         <BarChart 
                             data={distributionData} 
                             layout="vertical" 
-                            margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
+                            margin={{ top: 0, right: 30, left: 0, bottom: 0 }}
                             barCategoryGap={15}
                         >
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
@@ -235,18 +233,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
                                 type="category" 
                                 axisLine={false} 
                                 tickLine={false}
-                                tick={{ fontSize: 10, fontWeight: 'bold', fill: '#6B7280' }}
-                                width={60}
+                                tick={{ fontSize: 9, fontWeight: 'bold', fill: '#6B7280' }}
+                                width={50}
                             />
                             <Tooltip content={<CustomDistTooltip />} cursor={{fill: 'transparent'}} />
-                            <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={30}>
+                            <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
                                 {distributionData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={entry.color} />
                                 ))}
                                 <LabelList 
                                     dataKey="value" 
                                     position="right" 
-                                    style={{ fontSize: 11, fontWeight: 'bold', fill: '#374151' }} 
+                                    style={{ fontSize: 10, fontWeight: 'bold', fill: '#374151' }} 
                                     formatter={(val: number) => `${val} (${((val/totalItems)*100).toFixed(0)}%)`}
                                 />
                             </Bar>
