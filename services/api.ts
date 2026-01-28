@@ -69,26 +69,40 @@ export const api = {
         } catch (e) {
             console.warn("Error conectando al backend, intentando modo offline...", e);
             
-            const authUser = MOCK_DB.users.find(u => u.username === username && u.password === password);
+            // MOCK LOGIC UPDATE
+            const authUser = MOCK_DB.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+            
             if (authUser) {
-                const personnel = MOCK_DB.personnel.find(p => p.id === authUser.personnelId);
-                const facility = MOCK_DB.facilities.find(f => f.code === personnel?.facilityCode);
-                const roleConfig = MOCK_DB.roles.find(r => r.role === authUser.role);
+                // Check Password
+                if (authUser.password === password) {
+                    // Check Active
+                    if (authUser.isActive) {
+                        const personnel = MOCK_DB.personnel.find(p => p.id === authUser.personnelId);
+                        const facility = MOCK_DB.facilities.find(f => f.code === personnel?.facilityCode);
+                        const roleConfig = MOCK_DB.roles.find(r => r.role === authUser.role);
 
-                return {
-                    success: true,
-                    user: {
-                        username: authUser.username,
-                        role: authUser.role as UserRole,
-                        personnelId: authUser.personnelId,
-                        isActive: authUser.isActive,
-                        personnelData: personnel as Personnel,
-                        facilityData: facility as HealthFacility,
-                        permissions: roleConfig ? roleConfig.allowedModules as any : []
-                    },
-                    message: "Modo Offline / Demo (Sin conexión a Base de Datos)" 
-                };
+                        return {
+                            success: true,
+                            user: {
+                                username: authUser.username,
+                                role: authUser.role as UserRole,
+                                personnelId: authUser.personnelId,
+                                isActive: authUser.isActive,
+                                personnelData: personnel as Personnel,
+                                facilityData: facility as HealthFacility,
+                                permissions: roleConfig ? roleConfig.allowedModules as any : []
+                            },
+                            message: "Modo Offline / Demo" 
+                        };
+                    } else {
+                        return { success: false, message: "Su cuenta ha sido desactivada. Contacte al administrador." };
+                    }
+                } else {
+                    return { success: false, message: "Usuario o contraseña incorrectos." };
+                }
             }
+            
+            // If user not found in mock or connection failed completely
             return { success: false, message: "Error de conexión. Verifique su internet o la URL del script." };
         }
     },
@@ -144,8 +158,15 @@ export const api = {
         try {
             const result = await sendRequest('getUsers');
             if (result.success) {
-                usersCache = result.data; // Guardamos en memoria
-                return result.data;
+                // NORMALIZACIÓN DE DATOS (CRÍTICO)
+                // Asegura que isActive sea siempre un booleano real, no el string "TRUE"/"FALSE" de Google Sheets
+                const normalizedUsers = result.data.map((u: any) => ({
+                    ...u,
+                    isActive: u.isActive === true || String(u.isActive).toLowerCase() === 'true'
+                }));
+                
+                usersCache = normalizedUsers; // Guardamos en memoria normalizado
+                return normalizedUsers;
             }
             return [];
         } catch (e) {
@@ -154,6 +175,64 @@ export const api = {
                 ...u,
                 personnel: MOCK_DB.personnel.find(p => p.id === u.personnelId)
             }));
+        }
+    },
+
+    // --- NEW ADMIN METHODS ---
+
+    adminSaveUser: async (userData: any): Promise<{ success: boolean; message?: string }> => {
+        try {
+            usersCache = null; // Invalidate Cache
+            const result = await sendRequest('adminSaveUser', { userData });
+            return result;
+        } catch (e) {
+            console.error("Error admin save user:", e);
+            // Mock Implementation for offline test
+            if (userData.isNew) {
+                const newId = 'P' + Date.now();
+                MOCK_DB.personnel.push({
+                    id: newId,
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    dni: userData.dni,
+                    email: userData.email,
+                    facilityCode: userData.facilityCode
+                } as any);
+                MOCK_DB.users.push({
+                    username: userData.username,
+                    password: userData.password,
+                    role: userData.role,
+                    personnelId: newId,
+                    isActive: true
+                });
+            }
+            return { success: true, message: "Guardado en modo Offline (Mock)" };
+        }
+    },
+
+    toggleUserStatus: async (username: string, status: boolean): Promise<{ success: boolean; message?: string }> => {
+        try {
+            usersCache = null; // Invalidate Cache
+            const result = await sendRequest('toggleUserStatus', { username, status });
+            return result;
+        } catch (e) {
+            console.error("Error toggle status:", e);
+            // Mock Implementation
+            const u = MOCK_DB.users.find(user => user.username === username);
+            if (u) u.isActive = status;
+            return { success: true, message: "Estado actualizado en Offline" };
+        }
+    },
+
+    // --- FACILITIES ---
+    getFacilities: async (): Promise<HealthFacility[]> => {
+        try {
+            const result = await sendRequest('getFacilities');
+            if (result.success) return result.data;
+            return [];
+        } catch (e) {
+            console.error("Error fetching facilities:", e);
+            return MOCK_DB.facilities;
         }
     },
 

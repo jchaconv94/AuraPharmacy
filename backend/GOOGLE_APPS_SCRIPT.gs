@@ -2,14 +2,12 @@
 /**
  * AURA PHARMA BACKEND - GOOGLE APPS SCRIPT
  * 
- * v2.3 - Dynamic API URL Support
+ * v2.6 - Enhanced Login Feedback
  */
 
 // ----------------------------------------------------------------------------
 // CONFIGURATION
 // ----------------------------------------------------------------------------
-// Si dejas esto vacío, el script usará la hoja de cálculo a la que está vinculado.
-// Si quieres vincularlo a otra hoja específica, pon el ID entre las comillas.
 const SPREADSHEET_ID = ""; 
 
 // ----------------------------------------------------------------------------
@@ -25,7 +23,6 @@ function doGet(e) {
 
 function handleRequest(e) {
   const lock = LockService.getScriptLock();
-  // Esperar hasta 10 segundos para evitar conflictos de escritura simultánea
   lock.tryLock(10000);
 
   try {
@@ -57,6 +54,15 @@ function handleRequest(e) {
       case 'updateSystemConfig':
          result = handleUpdateSystemConfig(ss, params.config);
          break;
+      case 'adminSaveUser':
+         result = handleAdminSaveUser(ss, params.userData);
+         break;
+      case 'toggleUserStatus':
+         result = handleToggleUserStatus(ss, params.username, params.status);
+         break;
+      case 'getFacilities':
+         result = handleGetFacilities(ss);
+         break;
       default:
          result = { success: false, message: "Unknown action: " + params.action };
     }
@@ -70,9 +76,6 @@ function handleRequest(e) {
   }
 }
 
-// ----------------------------------------------------------------------------
-// RESPONSE HELPER (CORS)
-// ----------------------------------------------------------------------------
 function responseJSON(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
@@ -84,27 +87,31 @@ function responseJSON(data) {
 
 function handleLogin(ss, username, password) {
   const sheet = ss.getSheetByName('USERS');
-  if (!sheet) return { success: false, message: "DB Error: Table USERS missing. Run setupDatabase()." };
+  if (!sheet) return { success: false, message: "Error DB: Tabla USERS no encontrada." };
   
   const data = sheet.getDataRange().getValues(); 
   
   for (let i = 1; i < data.length; i++) {
-    // Columna 0: Username, Columna 1: Password
-    if (String(data[i][0]).toLowerCase() === String(username).toLowerCase() && String(data[i][1]) === String(password)) {
-        return buildUserResponse(ss, data[i]);
+    // Check username (case insensitive)
+    if (String(data[i][0]).toLowerCase() === String(username).toLowerCase()) {
+        // Check password (case sensitive)
+        if (String(data[i][1]) === String(password)) {
+             return buildUserResponse(ss, data[i]);
+        } else {
+             // User found, but wrong password
+             return { success: false, message: 'Usuario o contraseña incorrectos.' };
+        }
     }
   }
-  return { success: false, message: 'Usuario o contraseña incorrectos' };
+  // User not found
+  return { success: false, message: 'Usuario o contraseña incorrectos.' };
 }
 
 function handleRefreshUser(ss, username) {
   const sheet = ss.getSheetByName('USERS');
   if (!sheet) return { success: false, message: "DB Error" };
-  
   const data = sheet.getDataRange().getValues();
-  
   for (let i = 1; i < data.length; i++) {
-    // Solo validamos el Username (asumiendo que ya tiene sesión válida en frontend)
     if (String(data[i][0]).toLowerCase() === String(username).toLowerCase()) {
         return buildUserResponse(ss, data[i]);
     }
@@ -112,21 +119,17 @@ function handleRefreshUser(ss, username) {
   return { success: false, message: 'Usuario no encontrado o eliminado' };
 }
 
-// Helper para construir el objeto User completo (Login y Refresh usan esto)
 function buildUserResponse(ss, userRow) {
-    // Verificar si está activo (Columna 4)
+    // Check if Account is Active (Column Index 4)
     if (userRow[4] !== true && String(userRow[4]).toLowerCase() !== 'true') {
-            return { success: false, message: 'Usuario inactivo/bloqueado' };
+            return { success: false, message: 'Su cuenta ha sido desactivada. Contacte al administrador.' };
     }
     
     const personnelId = userRow[3];
     const personnelData = getPersonnelData(ss, personnelId);
-    
     if (!personnelData) return { success: false, message: 'Error de integridad: Personal no encontrado' };
-
     const facilityData = getFacilityData(ss, personnelData.facilityCode);
     const rolePermissions = getRolePermissions(ss, userRow[2]);
-    
     return {
         success: true,
         user: {
@@ -162,15 +165,12 @@ function handleGetUsers(ss) {
 function handleUpdateProfile(ss, personnelId, newData) {
     const pSheet = ss.getSheetByName('PERSONNEL');
     const uSheet = ss.getSheetByName('USERS');
-    
-    if (!pSheet || !uSheet) return { success: false, message: "Error DB: Tablas no encontradas" };
+    if (!pSheet || !uSheet) return { success: false, message: "Error DB" };
 
     const pData = pSheet.getDataRange().getValues();
     const uData = uSheet.getDataRange().getValues();
-    
     let personnelUpdated = false;
 
-    // 1. UPDATE PERSONNEL INFO
     for(let i=1; i<pData.length; i++) {
         if(String(pData[i][0]) === String(personnelId)) {
             const row = i + 1;
@@ -184,8 +184,6 @@ function handleUpdateProfile(ss, personnelId, newData) {
             break;
         }
     }
-
-    // 2. UPDATE USER INFO
     for(let i=1; i<uData.length; i++) {
         if(String(uData[i][3]) === String(personnelId)) {
             const row = i + 1;
@@ -198,64 +196,131 @@ function handleUpdateProfile(ss, personnelId, newData) {
             break;
         }
     }
-
     return personnelUpdated ? { success: true } : { success: false, message: "Personal no encontrado" };
 }
 
-// --- SYSTEM CONFIG HANDLERS (LOGICA DE CONFIGURACIÓN) ---
+function handleAdminSaveUser(ss, userData) {
+    const uSheet = ss.getSheetByName('USERS');
+    const pSheet = ss.getSheetByName('PERSONNEL');
+    
+    if (userData.isNew) {
+        const users = uSheet.getDataRange().getValues();
+        const exists = users.some(u => String(u[0]).toLowerCase() === String(userData.username).toLowerCase());
+        if (exists) return { success: false, message: "El nombre de usuario ya existe." };
+        
+        const newId = 'P' + new Date().getTime();
+        
+        pSheet.appendRow([
+            newId, 
+            userData.firstName, 
+            userData.lastName, 
+            userData.dni, 
+            userData.phone || '', 
+            userData.email || '', 
+            userData.birthDate || '', 
+            userData.facilityCode || '00001'
+        ]);
+        
+        uSheet.appendRow([
+            userData.username,
+            userData.password,
+            userData.role,
+            newId,
+            true
+        ]);
+        
+    } else {
+        const pData = pSheet.getDataRange().getValues();
+        const uData = uSheet.getDataRange().getValues();
+        
+        for(let i=1; i<pData.length; i++) {
+            if(String(pData[i][0]) === String(userData.personnelId)) {
+                const row = i + 1;
+                pSheet.getRange(row, 2).setValue(userData.firstName);
+                pSheet.getRange(row, 3).setValue(userData.lastName);
+                pSheet.getRange(row, 4).setValue(userData.dni);
+                pSheet.getRange(row, 6).setValue(userData.email);
+                pSheet.getRange(row, 8).setValue(userData.facilityCode);
+                break;
+            }
+        }
+        
+        for(let i=1; i<uData.length; i++) {
+            if(String(uData[i][3]) === String(userData.personnelId)) {
+                const row = i + 1;
+                uSheet.getRange(row, 3).setValue(userData.role);
+                if (userData.password) {
+                    uSheet.getRange(row, 2).setValue(userData.password);
+                }
+                break;
+            }
+        }
+    }
+    
+    return { success: true };
+}
+
+function handleToggleUserStatus(ss, username, status) {
+    const uSheet = ss.getSheetByName('USERS');
+    const uData = uSheet.getDataRange().getValues();
+    
+    for(let i=1; i<uData.length; i++) {
+        if(String(uData[i][0]) === String(username)) {
+            const row = i + 1;
+            uSheet.getRange(row, 5).setValue(status); // Column 5 is Active
+            return { success: true };
+        }
+    }
+    return { success: false, message: "Usuario no encontrado" };
+}
+
+function handleGetFacilities(ss) {
+    const sheet = ss.getSheetByName('FACILITIES');
+    if (!sheet) return { success: true, data: [] };
+    const data = sheet.getDataRange().getValues();
+    const list = [];
+    for(let i=1; i<data.length; i++) {
+        list.push({
+            code: data[i][0],
+            name: data[i][1],
+            category: data[i][2]
+        });
+    }
+    return { success: true, data: list };
+}
 
 function handleGetSystemConfig(ss) {
     const sheet = ss.getSheetByName('CONFIG');
-    // Si no existe la hoja, devolvemos un default seguro
     if (!sheet) return { success: true, data: { verificationDelaySeconds: 5 } };
-
     const data = sheet.getDataRange().getValues();
     const config = {};
-    
-    // Convertimos las filas [Clave, Valor] a un Objeto JSON { Clave: Valor }
     for(let i=1; i<data.length; i++) {
-        const key = data[i][0];
-        const value = data[i][1];
-        config[key] = value;
+        config[data[i][0]] = data[i][1];
     }
-
     return { success: true, data: config };
 }
 
 function handleUpdateSystemConfig(ss, newConfig) {
     let sheet = ss.getSheetByName('CONFIG');
-    
-    // Si la hoja no existe, la creamos al vuelo
     if (!sheet) {
         createTableIfNotExists(ss, 'CONFIG', ['Key', 'Value'], []);
         sheet = ss.getSheetByName('CONFIG');
     }
-
     const data = sheet.getDataRange().getValues();
     const keys = Object.keys(newConfig);
-
     keys.forEach(key => {
         let found = false;
-        // Buscamos si la clave ya existe para actualizarla
         for(let i=1; i<data.length; i++) {
             if(String(data[i][0]) === key) {
-                // Actualizamos la Columna B (índice 2)
                 sheet.getRange(i+1, 2).setValue(newConfig[key]);
                 found = true;
                 break;
             }
         }
-        // Si no existe, agregamos una nueva fila al final
-        if (!found) {
-            sheet.appendRow([key, newConfig[key]]);
-        }
+        if (!found) sheet.appendRow([key, newConfig[key]]);
     });
-
     return { success: true, message: "Configuración guardada en nube." };
 }
-
-
-// --- DATA HELPERS ---
 
 function getPersonnelData(ss, id) {
    const sheet = ss.getSheetByName('PERSONNEL');
@@ -301,32 +366,14 @@ function getRolePermissions(ss, role) {
    return [];
 }
 
-
-// ----------------------------------------------------------------------------
-// SETUP FUNCTION (EJECUTAR UNA VEZ PARA CREAR TABLAS)
-// ----------------------------------------------------------------------------
 function setupDatabase() {
   const ss = SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
-  
-  // Tabla FACILITIES
   createTableIfNotExists(ss, 'FACILITIES', ['Code', 'Name', 'Category'], [['00001', 'DIRESA SEDE CENTRAL', 'ADM']]);
-  
-  // Tabla PERSONNEL
   createTableIfNotExists(ss, 'PERSONNEL', ['ID', 'FirstName', 'LastName', 'DNI', 'Phone', 'Email', 'BirthDate', 'FacilityCode'], [['P001', 'Admin', 'User', '0000', '000', 'admin@aura.pe', '1990-01-01', '00001']]);
-  
-  // Tabla ROLES
   createTableIfNotExists(ss, 'ROLES', ['Role', 'Label', 'Modules'], [['ADMIN', 'Admin', 'DASHBOARD,ANALYSIS,ADMIN_USERS,ADMIN_ROLES,PROFILE']]);
-  
-  // Tabla USERS
   createTableIfNotExists(ss, 'USERS', ['Username', 'Password', 'Role', 'PersonnelID', 'Active'], [['admin', 'admin123', 'ADMIN', 'P001', true]]);
-  
-  // Tabla CONFIG (NUEVA) - Aquí se guardan tus parámetros globales
-  createTableIfNotExists(ss, 'CONFIG', ['Key', 'Value'], [
-      ['verificationDelaySeconds', 5],
-      ['apiUrl', ''] // Campo vacío por defecto
-  ]);
-  
-  Logger.log("Base de datos actualizada correctamente.");
+  createTableIfNotExists(ss, 'CONFIG', ['Key', 'Value'], [['verificationDelaySeconds', 5], ['apiUrl', '']]);
+  Logger.log("Base de datos actualizada.");
 }
 
 function createTableIfNotExists(ss, sheetName, headers, defaultData) {
@@ -334,9 +381,7 @@ function createTableIfNotExists(ss, sheetName, headers, defaultData) {
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
     sheet.appendRow(headers);
-    // Dar formato bonito a los encabezados
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#E6F4EA");
-    // Insertar datos por defecto si existen
     if (defaultData && defaultData.length > 0) defaultData.forEach(row => sheet.appendRow(row));
   }
 }

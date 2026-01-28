@@ -23,6 +23,11 @@ export const LoginScreen: React.FC = () => {
       setIsSubmitting(false);
   };
 
+  const handleInputChange = (setter: React.Dispatch<React.SetStateAction<string>>, value: string) => {
+      setter(value);
+      if (error) setError(''); // Clear error on typing
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-teal-900 to-gray-900 flex items-center justify-center p-4">
         {/* Adjusted max-width for compact screens (max-w-3xl) and large screens (2xl:max-w-5xl) */}
@@ -58,7 +63,7 @@ export const LoginScreen: React.FC = () => {
                 </div>
 
                 {error && (
-                    <div className="mb-4 2xl:mb-6 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">
+                    <div className="mb-4 2xl:mb-6 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
                         <Lock className="h-4 w-4 shrink-0" />
                         {error}
                     </div>
@@ -71,10 +76,10 @@ export const LoginScreen: React.FC = () => {
                             <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 2xl:h-5 2xl:w-5 text-gray-400 z-10" />
                             <input 
                                 type="text"
-                                className="w-full pl-9 2xl:pl-10 pr-4 py-2 2xl:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all bg-white text-gray-900 font-medium text-sm"
+                                className={`w-full pl-9 2xl:pl-10 pr-4 py-2 2xl:py-2.5 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all bg-white text-gray-900 font-medium text-sm ${error ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'}`}
                                 placeholder="Ej. jperez"
                                 value={username}
-                                onChange={(e) => setUsername(e.target.value)}
+                                onChange={(e) => handleInputChange(setUsername, e.target.value)}
                             />
                         </div>
                     </div>
@@ -85,10 +90,10 @@ export const LoginScreen: React.FC = () => {
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 2xl:h-5 2xl:w-5 text-gray-400 z-10" />
                             <input 
                                 type="password"
-                                className="w-full pl-9 2xl:pl-10 pr-4 py-2 2xl:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all bg-white text-gray-900 font-medium text-sm"
+                                className={`w-full pl-9 2xl:pl-10 pr-4 py-2 2xl:py-2.5 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all bg-white text-gray-900 font-medium text-sm ${error ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'}`}
                                 placeholder="••••••••"
                                 value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+                                onChange={(e) => handleInputChange(setPassword, e.target.value)}
                             />
                         </div>
                     </div>

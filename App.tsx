@@ -17,8 +17,12 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginScreen } from './components/LoginScreen';
 import { AdminPanel } from './components/AdminPanel';
 import { UserProfile } from './components/UserProfile';
+import { WelcomeModal } from './components/WelcomeModal'; // Importar Modal
 
 const STORAGE_KEY = 'aura_data_v1';
+const REVIEW_KEY = 'aura_reviews_v1';
+const ADDITIONAL_ITEMS_KEY = 'aura_additional_v1';
+const WELCOME_KEY = 'aura_welcome_shown_session'; // Clave de sesión
 
 // --- MAIN APP COMPONENT WRAPPED IN AUTH CONTEXT ---
 const App: React.FC = () => {
@@ -33,6 +37,20 @@ const App: React.FC = () => {
 const AuthenticatedApp: React.FC = () => {
     const { isAuthenticated, isLoading, user, logout, hasPermission } = useAuth();
     const [currentView, setCurrentView] = useState<AppModule>('DASHBOARD');
+    
+    // Welcome Modal State
+    const [showWelcome, setShowWelcome] = useState(false);
+
+    // Effect to trigger welcome modal ONCE per session
+    useEffect(() => {
+        if (isAuthenticated && user && !isLoading) {
+            const hasShown = sessionStorage.getItem(WELCOME_KEY);
+            if (!hasShown) {
+                setShowWelcome(true);
+                sessionStorage.setItem(WELCOME_KEY, 'true');
+            }
+        }
+    }, [isAuthenticated, isLoading, user]);
 
     // If loading, show spinner
     if (isLoading) {
@@ -51,6 +69,11 @@ const AuthenticatedApp: React.FC = () => {
     // --- RENDER MAIN LAYOUT ---
     return (
         <div className="min-h-screen bg-gray-50/50">
+            {/* WELCOME MODAL OVERLAY */}
+            {showWelcome && user && (
+                <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />
+            )}
+
             {/* PREMIUM HEADER */}
             <header className="bg-gray-950 border-b border-white/5 sticky top-0 z-50 backdrop-blur-md bg-opacity-95 shadow-xl">
                 <div className="max-w-[98%] mx-auto px-4 sm:px-6">
@@ -187,13 +210,28 @@ const AnalysisModule: React.FC = () => {
   const [quickFilter, setQuickFilter] = useState<QuickFilterOption>('ALL');
 
   // --- REVIEW SYSTEM STATE ---
-  const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
+  const [reviewedIds, setReviewedIds] = useState<Set<string>>(() => {
+      try {
+          const saved = localStorage.getItem(REVIEW_KEY);
+          return saved ? new Set(JSON.parse(saved)) : new Set();
+      } catch (e) {
+          return new Set();
+      }
+  });
+
   const [showReviewWarning, setShowReviewWarning] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   
   // --- ADDITIONAL ITEMS STATE ---
-  const [additionalItems, setAdditionalItems] = useState<AdditionalItem[]>([]);
+  const [additionalItems, setAdditionalItems] = useState<AdditionalItem[]>(() => {
+      try {
+          const saved = localStorage.getItem(ADDITIONAL_ITEMS_KEY);
+          return saved ? JSON.parse(saved) : [];
+      } catch (e) {
+          return [];
+      }
+  });
   const [isManualEntryModalOpen, setIsManualEntryModalOpen] = useState(false);
 
   // --- FULL SCREEN STATE & NATIVE API LOGIC ---
@@ -255,6 +293,16 @@ const AnalysisModule: React.FC = () => {
     }
   }, [result]);
 
+  // PERSIST REVIEWED IDS
+  useEffect(() => {
+      localStorage.setItem(REVIEW_KEY, JSON.stringify(Array.from(reviewedIds)));
+  }, [reviewedIds]);
+
+  // PERSIST ADDITIONAL ITEMS
+  useEffect(() => {
+      localStorage.setItem(ADDITIONAL_ITEMS_KEY, JSON.stringify(additionalItems));
+  }, [additionalItems]);
+
   const handleAnalyze = useCallback(async (data: MedicationInput[], referenceDate: string, vaccinesExcluded: boolean) => {
     setLoading(true);
     setError(null);
@@ -263,9 +311,15 @@ const AnalysisModule: React.FC = () => {
       setResult(analysisResult);
       setSearchTerm('');
       setActiveFilters({});
-      setReviewedIds(new Set());
-      setQuickFilter('ALL');
+      
+      // Reset reviews and additional items on NEW analysis
+      setReviewedIds(new Set()); 
+      localStorage.removeItem(REVIEW_KEY);
+      
       setAdditionalItems([]);
+      localStorage.removeItem(ADDITIONAL_ITEMS_KEY);
+
+      setQuickFilter('ALL');
       setShowSuccessModal(false);
     } catch (err: any) {
       console.error(err);
@@ -280,10 +334,16 @@ const AnalysisModule: React.FC = () => {
     setSearchTerm('');
     setActiveFilters({});
     setError(null);
+    
     setReviewedIds(new Set());
+    localStorage.removeItem(REVIEW_KEY);
+
     handleToggleFullScreen(false); // Exit fullscreen on reset
     setQuickFilter('ALL');
+    
     setAdditionalItems([]);
+    localStorage.removeItem(ADDITIONAL_ITEMS_KEY);
+
     setShowSuccessModal(false);
     setInputData([]); // Clear input data on reset
   }, [handleToggleFullScreen]);

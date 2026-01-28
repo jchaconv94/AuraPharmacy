@@ -18,14 +18,16 @@ import {
   MapPin,
   ShieldCheck,
   KeyRound,
-  Shield
+  Shield,
+  RefreshCw
 } from 'lucide-react';
 import { api } from '../services/api';
 
 export const UserProfile: React.FC = () => {
-  const { user, updateUserContext } = useAuth();
+  const { user, updateUserContext, refreshUserData } = useAuth();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Form State
@@ -40,6 +42,16 @@ export const UserProfile: React.FC = () => {
       newPassword: '',
       confirmPassword: ''
   });
+
+  // AUTO REFRESH ON MOUNT: Get latest data from DB immediately when opening profile
+  useEffect(() => {
+      const fetchLatest = async () => {
+          setIsRefreshing(true);
+          await refreshUserData();
+          setIsRefreshing(false);
+      };
+      fetchLatest();
+  }, []);
 
   // Load data into form when modal opens
   useEffect(() => {
@@ -60,6 +72,12 @@ export const UserProfile: React.FC = () => {
   }, [isEditModalOpen, user]);
 
   if (!user || !user.personnelData) return null;
+
+  const handleManualRefresh = async () => {
+      setIsRefreshing(true);
+      await refreshUserData();
+      setIsRefreshing(false);
+  };
 
   const handleSave = async () => {
       setError(null);
@@ -101,7 +119,7 @@ export const UserProfile: React.FC = () => {
       const response = await api.updateProfile(user.personnelId, payload);
       
       if (response.success) {
-          // Update local context
+          // 1. Update local context optimistic (for speed)
           updateUserContext({
               username: formData.username,
               personnelData: {
@@ -114,6 +132,10 @@ export const UserProfile: React.FC = () => {
                   birthDate: formData.birthDate
               }
           });
+          
+          // 2. CRITICAL: Force full refresh from DB immediately to update Header/Session
+          await refreshUserData();
+
           setIsEditModalOpen(false);
       } else {
           setError(response.message || "Error al guardar los cambios.");
@@ -133,6 +155,16 @@ export const UserProfile: React.FC = () => {
             <div className="h-32 2xl:h-48 rounded-t-2xl 2xl:rounded-t-3xl bg-gradient-to-r from-gray-900 via-teal-900 to-gray-900 relative overflow-hidden">
                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
                  <div className="absolute bottom-4 right-6 text-white/10 font-black text-4xl 2xl:text-6xl select-none hidden sm:block">AURA</div>
+                 
+                 {/* Manual Refresh Button (Top Right) */}
+                 <button 
+                    onClick={handleManualRefresh}
+                    disabled={isRefreshing}
+                    className="absolute top-4 right-4 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-all backdrop-blur-sm border border-white/10"
+                    title="Sincronizar datos con Base de Datos"
+                 >
+                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                 </button>
             </div>
             
             {/* Profile Info Bar (Matching Gradient Card Overlapping Banner) */}
@@ -203,9 +235,13 @@ export const UserProfile: React.FC = () => {
                     <div className="space-y-3 2xl:space-y-4 relative z-10">
                         <div>
                             <label className="text-[10px] 2xl:text-xs text-gray-400 font-bold uppercase">Establecimiento</label>
-                            <p className="text-base 2xl:text-lg font-bold text-gray-900 leading-tight mt-0.5">
-                                {user.facilityData?.name || 'No Asignado'}
-                            </p>
+                            {isRefreshing ? (
+                                <div className="h-6 w-3/4 bg-gray-100 animate-pulse rounded mt-1"></div>
+                            ) : (
+                                <p className="text-base 2xl:text-lg font-bold text-gray-900 leading-tight mt-0.5">
+                                    {user.facilityData?.name || 'No Asignado'}
+                                </p>
+                            )}
                         </div>
                         
                         <div className="flex gap-4">
