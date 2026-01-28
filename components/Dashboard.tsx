@@ -207,7 +207,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
                     Medicamentos e insumos con stock disponible en el establecimiento .
                 </p>
                 <div className="absolute bottom-6 w-full px-8 flex justify-between text-[9px] font-bold uppercase text-gray-400/80">
-                      <span>Meta: >90%</span>
+                      <span>Meta: &gt;90%</span>
                       <span>{result.indicators.availableItems} / {result.indicators.totalItems}</span>
                 </div>
             </div>
