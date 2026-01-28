@@ -37,7 +37,7 @@ export const LoginScreen: React.FC = () => {
                 <p className="text-teal-100 font-medium text-lg px-4 leading-relaxed">Inteligencia Artificial para<br/>para la Gestión Farmacéutica</p>
                 <div className="mt-8 text-sm text-teal-200 opacity-80 font-mono">
                     <p>Oficina de Gestión de Medicamentos</p>
-                    <p> Red de Salud Bellavista © 2026</p>
+                    <p> Red de Salud Bellavista © {new Date().getFullYear()}</p>
                 </div>
             </div>
 
