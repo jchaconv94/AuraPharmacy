@@ -367,9 +367,9 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   // Main Filter Display Label Logic
   const getFilterLabel = (filter: QuickFilterOption) => {
       switch(filter) {
-          case 'PENDING': return 'Pendientes de Validar';
-          case 'REQ_POSITIVE': return 'Con Requerimiento (>0)';
-          case 'REQ_ZERO': return 'Sin Requerimiento (0)';
+          case 'PENDING': return 'Pendientes';
+          case 'REQ_POSITIVE': return 'Con Req.';
+          case 'REQ_ZERO': return 'Sin Req.';
           default: return 'Todos';
       }
   };
@@ -385,25 +385,29 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
       
       {/* FULL SCREEN DEDICATED HEADER */}
       {isFullScreen && (
-          <div className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between shadow-md shrink-0 border-b border-gray-800">
-              {/* ... (Full screen header code) ... */}
-              <div className="flex items-center gap-6 flex-1">
-                  <div className="flex items-center gap-2">
-                      <div className="bg-teal-500/20 p-2 rounded-lg">
-                           <Layout className="h-5 w-5 text-teal-400" />
+          <div className="bg-gray-900 text-white px-4 py-2 sm:px-6 sm:py-3 flex items-center justify-between shadow-md shrink-0 border-b border-gray-800 transition-all duration-300">
+              
+              {/* LEFT SIDE: Title + Search + Actions - Optimized for fluid width */}
+              <div className="flex items-center gap-3 lg:gap-6 flex-1 min-w-0">
+                  
+                  {/* Branding/Title - Hide text on mobile, Compact on Tablet */}
+                  <div className="flex items-center gap-2 shrink-0">
+                      <div className="bg-teal-500/20 p-1.5 sm:p-2 rounded-lg">
+                           <Layout className="h-4 w-4 sm:h-5 sm:w-5 text-teal-400" />
                       </div>
-                      <div>
-                          <h2 className="font-bold text-lg leading-none">Modo Auditoría</h2>
-                          <p className="text-xs text-gray-400 mt-0.5">{filteredItems.length} ítems listados</p>
+                      <div className="hidden sm:block">
+                          <h2 className="font-bold text-sm sm:text-base lg:text-lg leading-none whitespace-nowrap">Modo Auditoría</h2>
+                          <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">{filteredItems.length} ítems</p>
                       </div>
                   </div>
-                  {/* ... (Search and Filters) ... */}
-                  <div className="relative max-w-md w-full ml-4 hidden md:block">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
+
+                  {/* Search Bar - Responsive Flex Width */}
+                  <div className="relative flex-1 max-w-[140px] sm:max-w-[200px] md:max-w-xs lg:max-w-md ml-0 sm:ml-2">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-gray-500" />
                       <input 
                         type="text" 
-                        placeholder="Buscar medicamento..." 
-                        className="pl-9 pr-4 py-2 text-sm bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none w-full text-white placeholder-gray-500"
+                        placeholder="Buscar..." 
+                        className="pl-8 sm:pl-9 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none w-full text-white placeholder-gray-500 transition-all"
                         value={searchTerm}
                         onChange={(e) => {
                             onSearchChange(e.target.value);
@@ -412,19 +416,21 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                         autoFocus
                       />
                   </div>
-                   {/* ... (Remaining Full Screen Header) ... */}
-                    <div className="relative" ref={mainFilterRef}>
+
+                  {/* Action Buttons Container - Hide Text on Laptops (XL breakpoint for full text) */}
+                  <div className="flex items-center gap-2" ref={mainFilterRef}>
                       <button 
                         onClick={() => setIsMainFilterOpen(!isMainFilterOpen)}
-                        className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                        className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all ${
                             quickFilter !== 'ALL'
                             ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' 
                             : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
                         }`}
                         title="Filtrar Lista"
                       >
-                         <ListFilter className="h-4 w-4" />
-                         {getFilterLabel(quickFilter)}
+                         <ListFilter className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                         <span className="hidden xl:inline">{getFilterLabel(quickFilter) === 'Pendientes' ? 'Pendientes de Validar' : getFilterLabel(quickFilter)}</span>
+                         <span className="inline xl:hidden">{getFilterLabel(quickFilter)}</span>
                          <ChevronDown className={`h-3 w-3 transition-transform ${isMainFilterOpen ? 'rotate-180' : ''}`} />
                       </button>
 
@@ -469,15 +475,15 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                    {onOpenAdditionalModal && (
                       <button 
                         onClick={onOpenAdditionalModal}
-                        className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ml-2 ${
+                        className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all ml-2 ${
                             additionalItemsCount > 0
                             ? 'bg-purple-900/50 text-purple-300 border border-purple-700 hover:bg-purple-900 shadow-[0_0_10px_rgba(168,85,247,0.2)]' 
                             : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
                         }`}
                         title="Gestionar Adicionales"
                       >
-                         <ShoppingCart className="h-4 w-4" />
-                         Adicionales
+                         <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                         <span className="hidden xl:inline">Adicionales</span>
                          {additionalItemsCount > 0 && (
                              <span className="bg-purple-600 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1 font-bold">
                                  {additionalItemsCount}
@@ -486,36 +492,39 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                       </button>
                   )}
               </div>
-              {/* ... (Progress Bar) ... */}
-              <div className="hidden lg:flex items-center gap-6 mr-6">
-                  <div className="text-right">
-                      <div className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">
-                          Progreso Validación
-                      </div>
-                      <div className="flex items-center justify-end gap-2">
-                          <span className={`text-xl font-black ${reviewProgress === 100 ? 'text-teal-400' : 'text-amber-400'}`}>
-                              {reviewProgress}%
-                          </span>
-                          <span className="text-xs text-gray-500">
-                              ({reviewedCount}/{totalToReview})
-                          </span>
-                      </div>
-                  </div>
-                  <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden">
-                       <div 
-                          className={`h-full transition-all duration-500 ${reviewProgress === 100 ? 'bg-teal-500' : 'bg-amber-500'}`}
-                          style={{ width: `${reviewProgress}%` }}
-                       />
-                  </div>
-              </div>
 
-              <button 
-                  onClick={() => onToggleFullScreen(false)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors text-gray-300 hover:text-white border border-gray-700"
-              >
-                  <Minimize2 className="h-4 w-4" />
-                  Salir
-              </button>
+              {/* RIGHT SIDE: Progress + Exit */}
+              <div className="flex items-center gap-3 sm:gap-6 ml-3 shrink-0">
+                  <div className="hidden md:flex items-center gap-3 sm:gap-6">
+                      <div className="text-right hidden lg:block">
+                          <div className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">
+                              Progreso
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                              <span className={`text-lg font-black ${reviewProgress === 100 ? 'text-teal-400' : 'text-amber-400'}`}>
+                                  {reviewProgress}%
+                              </span>
+                              <span className="text-[10px] text-gray-500">
+                                  ({reviewedCount}/{totalToReview})
+                              </span>
+                          </div>
+                      </div>
+                      <div className="w-16 sm:w-24 lg:w-32 h-1.5 sm:h-2 bg-gray-800 rounded-full overflow-hidden">
+                           <div 
+                              className={`h-full transition-all duration-500 ${reviewProgress === 100 ? 'bg-teal-500' : 'bg-amber-500'}`}
+                              style={{ width: `${reviewProgress}%` }}
+                           />
+                      </div>
+                  </div>
+
+                  <button 
+                      onClick={() => onToggleFullScreen(false)}
+                      className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs sm:text-sm font-medium transition-colors text-gray-300 hover:text-white border border-gray-700"
+                  >
+                      <Minimize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Salir</span>
+                  </button>
+              </div>
           </div>
       )}
 
