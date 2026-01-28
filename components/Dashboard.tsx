@@ -144,11 +144,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
     <div className="space-y-6">
         
         {/* --- TOP SECTION: 3 COLUMNS --- */}
-        {/* Layout: Availability | DME Indicator | Distribution */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_0.8fr_1.1fr] gap-6 items-stretch">
+        {/* Layout: Changed to stack on mobile/tablet, and row on XL screens */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_0.8fr_1.1fr] gap-6 items-stretch">
             
             {/* 1. LEFT: Availability Bar Chart */}
-            <div className="bg-white p-6 sm:p-8 rounded-2xl border border-gray-100 shadow-sm flex flex-col h-full min-h-[380px]">
+            <div className="bg-white p-4 sm:p-8 rounded-2xl border border-gray-100 shadow-sm flex flex-col h-full min-h-[300px] sm:min-h-[380px]">
                 <div className="flex justify-between items-center mb-6">
                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                       <BarChart3 className="h-4 w-4" />
@@ -172,6 +172,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
                                 tick={{ fill: '#6B7280', fontSize: 10, fontWeight: 600 }} 
                                 dy={10}
                                 interval={0}
+                                // Hide labels on very small screens if needed, or rotate
                             />
                             <YAxis 
                                 axisLine={{ stroke: '#E5E7EB', strokeWidth: 1.5 }}
@@ -195,9 +196,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
             </div>
 
             {/* 2. CENTER: DME Indicator Card */}
-            <div className={`rounded-2xl p-8 border flex flex-col items-center justify-center text-center shadow-sm relative h-full min-h-[380px] ${indicatorStyle.container}`}>
+            <div className={`rounded-2xl p-8 border flex flex-col items-center justify-center text-center shadow-sm relative h-full min-h-[300px] sm:min-h-[380px] ${indicatorStyle.container}`}>
                 <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">% Disponibilidad de Medicamentos</h4>
-                <div className={`text-7xl font-black mb-4 ${indicatorStyle.text} tracking-tighter`}>
+                <div className={`text-6xl sm:text-7xl font-black mb-4 ${indicatorStyle.text} tracking-tighter`}>
                     {indicators.dmeScore.toFixed(1)}%
                 </div>
                 <div className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide mb-4 ${indicatorStyle.badge}`}>
@@ -213,7 +214,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
             </div>
 
             {/* 3. RIGHT: Distribution Card */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col h-full min-h-[380px]">
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col h-full min-h-[300px] sm:min-h-[380px]">
                 <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Package className="h-3.5 w-3.5 text-purple-500" />
                     Distribución de Ítems

@@ -242,7 +242,7 @@ export const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, onReset, 
       
       {/* Upload Section */}
       <div className="mb-8 flex flex-col items-center">
-        <div className="w-full max-w-2xl bg-teal-50 border-2 border-dashed border-teal-200 rounded-xl p-6 sm:p-8 text-center relative hover:bg-teal-100/50 transition-colors">
+        <div className="w-full max-w-2xl bg-teal-50 border-2 border-dashed border-teal-200 rounded-xl p-4 sm:p-8 text-center relative hover:bg-teal-100/50 transition-colors">
             <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -257,18 +257,21 @@ export const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, onReset, 
                 </div>
                 
                 <h3 className="text-lg font-semibold text-gray-900 mt-2">Cargar Requerimiento IPRESS</h3>
-                <p className="text-sm text-gray-500 max-w-md mx-auto">
+                <p className="text-sm text-gray-500 max-w-md mx-auto hidden sm:block">
                     Suba su Excel con histórico (Ene-Dic o Jul-Dic).
-                    <br className="hidden sm:block" />
-                    <span className="text-xs text-teal-600 font-bold block mt-1 sm:inline">
+                    <br />
+                    <span className="text-xs text-teal-600 font-bold">
                         Aura detectará automáticamente los picos anormales y calculará el "CPA".
                     </span>
                 </p>
+                <p className="text-sm text-gray-500 max-w-md mx-auto block sm:hidden">
+                   Suba su archivo Excel para comenzar el análisis.
+                </p>
 
-                <div className="flex flex-col sm:flex-row gap-3 mt-6 w-full sm:w-auto justify-center">
+                <div className="flex flex-col sm:flex-row gap-3 mt-4 sm:mt-6 w-full sm:w-auto justify-center">
                     <button 
                         onClick={triggerFileUpload}
-                        className="w-full sm:w-auto justify-center px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2 shadow-sm"
+                        className="w-full sm:w-auto justify-center px-6 py-3 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2 shadow-sm"
                     >
                         <Upload className="h-4 w-4" />
                         Subir Archivo
@@ -281,7 +284,7 @@ export const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, onReset, 
       {/* Item Preview */}
       {items.length > 0 && (
         <div className="space-y-4 animate-in fade-in duration-500">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center max-w-5xl mx-auto px-1 gap-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center max-w-5xl mx-auto px-1 gap-3">
             <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide flex flex-wrap items-center gap-2">
               Items Cargados ({items.length})
               <span className="text-xs font-normal bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full normal-case whitespace-nowrap">
@@ -290,7 +293,7 @@ export const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, onReset, 
             </h3>
             <button 
               onClick={handleClearClick}
-              className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 bg-red-50 px-2 py-1 rounded hover:bg-red-100 transition-colors w-full sm:w-auto justify-center border border-red-100"
+              className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 bg-red-50 px-3 py-2 rounded hover:bg-red-100 transition-colors w-full sm:w-auto justify-center border border-red-100"
             >
               <Trash2 className="h-3 w-3" /> Limpiar Todo
             </button>
@@ -302,23 +305,19 @@ export const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, onReset, 
               <thead className="bg-gray-100 sticky top-0 z-10">
                 <tr>
                   <th className="px-3 py-2 text-left font-bold text-gray-600 text-xs uppercase tracking-wider whitespace-nowrap">Código</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-600 text-xs uppercase tracking-wider min-w-[200px]">Descripción</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-600 text-xs uppercase tracking-wider whitespace-nowrap">F.F.</th>
-                  <th className="px-3 py-2 text-right font-bold text-gray-600 text-xs uppercase tracking-wider whitespace-nowrap">Precio</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-600 text-xs uppercase tracking-wider min-w-[150px]">Descripción</th>
                   <th className="px-3 py-2 text-right font-bold text-gray-600 text-xs uppercase tracking-wider whitespace-nowrap">Stock</th>
-                  <th className="px-3 py-2 text-center font-bold text-gray-600 text-xs uppercase tracking-wider whitespace-nowrap">Histórico</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-600 text-xs uppercase tracking-wider whitespace-nowrap">Meses</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
                 {items.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-3 py-1.5 text-xs font-mono text-gray-500 font-medium w-24 whitespace-nowrap">{item.id}</td>
-                    <td className="px-3 py-1.5 text-gray-900 truncate max-w-[200px] text-xs font-medium" title={item.name}>{item.name}</td>
-                    <td className="px-3 py-1.5 text-xs text-gray-500 whitespace-nowrap">{item.ff || '-'}</td>
-                    <td className="px-3 py-1.5 text-right font-mono text-xs text-gray-600 whitespace-nowrap">S/ {item.unitPrice.toFixed(2)}</td>
+                    <td className="px-3 py-1.5 text-gray-900 truncate max-w-[150px] sm:max-w-[300px] text-xs font-medium" title={item.name}>{item.name}</td>
                     <td className="px-3 py-1.5 text-right font-mono text-xs font-bold text-gray-700 whitespace-nowrap">{item.currentStock.toLocaleString()}</td>
                     <td className="px-3 py-1.5 text-center text-xs text-gray-500 whitespace-nowrap">
-                      {item.monthlyConsumption.filter(v => v > 0).length} meses
+                      {item.monthlyConsumption.filter(v => v > 0).length}
                     </td>
                   </tr>
                 ))}
@@ -330,7 +329,7 @@ export const InputSection: React.FC<InputSectionProps> = ({ onAnalyze, onReset, 
             <button
               onClick={handleExecuteClick}
               disabled={isAnalyzing}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-2.5 bg-gray-900 text-white font-bold text-sm rounded-full hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-gray-900 text-white font-bold text-sm rounded-full hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
             >
               {isAnalyzing ? (
                 <>

@@ -355,7 +355,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                   </div>
 
                   {/* Integrated Search Bar for Zen Mode */}
-                  <div className="relative max-w-md w-full ml-4">
+                  <div className="relative max-w-md w-full ml-4 hidden md:block">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                       <input 
                         type="text" 
@@ -374,7 +374,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                   {onTogglePending && (
                       <button 
                         onClick={onTogglePending}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                        className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
                             showOnlyPending 
                             ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' 
                             : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
@@ -390,7 +390,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                   {onOpenAdditionalModal && (
                       <button 
                         onClick={onOpenAdditionalModal}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ml-2 ${
+                        className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ml-2 ${
                             additionalItemsCount > 0
                             ? 'bg-purple-900/50 text-purple-300 border border-purple-700 hover:bg-purple-900 shadow-[0_0_10px_rgba(168,85,247,0.2)]' 
                             : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
@@ -409,7 +409,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
               </div>
 
               {/* Progress Bar Widget */}
-              <div className="flex items-center gap-6 mr-6">
+              <div className="hidden lg:flex items-center gap-6 mr-6">
                   <div className="text-right">
                       <div className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">
                           Progreso Validación
@@ -446,7 +446,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center justify-between animate-in slide-in-from-top-2">
               <span className="text-amber-800 text-xs font-bold flex items-center gap-2">
                   <ListFilter className="h-4 w-4" />
-                  Mostrando únicamente {filteredItems.length} ítems pendientes de validar (se excluye sobrestock y sin rotación).
+                  Mostrando únicamente {filteredItems.length} ítems pendientes de validar.
               </span>
               {onTogglePending && (
                   <button onClick={onTogglePending} className="text-xs text-amber-900 underline hover:text-amber-700">
@@ -456,65 +456,74 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
           </div>
       )}
 
-      {/* STANDARD HEADER (Hidden in Full Screen) */}
+      {/* STANDARD HEADER (Hidden in Full Screen) - RESPONSIVE FIX */}
       {!isFullScreen && (
-        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row items-center gap-4">
-            <div className="w-full md:w-auto">
-            <h3 className="text-lg font-bold text-gray-900 flex flex-wrap items-center gap-2">
-                Matriz de Requerimiento
-                <span className="text-xs font-normal text-gray-500 bg-white px-2 py-1 rounded border border-gray-200 whitespace-nowrap">
-                {filteredItems.length} items
-                </span>
-            </h3>
+        <div className="px-4 py-4 border-b border-gray-200 bg-gray-50 flex flex-col gap-4">
+            {/* Top Row: Title */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h3 className="text-lg font-bold text-gray-900 flex flex-wrap items-center gap-2">
+                    Matriz de Requerimiento
+                    <span className="text-xs font-normal text-gray-500 bg-white px-2 py-1 rounded border border-gray-200 whitespace-nowrap">
+                        {filteredItems.length} items
+                    </span>
+                </h3>
             </div>
 
-            <div className="relative w-full md:max-w-lg md:mr-auto">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-6 text-gray-400" />
-                <input 
-                type="text" 
-                placeholder="Buscar por código o descripción..." 
-                className="pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none w-full bg-white text-gray-900 shadow-sm"
-                value={searchTerm}
-                onChange={(e) => {
-                    onSearchChange(e.target.value);
-                    setCurrentPage(1); 
-                }}
-                />
-            </div>
-            
-            <div className="flex w-full md:w-auto gap-3 shrink-0">
-                 {/* ADDED: Manual Entry Button */}
-                {onOpenAdditionalModal && (
+            {/* Bottom Row: Search & Actions Stacked on Mobile, Row on Desktop */}
+            <div className="flex flex-col lg:flex-row gap-3 w-full">
+                
+                {/* Search Bar: Full width on mobile, flexible on desktop */}
+                <div className="relative w-full lg:flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-6 text-gray-400" />
+                    <input 
+                        type="text" 
+                        placeholder="Buscar por código o descripción..." 
+                        className="pl-9 pr-4 py-2.5 sm:py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none w-full bg-white text-gray-900 shadow-sm"
+                        value={searchTerm}
+                        onChange={(e) => {
+                            onSearchChange(e.target.value);
+                            setCurrentPage(1); 
+                        }}
+                    />
+                </div>
+                
+                {/* Buttons: Grid on Mobile (2 cols), Flex on Desktop */}
+                <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 shrink-0">
+                     {/* ADDED: Manual Entry Button */}
+                    {onOpenAdditionalModal && (
+                        <button 
+                            onClick={onOpenAdditionalModal}
+                            className="flex justify-center items-center gap-2 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 text-sm font-medium rounded-lg transition-colors shadow-sm border border-purple-200 whitespace-nowrap col-span-1"
+                            title="Agregar ítems adicionales"
+                        >
+                            <ShoppingCart className="h-4 w-4" />
+                            <span className="block sm:hidden xl:block">Adicionales</span>
+                            <span className="hidden sm:block xl:hidden">Adic.</span>
+                            {additionalItemsCount > 0 && (
+                                <span className="bg-purple-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                    {additionalItemsCount}
+                                </span>
+                            )}
+                        </button>
+                    )}
+
                     <button 
-                        onClick={onOpenAdditionalModal}
-                        className="flex justify-center items-center gap-2 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 text-sm font-medium rounded-lg transition-colors shadow-sm border border-purple-200 whitespace-nowrap"
-                        title="Agregar ítems adicionales"
+                        onClick={() => onToggleFullScreen(true)}
+                        className="flex justify-center items-center gap-2 px-3 py-2 bg-white hover:bg-gray-100 text-gray-700 text-sm font-medium rounded-lg transition-colors shadow-sm border border-gray-300 whitespace-nowrap col-span-1"
+                        title="Modo Pantalla Completa (Auditoría)"
                     >
-                        <ShoppingCart className="h-4 w-4" />
-                        <span className="hidden xl:inline">Adicionales</span>
-                        {additionalItemsCount > 0 && (
-                            <span className="bg-purple-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                {additionalItemsCount}
-                            </span>
-                        )}
+                        <Maximize2 className="h-4 w-4" />
+                        <span className="block sm:hidden">Pantalla Completa</span>
                     </button>
-                )}
 
-                <button 
-                    onClick={() => onToggleFullScreen(true)}
-                    className="flex justify-center items-center gap-2 px-3 py-2 bg-white hover:bg-gray-100 text-gray-700 text-sm font-medium rounded-lg transition-colors shadow-sm border border-gray-300 whitespace-nowrap"
-                    title="Modo Pantalla Completa (Auditoría)"
-                >
-                    <Maximize2 className="h-4 w-4" />
-                </button>
-
-                <button 
-                    onClick={handleExportExcel}
-                    className="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm whitespace-nowrap"
-                >
-                    <FileSpreadsheet className="h-4 w-4" />
-                    <span className="">Exportar Excel</span>
-                </button>
+                    <button 
+                        onClick={handleExportExcel}
+                        className="flex justify-center items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm whitespace-nowrap col-span-2 sm:col-span-1 sm:w-auto"
+                    >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        <span>Exportar Excel</span>
+                    </button>
+                </div>
             </div>
         </div>
       )}
