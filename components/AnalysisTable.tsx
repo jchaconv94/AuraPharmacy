@@ -252,15 +252,15 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   const getStatusBadge = (status: StockStatus) => {
     switch (status) {
       case StockStatus.DESABASTECIDO:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200 whitespace-nowrap">Desabastecido</span>;
+        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-800 border border-red-200 whitespace-nowrap">Desabastecido</span>;
       case StockStatus.SUBSTOCK:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">SubStock</span>;
+        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">SubStock</span>;
       case StockStatus.NORMOSTOCK:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">NormoStock</span>;
+        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">NormoStock</span>;
       case StockStatus.SOBRESTOCK:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 border border-indigo-200 whitespace-nowrap">SobreStock</span>;
+        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-100 text-indigo-800 border border-indigo-200 whitespace-nowrap">SobreStock</span>;
       case StockStatus.SIN_ROTACION:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200 whitespace-nowrap">Sin Rotación</span>;
+        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-800 border border-gray-200 whitespace-nowrap">Sin Rotación</span>;
       default:
         return null;
     }
@@ -284,8 +284,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
     const isOpen = openFilterDropdown === field;
     
     return (
-        <th scope="col" className={`px-4 sm:px-6 py-3 text-${align} text-xs font-bold ${textColor} uppercase tracking-wider relative ${className}`}>
-            <div className={`flex items-center gap-2 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
+        <th scope="col" className={`px-2 sm:px-3 py-3 text-${align} text-xs font-bold ${textColor} uppercase tracking-wider relative ${className}`}>
+            <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
                 <span className="whitespace-nowrap">{label}</span>
                 {field && (
                     <button 
@@ -293,7 +293,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                             e.stopPropagation();
                             setOpenFilterDropdown(isOpen ? null : field);
                         }}
-                        className={`p-1 rounded hover:bg-gray-200 transition-colors ${isActive ? 'bg-teal-100 text-teal-700' : 'text-gray-400'}`}
+                        className={`p-0.5 rounded hover:bg-gray-200 transition-colors ${isActive ? 'bg-teal-100 text-teal-700' : 'text-gray-400'}`}
                     >
                         <Filter className="h-3 w-3" />
                     </button>
@@ -469,11 +469,11 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                 </h3>
             </div>
 
-            {/* Bottom Row: Search & Actions Stacked on Mobile, Row on Desktop */}
-            <div className="flex flex-col lg:flex-row gap-3 w-full">
+            {/* Bottom Row: Search & Actions */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 w-full">
                 
-                {/* Search Bar: Full width on mobile, flexible on desktop */}
-                <div className="relative w-full lg:flex-1">
+                {/* Search Bar: Fixed width on Desktop (approx 384px) */}
+                <div className="relative w-full lg:w-96">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-6 text-gray-400" />
                     <input 
                         type="text" 
@@ -487,8 +487,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     />
                 </div>
                 
-                {/* Buttons: Grid on Mobile (2 cols), Flex on Desktop */}
-                <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 shrink-0">
+                {/* Buttons: Pushed to the right end */}
+                <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 shrink-0 lg:ml-auto">
                      {/* ADDED: Manual Entry Button */}
                     {onOpenAdditionalModal && (
                         <button 
@@ -576,10 +576,10 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                       showReviewedState ? 'bg-teal-50/30 hover:bg-teal-50' : 'hover:bg-gray-50'
                   }`}
                 >
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-sm font-bold text-gray-700 font-mono">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-sm font-bold text-gray-700 font-mono">
                     {item.id}
                   </td>
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                         <div className="text-sm font-semibold text-gray-900 truncate max-w-[200px] sm:max-w-[300px]" title={item.name}>{item.name}</div>
                         {item.isSporadic && (
@@ -594,24 +594,24 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     </div>
                   </td>
 
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-xs text-gray-600">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-xs text-gray-600">
                     {item.ff ? <span className="bg-gray-100 px-2 py-1 rounded border border-gray-200">{item.ff}</span> : '-'}
                   </td>
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-xs text-gray-600">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-xs text-gray-600">
                     {item.medtip || '-'}
                   </td>
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-xs text-gray-600">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-xs text-gray-600">
                     {item.medpet || '-'}
                   </td>
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-xs text-gray-600">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-xs text-gray-600">
                     {item.medest || '-'}
                   </td>
 
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-right text-gray-900 font-mono">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-right text-gray-900 font-mono">
                     <span className="text-base font-bold">{item.currentStock.toLocaleString()}</span>
                   </td>
                   
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-right">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-right">
                     <div className="flex flex-col items-end">
                         <span className="text-base font-bold text-teal-700 font-mono">
                             {item.cpm.toFixed(1)}
@@ -624,7 +624,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     </div>
                   </td>
 
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-right font-mono">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-right font-mono">
                     <span className={`text-base font-bold ${
                         item.monthsOfProvision < 2 ? 'text-amber-600' : 
                         item.monthsOfProvision > 12 ? 'text-blue-600' : 'text-gray-600'
@@ -633,11 +633,11 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     </span>
                   </td>
 
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap text-center">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-center">
                     {getStatusBadge(item.status)}
                   </td>
                   
-                  <td className="px-4 sm:px-6 py-3 whitespace-nowrap">
+                  <td className="px-2 sm:px-3 py-3 whitespace-nowrap">
                     {item.hasSpikes ? (
                       <div 
                         className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-100 w-fit group-hover:bg-amber-100 transition-colors"
@@ -658,7 +658,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                     )}
                   </td>
 
-                  <td className={`px-4 sm:px-6 py-3 whitespace-nowrap text-right border-l ${showReviewedState ? 'bg-teal-50 border-teal-200' : 'bg-gray-50/50 border-transparent'}`}>
+                  <td className={`px-2 sm:px-3 py-3 whitespace-nowrap text-right border-l ${showReviewedState ? 'bg-teal-50 border-teal-200' : 'bg-gray-50/50 border-transparent'}`}>
                       {needsReview ? (
                           <div className="flex flex-col items-end justify-center min-h-[2.5rem]">
                               <div className="flex items-center justify-end gap-3">
