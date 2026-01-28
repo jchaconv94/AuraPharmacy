@@ -18,7 +18,7 @@ import {
   Layout,
   ListFilter,
   ShoppingCart,
-  Timer // New Icon
+  Timer
 } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
 import { ConsumptionModal } from './ConsumptionModal';
@@ -590,7 +590,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                         )}
                     </div>
                     <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
-                       <span>S/ {item.unitPrice.toFixed(2)}</span>
+                       <span>S/ {(item.unitPrice || 0).toFixed(2)}</span>
                     </div>
                   </td>
 
@@ -608,17 +608,17 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                   </td>
 
                   <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-right text-gray-900 font-mono">
-                    <span className="text-base font-bold">{item.currentStock.toLocaleString()}</span>
+                    <span className="text-base font-bold">{(item.currentStock || 0).toLocaleString()}</span>
                   </td>
                   
                   <td className="px-2 sm:px-3 py-3 whitespace-nowrap text-right">
                     <div className="flex flex-col items-end">
                         <span className="text-base font-bold text-teal-700 font-mono">
-                            {item.cpm.toFixed(1)}
+                            {(item.cpm || 0).toFixed(1)}
                         </span>
                         {item.hasSpikes && (
-                             <span className="text-xs text-gray-400 line-through decoration-red-400" title={`Promedio Simple (con picos): ${item.rawCpm.toFixed(1)}`}>
-                                {item.rawCpm.toFixed(1)}
+                             <span className="text-xs text-gray-400 line-through decoration-red-400" title={`Promedio Simple (con picos): ${(item.rawCpm || 0).toFixed(1)}`}>
+                                {(item.rawCpm || 0).toFixed(1)}
                              </span>
                         )}
                     </div>
@@ -629,7 +629,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                         item.monthsOfProvision < 2 ? 'text-amber-600' : 
                         item.monthsOfProvision > 12 ? 'text-blue-600' : 'text-gray-600'
                     }`}>
-                        {isFinite(item.monthsOfProvision) ? item.monthsOfProvision.toFixed(1) : '∞'}
+                        {isFinite(item.monthsOfProvision || 0) ? (item.monthsOfProvision || 0).toFixed(1) : '∞'}
                     </span>
                   </td>
 
@@ -684,7 +684,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                               </div>
                               <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                                   <TrendingUp className="h-3 w-3" />
-                                  S/ {item.estimatedInvestment.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                  S/ {(item.estimatedInvestment || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                               </span>
                           </div>
                       ) : (

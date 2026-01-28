@@ -62,7 +62,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
 
     if (!acc[category]) acc[category] = { count: 0, money: 0 };
     acc[category].count += 1;
-    acc[category].money += item.estimatedInvestment;
+    acc[category].money += (item.estimatedInvestment || 0); // Defensive check
     return acc;
   }, {} as Record<string, { count: number; money: number }>);
 
@@ -133,7 +133,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
         <div className="bg-white p-2 border border-gray-200 shadow-md rounded text-xs z-50">
           <p className="font-bold uppercase" style={{ color: data.color }}>{data.name}</p>
           <p className="text-gray-900 font-bold">{data.value} ítems</p>
-          <p className="text-gray-500">S/ {data.money.toLocaleString('es-PE', { maximumFractionDigits: 0 })}</p>
+          <p className="text-gray-500">S/ {(data.money || 0).toLocaleString('es-PE', { maximumFractionDigits: 0 })}</p>
         </div>
       );
     }
@@ -157,7 +157,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
                    {/* Button moved to Table */}
                 </div>
 
-                <div className="flex-1 w-full">
+                <div className="flex-1 w-full min-h-0">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart 
                             data={statusData} 
@@ -199,7 +199,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
             <div className={`rounded-2xl p-8 border flex flex-col items-center justify-center text-center shadow-sm relative h-full min-h-[300px] sm:min-h-[380px] ${indicatorStyle.container}`}>
                 <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">% Disponibilidad de Medicamentos</h4>
                 <div className={`text-6xl sm:text-7xl font-black mb-4 ${indicatorStyle.text} tracking-tighter`}>
-                    {indicators.dmeScore.toFixed(1)}%
+                    {(indicators.dmeScore || 0).toFixed(1)}%
                 </div>
                 <div className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide mb-4 ${indicatorStyle.badge}`}>
                     {indicators.status}

@@ -55,8 +55,8 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   // Initialize state when medication opens or changes
   useEffect(() => {
     if (medication) {
-        setReqQuantity(medication.quantityToOrder);
-        setInitialQuantity(medication.quantityToOrder); 
+        setReqQuantity(medication.quantityToOrder || 0);
+        setInitialQuantity(medication.quantityToOrder || 0); 
 
         // Start Countdown ONLY if it needs review and is not validated yet
         if (needsReview && !isReviewed) {
@@ -195,7 +195,6 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   // Max Delay Reference for progress bar calculation
   const maxDelay = systemConfig?.verificationDelaySeconds || 5;
 
-  // Use React Portal to render the modal at document.body level
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4 animate-in fade-in duration-200 overflow-y-auto">
       <div className={`bg-white rounded-xl shadow-2xl w-full max-w-7xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] sm:max-h-none h-auto sm:h-auto my-auto ${isReviewed ? 'ring-4 ring-teal-500/30' : ''}`}>
@@ -286,20 +285,20 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full lg:w-auto">
                 <div className="bg-gray-100 px-3 py-2 rounded-lg flex flex-col justify-center">
                     <span className="text-gray-500 block text-[10px] uppercase">Stock</span>
-                    <span className="font-bold text-gray-900 text-lg sm:text-2xl">{medication.currentStock.toLocaleString()}</span>
+                    <span className="font-bold text-gray-900 text-lg sm:text-2xl">{(medication.currentStock || 0).toLocaleString()}</span>
                 </div>
                 <div className="bg-teal-50 px-3 py-2 rounded-lg border border-teal-100 flex flex-col justify-center">
                     <span className="text-teal-600 block text-[10px] uppercase font-bold">CPA Ajust.</span>
-                    <span className="font-bold text-teal-800 text-lg sm:text-2xl">{medication.cpm.toFixed(1)}</span>
+                    <span className="font-bold text-teal-800 text-lg sm:text-2xl">{(medication.cpm || 0).toFixed(1)}</span>
                 </div>
                 <div className="bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 flex flex-col justify-center">
                     <span className="text-gray-500 block text-[10px] uppercase">CPA Simple</span>
-                    <span className="font-bold text-gray-700 text-lg sm:text-2xl line-through decoration-red-400">{medication.rawCpm.toFixed(1)}</span>
+                    <span className="font-bold text-gray-700 text-lg sm:text-2xl line-through decoration-red-400">{(medication.rawCpm || 0).toFixed(1)}</span>
                 </div>
                 <div className="bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 flex flex-col justify-center">
                     <span className="text-blue-600 block text-[10px] uppercase font-bold">Meses Disp.</span>
                     <span className="font-bold text-blue-800 text-lg sm:text-2xl">
-                    {isFinite(medication.monthsOfProvision) ? medication.monthsOfProvision.toFixed(1) : '∞'}
+                    {isFinite(medication.monthsOfProvision || 0) ? (medication.monthsOfProvision || 0).toFixed(1) : '∞'}
                     </span>
                 </div>
              </div>
@@ -333,14 +332,14 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     <div className="flex justify-between items-baseline mb-0 sm:mb-2">
                         <span className="text-[10px] uppercase text-gray-400">Cobertura Pedido</span>
                         <span className="font-bold text-teal-300 text-lg leading-tight">
-                            +{coverageFromOrder.toFixed(1)} Meses
+                            +{(coverageFromOrder || 0).toFixed(1)} Meses
                         </span>
                     </div>
                     
                     <div className="border-t border-gray-700 pt-2 mt-auto flex justify-between items-baseline">
                         <span className="text-[10px] uppercase text-gray-400">Total Proyectado</span>
                         <span className="font-bold text-white text-lg leading-tight">
-                             {isFinite(totalProjectedCoverage) ? totalProjectedCoverage.toFixed(1) : '∞'} Meses
+                             {isFinite(totalProjectedCoverage) ? (totalProjectedCoverage || 0).toFixed(1) : '∞'} Meses
                         </span>
                     </div>
                 </div>
@@ -366,7 +365,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                         </td>
                         {medication.originalHistory.map((val, idx) => {
                             // Logic: If value > threshold AND value > 0, it's a spike.
-                            const isSpike = val > medication.spikeThreshold && val > 0;
+                            const isSpike = val > (medication.spikeThreshold || 0) && val > 0;
                             
                             return (
                                 <td 
@@ -394,7 +393,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     Se calculó la mediana histórica de los meses con movimiento.
                 </li>
                 <li>
-                    El umbral de tolerancia se fijó en <strong>{medication.spikeThreshold.toFixed(1)}</strong> unidades.
+                    El umbral de tolerancia se fijó en <strong>{(medication.spikeThreshold || 0).toFixed(1)}</strong> unidades.
                 </li>
                 <li>
                     Los meses pintados en <span className="bg-yellow-300 px-1 rounded text-black font-bold">AMARILLO</span> superan este umbral.
