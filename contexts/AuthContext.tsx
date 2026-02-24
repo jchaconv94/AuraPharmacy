@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const config = await api.getSystemConfig();
             setState(prev => ({ ...prev, systemConfig: config }));
         } catch (e) {
-            console.error("Failed to load system config", e);
+            console.warn("Failed to load system config (using defaults)", e);
         }
 
         // 2. Check local storage for persisted session

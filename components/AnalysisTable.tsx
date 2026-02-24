@@ -28,7 +28,7 @@ interface AnalysisTableProps {
   medications: AnalyzedMedication[]; // The FILTERED list to display
   allMedications: AnalyzedMedication[]; // The FULL list for generating filter options
   referenceDate?: string;
-  onMedicationUpdate: (id: string, quantity: number, mode?: 'ADJUSTED' | 'SIMPLE') => void;
+  onMedicationUpdate: (id: string, quantity: number, mode?: 'ADJUSTED' | 'SIMPLE', excludedIndices?: number[]) => void;
   
   // Lifted State Props
   searchTerm: string;
@@ -66,7 +66,44 @@ type FilterKey = 'ff' | 'medtip' | 'medpet' | 'medest' | 'status' | 'currentStoc
 
 // --- HELPER: Recalculate Status Dynamically ---
 const calculateDynamicMetrics = (item: AnalyzedMedication) => {
-    const activeCpm = item.selectedCpaMode === 'SIMPLE' ? item.rawCpm : item.cpm;
+    let activeCpm = 0;
+    const excludedIndices = item.excludedIndices || [];
+    const mode = item.selectedCpaMode || 'ADJUSTED';
+
+    if (excludedIndices.length === 0) {
+        activeCpm = mode === 'SIMPLE' ? item.rawCpm : item.cpm;
+    } else {
+        // Manual Recalculation
+        const history = item.originalHistory;
+        const threshold = item.spikeThreshold || 0;
+        const isSporadic = item.isSporadic;
+        
+        const valuesToAverage: number[] = [];
+
+        history.forEach((val, idx) => {
+            if (val === 0) return; // Ignore zeros
+            if (excludedIndices.includes(idx)) return; // User excluded
+
+            if (mode === 'SIMPLE') {
+                valuesToAverage.push(val);
+            } else {
+                // ADJUSTED MODE
+                if (isSporadic) {
+                    // Sporadic: No spike exclusion, just average active months
+                    valuesToAverage.push(val);
+                } else {
+                    // Normal: Exclude spikes
+                    if (val <= threshold) {
+                        valuesToAverage.push(val);
+                    }
+                }
+            }
+        });
+
+        activeCpm = valuesToAverage.length > 0
+            ? valuesToAverage.reduce((a, b) => a + b, 0) / valuesToAverage.length
+            : 0;
+    }
     
     // Calculate Months
     const activeMonths = activeCpm > 0 
@@ -652,7 +689,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                 // Use original status for review logic to ensure stability, or dynamic?
                 // Logic: Reviews should persist. Display relies on dynamic.
                 
-                const needsReview = !isOverstock && !isNoRotation;
+                // MODIFIED: If item has a manual quantity > 0, it ALWAYS needs review/display, regardless of status
+                const needsReview = (!isOverstock && !isNoRotation) || item.quantityToOrder > 0;
                 const isReviewed = reviewedIds.has(item.id);
                 const showReviewedState = isReviewed && needsReview;
                 

@@ -176,6 +176,34 @@ export const AdminPanel: React.FC = () => {
       setIsSavingUser(false);
   };
 
+  const handleRoleModuleChange = (roleName: string, module: string, isChecked: boolean) => {
+      setRoles(prevRoles => prevRoles.map(r => {
+          if (r.role === roleName) {
+              const newModules = isChecked 
+                  ? [...r.allowedModules, module as any]
+                  : r.allowedModules.filter(m => m !== module);
+              return { ...r, allowedModules: newModules };
+          }
+          return r;
+      }));
+  };
+
+  const handleSaveRoleConfig = async (roleConfig: RoleConfig) => {
+      // Optimistic Update (already done in state)
+      // Call API
+      try {
+          const res = await api.updateRoleConfig(roleConfig);
+          if (res.success) {
+              setConfigMessage(`Rol ${roleConfig.label} actualizado correctamente.`);
+              setTimeout(() => setConfigMessage(null), 3000);
+          } else {
+              setConfigMessage(`Error al actualizar rol: ${res.message}`);
+          }
+      } catch (e) {
+          setConfigMessage("Error de conexión al guardar rol.");
+      }
+  };
+
   return (
     <>
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4">
@@ -331,7 +359,7 @@ export const AdminPanel: React.FC = () => {
                                                 <input 
                                                     type="checkbox" 
                                                     checked={role.allowedModules.includes(module as any)}
-                                                    readOnly // Read only for demo
+                                                    onChange={(e) => handleRoleModuleChange(role.role, module, e.target.checked)}
                                                     className="rounded text-teal-600 focus:ring-teal-500"
                                                 />
                                                 <span className="text-sm text-gray-700">{module}</span>
@@ -339,7 +367,10 @@ export const AdminPanel: React.FC = () => {
                                         ))}
                                     </div>
                                     <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
-                                        <button className="text-xs font-bold text-white bg-gray-900 px-3 py-2 rounded hover:bg-black">
+                                        <button 
+                                            onClick={() => handleSaveRoleConfig(role)}
+                                            className="text-xs font-bold text-white bg-gray-900 px-3 py-2 rounded hover:bg-black transition-colors"
+                                        >
                                             Guardar Cambios
                                         </button>
                                     </div>

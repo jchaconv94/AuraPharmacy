@@ -10,7 +10,7 @@ interface ConsumptionModalProps {
   isOpen: boolean;
   onClose: () => void;
   referenceDate?: string; // YYYY-MM
-  onUpdate: (id: string, quantity: number, mode?: 'ADJUSTED' | 'SIMPLE') => void;
+  onUpdate: (id: string, quantity: number, mode?: 'ADJUSTED' | 'SIMPLE', excludedIndices?: number[]) => void;
   
   // Review Props
   isReviewed: boolean;
@@ -41,7 +41,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   
   // STATE: CPA MODE SELECTION
   const [cpaMode, setCpaMode] = useState<'ADJUSTED' | 'SIMPLE'>('ADJUSTED');
-  const [excludeLows, setExcludeLows] = useState(false);
+  const [excludedIndices, setExcludedIndices] = useState<number[]>([]);
   
   // Security Timer State
   const [lockTimer, setLockTimer] = useState(0);
@@ -57,9 +57,44 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const dynamicData = useMemo(() => {
       if (!medication) return null;
 
-      const activeCpm = cpaMode === 'SIMPLE' 
-          ? medication.rawCpm 
-          : (excludeLows && medication.cpmExcludingLows ? medication.cpmExcludingLows : medication.cpm);
+      let activeCpm = 0;
+
+      // Optimization: If no manual exclusions, use the pre-calculated values from Service
+      // This ensures we match the "Median Fallback" logic for All-Spikes cases exactly.
+      if (excludedIndices.length === 0) {
+          activeCpm = cpaMode === 'SIMPLE' ? medication.rawCpm : medication.cpm;
+      } else {
+          // Manual Recalculation
+          const history = medication.originalHistory;
+          const threshold = medication.spikeThreshold || 0;
+          const isSporadic = medication.isSporadic;
+          
+          const valuesToAverage: number[] = [];
+
+          history.forEach((val, idx) => {
+              if (val === 0) return; // Ignore zeros
+              if (excludedIndices.includes(idx)) return; // User excluded
+
+              if (cpaMode === 'SIMPLE') {
+                  valuesToAverage.push(val);
+              } else {
+                  // ADJUSTED MODE
+                  if (isSporadic) {
+                      // Sporadic: No spike exclusion, just average active months
+                      valuesToAverage.push(val);
+                  } else {
+                      // Normal: Exclude spikes
+                      if (val <= threshold) {
+                          valuesToAverage.push(val);
+                      }
+                  }
+              }
+          });
+
+          activeCpm = valuesToAverage.length > 0
+              ? valuesToAverage.reduce((a, b) => a + b, 0) / valuesToAverage.length
+              : 0;
+      }
       
       const activeMonths = activeCpm > 0 
           ? medication.currentStock / activeCpm 
@@ -100,11 +135,12 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
           status: activeStatus,
           suggestedReq: suggestedReq
       };
-  }, [medication, cpaMode, excludeLows]);
+  }, [medication, cpaMode, excludedIndices]);
 
-  const needsReview = medication ? (
-      medication.status !== StockStatus.SOBRESTOCK && 
-      medication.status !== StockStatus.SIN_ROTACION
+  const needsReview = dynamicData ? (
+      (dynamicData.status !== StockStatus.SOBRESTOCK && 
+      dynamicData.status !== StockStatus.SIN_ROTACION) ||
+      reqQuantity > 0
   ) : false;
 
   const isLockedTimer = lockTimer > 0 && needsReview && !isReviewed;
@@ -114,6 +150,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     if (medication) {
         setCpaMode(medication.selectedCpaMode || 'ADJUSTED');
         setReqQuantity(medication.quantityToOrder || 0);
+        setExcludedIndices(medication.excludedIndices || []); // Load saved exclusions
         setShowUnlockConfirm(false); // Reset confirmation state on item change
         setShowSaveMenu(false); // Close menu on change
     }
@@ -164,18 +201,38 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   }, [showSaveMenu]);
 
 
+  const handleToggleIndex = (idx: number) => {
+      if (isReviewed || !medication) return;
+      
+      const prevIndices = excludedIndices;
+      let newIndices: number[];
+      
+      if (prevIndices.includes(idx)) {
+          newIndices = prevIndices.filter(i => i !== idx);
+      } else {
+          newIndices = [...prevIndices, idx];
+      }
+      
+      setExcludedIndices(newIndices);
+      
+      // Update parent immediately to persist state
+      // Note: The quantity will be auto-updated by the useEffect that watches dynamicData
+      // But we need to save the indices.
+      onUpdate(medication.id, reqQuantity, cpaMode, newIndices);
+  };
+
   const handleQuantityChange = (val: number) => {
     if (isReviewed) return;
     setReqQuantity(val);
     if (medication) {
-        onUpdate(medication.id, val, cpaMode);
+        onUpdate(medication.id, val, cpaMode, excludedIndices);
     }
   };
 
   const handleConfirmAndNext = useCallback(() => {
       if (!medication || isLockedTimer) return;
       
-      onUpdate(medication.id, reqQuantity, cpaMode);
+      onUpdate(medication.id, reqQuantity, cpaMode, excludedIndices);
       onToggleReview(medication.id, true);
 
       if (nextReviewId && onNavigate) {
@@ -183,20 +240,20 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       } else {
           onClose();
       }
-  }, [medication, nextReviewId, onNavigate, onToggleReview, onClose, isLockedTimer, reqQuantity, cpaMode, onUpdate]);
+  }, [medication, nextReviewId, onNavigate, onToggleReview, onClose, isLockedTimer, reqQuantity, cpaMode, excludedIndices, onUpdate]);
 
   const handleConfirmAndStay = useCallback(() => {
       if (!medication || isLockedTimer) return;
       
-      onUpdate(medication.id, reqQuantity, cpaMode);
+      onUpdate(medication.id, reqQuantity, cpaMode, excludedIndices);
       onToggleReview(medication.id, true);
       setShowSaveMenu(false);
       // No navigate called here, so user stays on the validated item
-  }, [medication, onUpdate, onToggleReview, isLockedTimer, reqQuantity, cpaMode]);
+  }, [medication, onUpdate, onToggleReview, isLockedTimer, reqQuantity, cpaMode, excludedIndices]);
 
   const handleManualSave = () => {
       if (!medication) return;
-      onUpdate(medication.id, reqQuantity, cpaMode);
+      onUpdate(medication.id, reqQuantity, cpaMode, excludedIndices);
       onClose();
   };
 
@@ -208,7 +265,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       
       // 1. Reset Local State & Parent State to System Value immediately
       setReqQuantity(systemValue);
-      onUpdate(medication.id, systemValue, cpaMode);
+      onUpdate(medication.id, systemValue, cpaMode, excludedIndices);
 
       // 2. Unlock (Triggers timer)
       onToggleReview(medication.id, false);
@@ -475,22 +532,6 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 </div>
              </div>
              
-             {/* TOGGLE FOR LOWS */}
-             {cpaMode === 'ADJUSTED' && medication.hasLows && (
-                <div className="flex items-center px-2 py-1 bg-orange-50 border border-orange-100 rounded-lg">
-                    <label className={`flex items-center gap-2 text-xs font-bold cursor-pointer select-none transition-colors ${excludeLows ? 'text-orange-800' : 'text-gray-500'}`}>
-                        <input 
-                            type="checkbox" 
-                            checked={excludeLows}
-                            onChange={(e) => !isReviewed && setExcludeLows(e.target.checked)}
-                            disabled={isReviewed}
-                            className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500 border-gray-300 accent-orange-600"
-                        />
-                        Excluir Bajos (Sube CPA)
-                    </label>
-                </div>
-             )}
-             
              <div className={`${statusConfig.bg} px-4 py-2 rounded-lg border ${statusConfig.border} flex flex-col justify-center w-full lg:w-auto transition-colors duration-300`}>
                 <span className={`${statusConfig.label} block text-[10px] uppercase font-bold`}>Estado</span>
                 <span className={`font-bold ${statusConfig.text} text-xl`}>
@@ -559,23 +600,42 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                         {medication.originalHistory.map((val, idx) => {
                             const isSpike = val > (medication.spikeThreshold || 0) && val > 0;
                             const isLow = val < (medication.lowThreshold || 0) && val > 0;
+                            const isExcluded = excludedIndices.includes(idx);
                             
                             let cellBg = 'bg-white text-gray-600';
+                            let cellStyle = '';
                             
-                            if (isSpike) {
+                            if (isExcluded) {
+                                cellBg = 'bg-gray-200 text-gray-400';
+                                cellStyle = 'line-through decoration-gray-500 decoration-2 opacity-60';
+                            } else if (isSpike) {
                                 cellBg = cpaMode === 'SIMPLE' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-yellow-300 font-bold text-black';
-                            } else if (isLow) {
-                                if (cpaMode === 'ADJUSTED' && excludeLows) {
-                                    cellBg = 'bg-gray-100 text-gray-400 line-through decoration-orange-500 decoration-2';
-                                } else {
-                                    cellBg = 'bg-orange-200 text-orange-900 font-bold';
+                                // MODIFIED: Add strikethrough to yellow spikes in ADJUSTED mode to indicate exclusion
+                                if (cpaMode === 'ADJUSTED' && !medication.isSporadic) {
+                                    cellStyle = 'line-through decoration-red-500 decoration-2';
                                 }
+                            } else if (isLow) {
+                                cellBg = 'bg-orange-200 text-orange-900 font-bold';
+                            }
+
+                            // Allow clicking on any non-zero value to toggle exclusion.
+                            // EXCEPTION (User Request): In ADJUSTED mode, Spikes (Yellow) are ALREADY excluded by default.
+                            // So we should NOT allow clicking them to "exclude" them again (redundant).
+                            // Only allow interaction if it's NOT a spike, OR if we are in SIMPLE mode (where spikes are included).
+                            // Note: Sporadic items don't auto-exclude spikes, so we allow interaction there too.
+                            
+                            let canInteract = !isReviewed && val > 0;
+                            
+                            if (cpaMode === 'ADJUSTED' && isSpike && !medication.isSporadic) {
+                                canInteract = false;
                             }
 
                             return (
                                 <td 
                                     key={idx} 
-                                    className={`p-3 text-center font-mono text-base border-r border-gray-200 last:border-0 ${cellBg}`}
+                                    onClick={() => canInteract && handleToggleIndex(idx)}
+                                    className={`p-3 text-center font-mono text-base border-r border-gray-200 last:border-0 transition-all ${cellBg} ${cellStyle} ${canInteract ? 'cursor-pointer hover:opacity-80 hover:shadow-inner' : 'cursor-default'}`}
+                                    title={canInteract ? (isExcluded ? "Clic para incluir" : "Clic para excluir del promedio") : (isSpike && cpaMode === 'ADJUSTED' ? "Excluido automáticamente por el sistema" : "")}
                                 >
                                     {val}
                                 </td>
@@ -600,11 +660,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 </li>
                 {medication.hasLows && (
                     <li>
-                        Se detectaron consumos muy bajos (menores a <strong>{(medication.lowThreshold || 0).toFixed(1)}</strong>).
-                        {excludeLows 
-                            ? <> Se han <span className="bg-gray-200 px-1 rounded text-gray-600 font-bold line-through decoration-orange-500">EXCLUIDO</span> del cálculo (Opción Manual).</>
-                            : <> Se resaltan en <span className="bg-orange-200 px-1 rounded text-orange-900 font-bold">NARANJA</span> pero se incluyen en el promedio.</>
-                        }
+                        Se detectaron consumos muy bajos (menores a <strong>{(medication.lowThreshold || 0).toFixed(1)}</strong>). Se resaltan en <span className="bg-orange-200 px-1 rounded text-orange-900 font-bold">NARANJA</span>.
                     </li>
                 )}
                 <li>
@@ -613,6 +669,11 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                         : <>MODO MANUAL ACTIVO: Se están considerando todos los meses (incluso atípicos) para el cálculo.</>
                     }
                 </li>
+                {excludedIndices.length > 0 && (
+                    <li>
+                        <span className="font-bold text-gray-800">EXCLUSIÓN MANUAL:</span> Se han excluido {excludedIndices.length} mes(es) del cálculo por decisión del usuario (tachados).
+                    </li>
+                )}
              </ul>
           </div>
 

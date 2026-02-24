@@ -348,8 +348,8 @@ const AnalysisModule: React.FC = () => {
     setInputData([]); // Clear input data on reset
   }, [handleToggleFullScreen]);
 
-  // UPDATED HANDLER: Now accepts CPA Mode
-  const handleMedicationUpdate = (id: string, newQuantity: number, mode?: 'ADJUSTED' | 'SIMPLE') => {
+  // UPDATED HANDLER: Now accepts CPA Mode and Excluded Indices
+  const handleMedicationUpdate = (id: string, newQuantity: number, mode?: 'ADJUSTED' | 'SIMPLE', excludedIndices?: number[]) => {
     if (!result) return;
     setResult((prev) => {
       if (!prev) return null;
@@ -359,7 +359,8 @@ const AnalysisModule: React.FC = () => {
               ...m,
               quantityToOrder: newQuantity,
               estimatedInvestment: newQuantity * m.unitPrice,
-              selectedCpaMode: mode || m.selectedCpaMode // Save the mode
+              selectedCpaMode: mode || m.selectedCpaMode, // Save the mode
+              excludedIndices: excludedIndices !== undefined ? excludedIndices : m.excludedIndices // Save excluded indices
             }
           : m
       );

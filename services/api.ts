@@ -240,6 +240,16 @@ export const api = {
         return MOCK_DB.roles as RoleConfig[];
     },
 
+    updateRoleConfig: async (roleConfig: RoleConfig): Promise<{ success: boolean; message?: string }> => {
+        try {
+            const result = await sendRequest('updateRoleConfig', { roleConfig });
+            return result;
+        } catch (e) {
+            console.error("Error updating role config:", e);
+            return { success: false, message: "Error de conexión: No se pudo actualizar el rol." };
+        }
+    },
+
     // --- SYSTEM CONFIG METHODS ---
     
     getSystemConfig: async (): Promise<SystemConfig> => {

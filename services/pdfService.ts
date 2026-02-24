@@ -34,9 +34,15 @@ const COLORS = {
   TEXT_GREEN_DARK: [20, 83, 45] as [number, number, number], // Green-900
   
   // CPA Active Backgrounds
-  BG_ACTIVE_SIMPLE: [239, 246, 255] as [number, number, number], // Blue-50
-  BG_ACTIVE_ADJUSTED: [240, 253, 250] as [number, number, number], // Teal-50
+  BG_ACTIVE_SIMPLE: [191, 219, 254] as [number, number, number], // Blue-200 (Darker than Blue-50)
+  BG_ACTIVE_ADJUSTED: [153, 246, 228] as [number, number, number], // Teal-200 (Darker than Teal-50)
   TEXT_INACTIVE: [156, 163, 175] as [number, number, number], // Gray-400
+
+  // New Status Colors for Cells
+  BG_GRAY_EXCLUDED: [229, 231, 235] as [number, number, number], // Gray-200
+  TEXT_GRAY_EXCLUDED: [107, 114, 128] as [number, number, number], // Gray-500
+  BG_ORANGE_LOW: [255, 237, 213] as [number, number, number], // Orange-100
+  TEXT_ORANGE_LOW: [154, 52, 18] as [number, number, number], // Orange-800
 };
 
 const formatCurrency = (val: number) => `S/ ${val.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -58,7 +64,44 @@ const getMonthHeaders = (refDate?: string) => {
 
 // --- HELPER: Replicate Logic for PDF Dynamic Calculation ---
 const calculateDynamicMetricsPDF = (item: AnalyzedMedication) => {
-    const activeCpm = item.selectedCpaMode === 'SIMPLE' ? item.rawCpm : item.cpm;
+    let activeCpm = 0;
+    const excludedIndices = item.excludedIndices || [];
+    const mode = item.selectedCpaMode || 'ADJUSTED';
+
+    if (excludedIndices.length === 0) {
+        activeCpm = mode === 'SIMPLE' ? item.rawCpm : item.cpm;
+    } else {
+        // Manual Recalculation
+        const history = item.originalHistory;
+        const threshold = item.spikeThreshold || 0;
+        const isSporadic = item.isSporadic;
+        
+        const valuesToAverage: number[] = [];
+
+        history.forEach((val, idx) => {
+            if (val === 0) return; // Ignore zeros
+            if (excludedIndices.includes(idx)) return; // User excluded
+
+            if (mode === 'SIMPLE') {
+                valuesToAverage.push(val);
+            } else {
+                // ADJUSTED MODE
+                if (isSporadic) {
+                    // Sporadic: No spike exclusion, just average active months
+                    valuesToAverage.push(val);
+                } else {
+                    // Normal: Exclude spikes
+                    if (val <= threshold) {
+                        valuesToAverage.push(val);
+                    }
+                }
+            }
+        });
+
+        activeCpm = valuesToAverage.length > 0
+            ? valuesToAverage.reduce((a, b) => a + b, 0) / valuesToAverage.length
+            : 0;
+    }
     
     // Calculate Months
     const activeMonths = activeCpm > 0 
@@ -149,15 +192,22 @@ export const generateFullReportPDF = (
       doc.setFont("helvetica", "bold");
       doc.text("DISTRIBUCIÓN DE DISPONIBILIDAD", leftX + 10, startY + 12);
 
+      // --- RECALCULATE STATUSES FOR CHARTS ---
+      const recalculatedMedications = result.medications.map(m => {
+          const { activeStatus } = calculateDynamicMetricsPDF(m);
+          return { ...m, status: activeStatus };
+      });
+
       const stats = [
-        { label: "Desabastecido", val: result.medications.filter(m => m.status === StockStatus.DESABASTECIDO).length, color: COLORS.RED },
-        { label: "SubStock", val: result.medications.filter(m => m.status === StockStatus.SUBSTOCK).length, color: COLORS.ORANGE },
-        { label: "NormoStock", val: result.medications.filter(m => m.status === StockStatus.NORMOSTOCK).length, color: COLORS.GREEN },
-        { label: "SobreStock", val: result.medications.filter(m => m.status === StockStatus.SOBRESTOCK).length, color: COLORS.INDIGO },
-        { label: "Sin Rotación", val: result.medications.filter(m => m.status === StockStatus.SIN_ROTACION).length, color: COLORS.GRAY },
+        { label: "Desabastecido", val: recalculatedMedications.filter(m => m.status === StockStatus.DESABASTECIDO).length, color: COLORS.RED },
+        { label: "SubStock", val: recalculatedMedications.filter(m => m.status === StockStatus.SUBSTOCK).length, color: COLORS.ORANGE },
+        { label: "NormoStock", val: recalculatedMedications.filter(m => m.status === StockStatus.NORMOSTOCK).length, color: COLORS.GREEN },
+        { label: "SobreStock", val: recalculatedMedications.filter(m => m.status === StockStatus.SOBRESTOCK).length, color: COLORS.INDIGO },
+        { label: "Sin Rotación", val: recalculatedMedications.filter(m => m.status === StockStatus.SIN_ROTACION).length, color: COLORS.GRAY },
       ];
       const maxVal = Math.max(...stats.map(s => s.val), 1);
-      const totalItems = result.indicators.totalItems || 1;
+      const totalItems = result.indicators.totalItems || 1; // Keep original total or recalculate? Recalculate is safer.
+      const recalculatedTotal = recalculatedMedications.length || 1;
 
       // Chart Dimensions
       const chartBottomMargin = 20;
@@ -177,7 +227,7 @@ export const generateFullReportPDF = (
 
       stats.forEach(stat => {
           const barHeight = (stat.val / maxVal) * chartAreaH;
-          const percentage = ((stat.val / totalItems) * 100).toFixed(1) + "%";
+          const percentage = ((stat.val / recalculatedTotal) * 100).toFixed(1) + "%";
 
           doc.setFillColor(stat.color[0], stat.color[1], stat.color[2]);
           doc.rect(currentBarX, chartBaseY - barHeight, barWidth, barHeight, "F");
@@ -201,7 +251,21 @@ export const generateFullReportPDF = (
       });
 
       // 2. RIGHT TOP: DME INDICATOR
-      const isLow = result.indicators.dmeScore < 70;
+      // Recalculate DME Score
+      const availableItemsCount = recalculatedMedications.filter(m => 
+          m.status === StockStatus.NORMOSTOCK || 
+          m.status === StockStatus.SOBRESTOCK || 
+          m.status === StockStatus.SIN_ROTACION
+      ).length;
+      
+      const dmeScore = recalculatedTotal > 0 ? (availableItemsCount / recalculatedTotal) * 100 : 0;
+      
+      let indicatorStatus = 'BAJO';
+      if (dmeScore >= 90) indicatorStatus = 'OPTIMO';
+      else if (dmeScore >= 80) indicatorStatus = 'ALTO';
+      else if (dmeScore >= 70) indicatorStatus = 'REGULAR';
+
+      const isLow = dmeScore < 70;
       const cardBg = isLow ? COLORS.BG_RED_LIGHT : COLORS.BG_GREEN_LIGHT;
       const cardText = isLow ? COLORS.RED : ([6, 78, 59] as [number, number, number]);
       const badgeBg = isLow ? ([252, 165, 165] as [number, number, number]) : ([110, 231, 183] as [number, number, number]);
@@ -218,14 +282,14 @@ export const generateFullReportPDF = (
       doc.setFontSize(40);
       doc.setTextColor(cardText[0], cardText[1], cardText[2]);
       doc.setFont("helvetica", "bold");
-      doc.text(`${result.indicators.dmeScore.toFixed(1)}%`, rightX + (rightColW/2), dmeY + 30, { align: "center" });
+      doc.text(`${dmeScore.toFixed(1)}%`, rightX + (rightColW/2), dmeY + 30, { align: "center" });
 
       doc.setFillColor(badgeBg[0], badgeBg[1], badgeBg[2]);
       const badgeW = 35;
       doc.roundedRect(rightX + (rightColW/2) - (badgeW/2), dmeY + 36, badgeW, 7, 3, 3, "F");
       doc.setFontSize(8);
       doc.setTextColor(255, 255, 255);
-      doc.text(result.indicators.status, rightX + (rightColW/2), dmeY + 40.5, { align: "center" });
+      doc.text(indicatorStatus, rightX + (rightColW/2), dmeY + 40.5, { align: "center" });
 
       doc.setFontSize(7);
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
@@ -239,7 +303,7 @@ export const generateFullReportPDF = (
       doc.setFont("helvetica", "bold");
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
       doc.text("META: >90%", rightX + 10, dmeY + 65);
-      doc.text(`ACTUAL: ${result.indicators.availableItems}/${result.indicators.totalItems}`, rightX + rightColW - 10, dmeY + 65, { align: "right" });
+      doc.text(`ACTUAL: ${availableItemsCount}/${recalculatedTotal}`, rightX + rightColW - 10, dmeY + 65, { align: "right" });
 
       // 3. RIGHT BOTTOM: DISTRIBUTION
       doc.setDrawColor(220, 220, 220);
@@ -384,6 +448,8 @@ export const generateFullReportPDF = (
             status: activeStatus,
             req: item.quantityToOrder > 0 ? item.quantityToOrder : '-',
             _spikeThreshold: item.spikeThreshold,
+            _lowThreshold: item.lowThreshold || 0,
+            _excludedIndices: item.excludedIndices || [],
             _history: item.originalHistory,
             _statusEnum: activeStatus, // Use active status for coloring
             _selectedMode: item.selectedCpaMode || 'ADJUSTED' // Pass mode to parse cell
@@ -427,11 +493,21 @@ export const generateFullReportPDF = (
                 const idx = parseInt(String(data.column.dataKey).substring(1));
                 const val = row._history ? row._history[idx] : 0;
                 const threshold = row._spikeThreshold;
+                const lowThreshold = row._lowThreshold;
+                const isExcluded = row._excludedIndices && row._excludedIndices.includes(idx);
 
-                if (val > threshold && val > 0) {
+                if (isExcluded) {
+                    data.cell.styles.fillColor = COLORS.BG_GRAY_EXCLUDED;
+                    data.cell.styles.textColor = COLORS.TEXT_GRAY_EXCLUDED;
+                    // Note: Strikethrough is handled in didDrawCell
+                } else if (val > threshold && val > 0) {
                     data.cell.styles.fillColor = COLORS.YELLOW_HIGHLIGHT;
                     data.cell.styles.textColor = COLORS.RED;
                     data.cell.styles.fontStyle = 'bold';
+                } else if (val < lowThreshold && val > 0) {
+                    data.cell.styles.fillColor = COLORS.BG_ORANGE_LOW;
+                    data.cell.styles.textColor = COLORS.TEXT_ORANGE_LOW;
+                    // data.cell.styles.fontStyle = 'bold'; // Optional
                 } else if (val > 0) {
                     data.cell.styles.fillColor = COLORS.BG_GREEN_CELL;
                     data.cell.styles.textColor = COLORS.TEXT_GREEN_DARK;
@@ -444,8 +520,8 @@ export const generateFullReportPDF = (
             if (data.column.dataKey === 'rawCpm') { // CPA Simple
                 if (row._selectedMode === 'SIMPLE') {
                     data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.textColor = COLORS.PIE_BLUE; // Active Color
-                    data.cell.styles.fillColor = COLORS.BG_ACTIVE_SIMPLE;
+                    data.cell.styles.textColor = [30, 64, 175]; // Blue-800 (Stronger than original but not black)
+                    data.cell.styles.fillColor = [219, 234, 254]; // Blue-100 (Visible but not overwhelming)
                 } else {
                     data.cell.styles.textColor = COLORS.TEXT_INACTIVE;
                 }
@@ -454,8 +530,8 @@ export const generateFullReportPDF = (
             if (data.column.dataKey === 'cpm') { // CPA Adjusted
                 if (row._selectedMode === 'ADJUSTED') {
                     data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.textColor = COLORS.TEAL_DARK; // Active Color
-                    data.cell.styles.fillColor = COLORS.BG_ACTIVE_ADJUSTED;
+                    data.cell.styles.textColor = [30, 64, 175]; // Blue-800 (Same as Simple)
+                    data.cell.styles.fillColor = [219, 234, 254]; // Blue-100 (Same as Simple)
                 } else {
                     data.cell.styles.textColor = COLORS.TEXT_INACTIVE;
                 }
@@ -478,6 +554,36 @@ export const generateFullReportPDF = (
                  } else if (row._statusEnum === StockStatus.SIN_ROTACION) {
                      data.cell.styles.fillColor = [243, 244, 246]; 
                      data.cell.styles.textColor = COLORS.GRAY;
+                 }
+            }
+        },
+        didDrawCell: function(data: any) {
+            if (data.section !== 'body') return;
+            const row = data.row.raw;
+            // Draw Strikethrough for Excluded Months OR Yellow Spikes (in Adjusted Mode)
+            if (data.column.dataKey && String(data.column.dataKey).startsWith('m')) {
+                 const idx = parseInt(String(data.column.dataKey).substring(1));
+                 const val = row._history ? row._history[idx] : 0;
+                 const threshold = row._spikeThreshold;
+                 const isExcluded = row._excludedIndices && row._excludedIndices.includes(idx);
+                 const isSpike = val > threshold && val > 0;
+                 const isAdjustedMode = row._selectedMode === 'ADJUSTED';
+
+                 // Condition: User Excluded OR (Is Spike AND Adjusted Mode)
+                 if (isExcluded || (isSpike && isAdjustedMode)) {
+                     const doc = data.doc;
+                     const { x, y, width, height } = data.cell;
+                     
+                     // Use Gray for Excluded, Red for Spikes
+                     if (isExcluded) {
+                        doc.setDrawColor(156, 163, 175); // Gray-400
+                     } else {
+                        doc.setDrawColor(220, 38, 38); // Red-600
+                     }
+                     
+                     doc.setLineWidth(0.2);
+                     // Horizontal line in the middle
+                     doc.line(x + 2, y + height / 2, x + width - 2, y + height / 2);
                  }
             }
         }

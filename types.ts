@@ -56,6 +56,7 @@ export interface AnalyzedMedication {
 
   // User Selection Memory
   selectedCpaMode?: 'ADJUSTED' | 'SIMPLE'; // Persist user choice
+  excludedIndices?: number[]; // Persist manually excluded months
 
   // Historical context for export
   originalHistory: number[];
