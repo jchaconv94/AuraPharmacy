@@ -10,12 +10,12 @@ const calculateMedian = (values: number[]): number => {
 };
 
 // 1. Math Helpers (SISMED + Spike Detection)
-const calculateAdjustedCPM = (history: number[]): { adjusted: number; raw: number; spikes: number; details: string; threshold: number; isSporadic: boolean } => {
+const calculateAdjustedCPM = (history: number[]): { adjusted: number; adjustedNoLows: number; raw: number; spikes: number; details: string; threshold: number; lowThreshold: number; lows: number; isSporadic: boolean } => {
   const nonZeroMonths = history.filter(val => val > 0);
   const frequency = nonZeroMonths.length;
   
   if (frequency === 0) {
-    return { adjusted: 0, raw: 0, spikes: 0, details: "Sin consumo histórico", threshold: 0, isSporadic: false };
+    return { adjusted: 0, adjustedNoLows: 0, raw: 0, spikes: 0, details: "Sin consumo histórico", threshold: 0, lowThreshold: 0, lows: 0, isSporadic: false };
   }
 
   const rawSum = nonZeroMonths.reduce((a, b) => a + b, 0);
@@ -26,10 +26,13 @@ const calculateAdjustedCPM = (history: number[]): { adjusted: number; raw: numbe
       const activeMonthsAverage = rawSum / frequency;
       return {
           adjusted: activeMonthsAverage,
+          adjustedNoLows: activeMonthsAverage,
           raw: activeMonthsAverage, 
           spikes: 0,
           details: `Consumo Esporádico (${frequency} salidas/año). CPA basado en meses activos.`,
           threshold: 5, 
+          lowThreshold: 0,
+          lows: 0,
           isSporadic: true
       };
   }
@@ -44,10 +47,20 @@ const calculateAdjustedCPM = (history: number[]): { adjusted: number; raw: numbe
   
   const threshold = calculatedThreshold;
 
-  // Identify normal values vs spikes
+  // Low Threshold Logic (New Feature)
+  // Detect "very low" consumption (e.g., < 30% of median)
+  const lowThreshold = median * 0.3;
+
+  // Identify normal values vs spikes vs lows
+  // Note: Lows are NOT excluded from calculation in the current logic, just flagged.
+  // Only spikes (> threshold) are excluded.
   const validMonths = nonZeroMonths.filter(val => val <= threshold);
   const spikes = nonZeroMonths.filter(val => val > threshold);
+  const lows = nonZeroMonths.filter(val => val < lowThreshold);
   
+  // New: Calculate adjusted average excluding BOTH spikes AND lows
+  const validMonthsNoLows = nonZeroMonths.filter(val => val <= threshold && val >= lowThreshold);
+
   let adjustedAvg = 0;
   if (validMonths.length > 0) {
     adjustedAvg = validMonths.reduce((a, b) => a + b, 0) / validMonths.length;
@@ -55,24 +68,38 @@ const calculateAdjustedCPM = (history: number[]): { adjusted: number; raw: numbe
     adjustedAvg = median;
   }
 
+  let adjustedNoLowsAvg = 0;
+  if (validMonthsNoLows.length > 0) {
+    adjustedNoLowsAvg = validMonthsNoLows.reduce((a, b) => a + b, 0) / validMonthsNoLows.length;
+  } else {
+    // Fallback if everything is filtered out (unlikely but possible if all are spikes or lows)
+    adjustedNoLowsAvg = adjustedAvg; 
+  }
+
   let details = `Promedio: ${adjustedAvg.toFixed(1)}`;
   if (spikes.length > 0) {
     details = `Se excluyeron ${spikes.length} picos atípicos (Ref: >${threshold.toFixed(0)})`;
   }
+  if (lows.length > 0) {
+    details += ` | ${lows.length} consumos muy bajos detectados (<${lowThreshold.toFixed(1)})`;
+  }
 
   return { 
     adjusted: adjustedAvg, 
+    adjustedNoLows: adjustedNoLowsAvg,
     raw: rawAvg, 
     spikes: spikes.length, 
     details,
     threshold,
+    lowThreshold,
+    lows: lows.length,
     isSporadic: false
   };
 };
 
 const analyzeItemLocally = (item: MedicationInput): AnalyzedMedication => {
   const history = item.monthlyConsumption;
-  const { adjusted: cpm, raw: rawCpm, spikes, details, threshold, isSporadic } = calculateAdjustedCPM(history);
+  const { adjusted: cpm, adjustedNoLows: cpmExcludingLows, raw: rawCpm, spikes, details, threshold, lowThreshold, lows, isSporadic } = calculateAdjustedCPM(history);
   
   const monthsOfProvision = cpm > 0 ? item.currentStock / cpm : (item.currentStock > 0 ? Infinity : 0);
 
@@ -162,6 +189,7 @@ const analyzeItemLocally = (item: MedicationInput): AnalyzedMedication => {
     ff: item.ff,
     
     cpm: cpm, 
+    cpmExcludingLows: cpmExcludingLows,
     rawCpm: rawCpm,
     monthsOfProvision: monthsOfProvision,
     status: status,
@@ -175,6 +203,9 @@ const analyzeItemLocally = (item: MedicationInput): AnalyzedMedication => {
     spikesCount: spikes,
     spikeThreshold: threshold, 
     
+    hasLows: lows > 0,
+    lowThreshold: lowThreshold,
+
     isSporadic: isSporadic,
     originalHistory: history
   };

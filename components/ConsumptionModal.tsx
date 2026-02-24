@@ -41,6 +41,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   
   // STATE: CPA MODE SELECTION
   const [cpaMode, setCpaMode] = useState<'ADJUSTED' | 'SIMPLE'>('ADJUSTED');
+  const [excludeLows, setExcludeLows] = useState(false);
   
   // Security Timer State
   const [lockTimer, setLockTimer] = useState(0);
@@ -56,7 +57,9 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const dynamicData = useMemo(() => {
       if (!medication) return null;
 
-      const activeCpm = cpaMode === 'SIMPLE' ? medication.rawCpm : medication.cpm;
+      const activeCpm = cpaMode === 'SIMPLE' 
+          ? medication.rawCpm 
+          : (excludeLows && medication.cpmExcludingLows ? medication.cpmExcludingLows : medication.cpm);
       
       const activeMonths = activeCpm > 0 
           ? medication.currentStock / activeCpm 
@@ -97,7 +100,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
           status: activeStatus,
           suggestedReq: suggestedReq
       };
-  }, [medication, cpaMode]);
+  }, [medication, cpaMode, excludeLows]);
 
   const needsReview = medication ? (
       medication.status !== StockStatus.SOBRESTOCK && 
@@ -472,6 +475,22 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 </div>
              </div>
              
+             {/* TOGGLE FOR LOWS */}
+             {cpaMode === 'ADJUSTED' && medication.hasLows && (
+                <div className="flex items-center px-2 py-1 bg-orange-50 border border-orange-100 rounded-lg">
+                    <label className={`flex items-center gap-2 text-xs font-bold cursor-pointer select-none transition-colors ${excludeLows ? 'text-orange-800' : 'text-gray-500'}`}>
+                        <input 
+                            type="checkbox" 
+                            checked={excludeLows}
+                            onChange={(e) => !isReviewed && setExcludeLows(e.target.checked)}
+                            disabled={isReviewed}
+                            className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500 border-gray-300 accent-orange-600"
+                        />
+                        Excluir Bajos (Sube CPA)
+                    </label>
+                </div>
+             )}
+             
              <div className={`${statusConfig.bg} px-4 py-2 rounded-lg border ${statusConfig.border} flex flex-col justify-center w-full lg:w-auto transition-colors duration-300`}>
                 <span className={`${statusConfig.label} block text-[10px] uppercase font-bold`}>Estado</span>
                 <span className={`font-bold ${statusConfig.text} text-xl`}>
@@ -539,9 +558,19 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                         </td>
                         {medication.originalHistory.map((val, idx) => {
                             const isSpike = val > (medication.spikeThreshold || 0) && val > 0;
-                            const cellBg = isSpike 
-                                ? (cpaMode === 'SIMPLE' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-yellow-300 font-bold text-black')
-                                : 'bg-white text-gray-600';
+                            const isLow = val < (medication.lowThreshold || 0) && val > 0;
+                            
+                            let cellBg = 'bg-white text-gray-600';
+                            
+                            if (isSpike) {
+                                cellBg = cpaMode === 'SIMPLE' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-yellow-300 font-bold text-black';
+                            } else if (isLow) {
+                                if (cpaMode === 'ADJUSTED' && excludeLows) {
+                                    cellBg = 'bg-gray-100 text-gray-400 line-through decoration-orange-500 decoration-2';
+                                } else {
+                                    cellBg = 'bg-orange-200 text-orange-900 font-bold';
+                                }
+                            }
 
                             return (
                                 <td 
@@ -569,6 +598,15 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 <li>
                     El umbral de tolerancia se fijó en <strong>{(medication.spikeThreshold || 0).toFixed(1)}</strong> unidades.
                 </li>
+                {medication.hasLows && (
+                    <li>
+                        Se detectaron consumos muy bajos (menores a <strong>{(medication.lowThreshold || 0).toFixed(1)}</strong>).
+                        {excludeLows 
+                            ? <> Se han <span className="bg-gray-200 px-1 rounded text-gray-600 font-bold line-through decoration-orange-500">EXCLUIDO</span> del cálculo (Opción Manual).</>
+                            : <> Se resaltan en <span className="bg-orange-200 px-1 rounded text-orange-900 font-bold">NARANJA</span> pero se incluyen en el promedio.</>
+                        }
+                    </li>
+                )}
                 <li>
                     {cpaMode === 'ADJUSTED' 
                         ? <>Los meses pintados en <span className="bg-yellow-300 px-1 rounded text-black font-bold">AMARILLO</span> se excluyen del cálculo.</>

@@ -170,7 +170,7 @@ export const api = {
             }
             return [];
         } catch (e) {
-            console.error(e);
+            console.warn("Offline mode (getUsers): Using mock data.");
              return MOCK_DB.users.map(u => ({
                 ...u,
                 personnel: MOCK_DB.personnel.find(p => p.id === u.personnelId)
@@ -231,7 +231,7 @@ export const api = {
             if (result.success) return result.data;
             return [];
         } catch (e) {
-            console.error("Error fetching facilities:", e);
+            console.warn("Offline mode (getFacilities): Using mock data.");
             return MOCK_DB.facilities;
         }
     },
@@ -263,7 +263,7 @@ export const api = {
             
             return MOCK_DB.defaultConfig;
         } catch (e) {
-            console.error("Error obteniendo configuración global:", e);
+            console.warn("Offline mode (getSystemConfig): Using default config.");
             return MOCK_DB.defaultConfig;
         }
     },

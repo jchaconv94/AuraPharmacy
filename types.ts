@@ -33,6 +33,7 @@ export interface AnalyzedMedication {
 
   // Analysis results (SISMED 2026 IPRESS)
   cpm: number; // Consumo Promedio AJUSTADO (Sin picos)
+  cpmExcludingLows?: number; // Consumo Promedio AJUSTADO (Sin picos Y sin bajos)
   rawCpm: number; // Consumo Promedio SIMPLE (Con picos, para referencia)
   monthsOfProvision: number; // MED (Meses de Existencia Disponible)
   status: StockStatus; 
@@ -46,6 +47,10 @@ export interface AnalyzedMedication {
   spikesCount: number; // Cuántos meses se eliminaron
   spikeThreshold: number; // El valor máximo permitido (Valores mayores a este se pintan de amarillo)
   
+  // Low Consumption Audit
+  hasLows?: boolean; // Flag para UI (Consumos muy bajos)
+  lowThreshold?: number; // El valor mínimo (Valores menores a este se pintan de otro color)
+
   // Low Rotation Flag
   isSporadic: boolean; // NEW: Indica si es de baja rotación para mostrar etiqueta visual
 
