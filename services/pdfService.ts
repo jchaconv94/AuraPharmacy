@@ -125,10 +125,27 @@ const calculateDynamicMetricsPDF = (item: AnalyzedMedication) => {
     return { activeCpm, activeMonths, activeStatus };
 };
 
+const formatDateToMonthYear = (dateStr?: string) => {
+    if (!dateStr) return 'ACTUAL';
+    try {
+        const [year, month] = dateStr.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+        // Check if date is valid
+        if (isNaN(date.getTime())) return dateStr;
+        
+        const monthName = date.toLocaleString('es-ES', { month: 'long' });
+        return `${monthName.toUpperCase()} ${year}`;
+    } catch (e) {
+        return dateStr;
+    }
+};
+
 export const generateFullReportPDF = (
     result: AuraAnalysisResult, 
     filteredTableItems?: AnalyzedMedication[],
-    additionalItems?: AdditionalItem[]
+    additionalItems?: AdditionalItem[],
+    establishmentName: string = 'ESTABLECIMIENTO DE SALUD',
+    responsibleName: string = ''
 ) => {
   try {
       // 1. Initialize Landscape PDF (A4 Landscape: 297mm x 210mm)
@@ -152,10 +169,20 @@ export const generateFullReportPDF = (
       doc.setTextColor(230, 230, 230);
       doc.text("SISTEMA INTELIGENTE DE GESTIÓN FARMACÉUTICA", 45, 16);
       
-      doc.setFontSize(11);
+      // Establishment Name on Page 1
+      doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
-      doc.text(`CORTE: ${result.referenceDate || 'ACTUAL'}`, pageWidth - 15, 16, { align: "right" });
+      doc.text(establishmentName.toUpperCase(), pageWidth - 15, 9, { align: "right" });
+
+      // Responsible Name
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, 14, { align: "right" });
+
+      // Date
+      const formattedDate = formatDateToMonthYear(result.referenceDate);
+      doc.text(`CORTE: ${formattedDate}`, pageWidth - 15, 19, { align: "right" });
 
       // --- LAYOUT CALCULATIONS (SYMMETRY) ---
       const margin = 15;
@@ -398,16 +425,9 @@ export const generateFullReportPDF = (
       // ==========================================
       // PAGE 3+: DATA MATRIX (DEDICATED START)
       // ==========================================
+      // PAGE 2+: DETAILED TABLE
+      // ==========================================
       doc.addPage();
-
-      // Header Page 3 - BLACK
-      doc.setFillColor(COLORS.BLACK[0], COLORS.BLACK[1], COLORS.BLACK[2]);
-      doc.rect(0, 0, pageWidth, 24, "F");
-
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "bold");
-      doc.text("MATRIZ DE REQUERIMIENTO DETALLADA", 15, 16);
 
       // Table Start Position
       const tableStartY = 35;
@@ -483,6 +503,27 @@ export const generateFullReportPDF = (
             monthsProvision: { cellWidth: 10, fontStyle: 'bold' },
             status: { cellWidth: 18, fontSize: 5 },
             req: { cellWidth: 10, fontStyle: 'bold', textColor: COLORS.PIE_BLUE }
+        },
+        didDrawPage: function(data: any) {
+            // Header on every page of the table
+            doc.setFillColor(COLORS.BLACK[0], COLORS.BLACK[1], COLORS.BLACK[2]);
+            doc.rect(0, 0, pageWidth, 24, "F");
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont("helvetica", "bold");
+            doc.text("MATRIZ DE REQUERIMIENTO DETALLADA", 15, 16);
+            
+            // Establishment Name & Cut-off Date
+            doc.setFontSize(12);
+            doc.text(establishmentName.toUpperCase(), pageWidth - 15, 10, { align: "right" });
+            
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, 15, { align: "right" });
+
+            const formattedDate = formatDateToMonthYear(result.referenceDate);
+            doc.text(`CORTE: ${formattedDate}`, pageWidth - 15, 20, { align: "right" });
         },
         didParseCell: function(data: any) {
             if (data.section !== 'body') return;

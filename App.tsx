@@ -185,6 +185,9 @@ const AuthenticatedApp: React.FC = () => {
 // --- ANALYSIS MODULE (Original App Logic) ---
 // Extracted to keep App.tsx clean
 const AnalysisModule: React.FC = () => {
+  // NEW: Get User Context
+  const { user } = useAuth();
+
   // Initialize state from LocalStorage if available
   const [result, setResult] = useState<AuraAnalysisResult | null>(() => {
     try {
@@ -508,7 +511,11 @@ const AnalysisModule: React.FC = () => {
     if (excludeNoSupply) {
         finalMedications = finalMedications.filter(m => m.quantityToOrder > 0);
     }
-    generateFullReportPDF(dashboardResult, finalMedications, additionalItems);
+    
+    const establishmentName = user?.facilityData?.name || 'ESTABLECIMIENTO DE SALUD';
+    const responsibleName = user?.personnelData ? `${user.personnelData.firstName} ${user.personnelData.lastName}` : (user?.username || '');
+    generateFullReportPDF(dashboardResult, finalMedications, additionalItems, establishmentName, responsibleName);
+    
     setIsReportModalOpen(false);
   };
 
