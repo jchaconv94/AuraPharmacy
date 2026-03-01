@@ -96,7 +96,7 @@ export interface ChartDataPoint {
 
 export type UserRole = 'ADMIN' | 'FARMACIA' | 'INVITADO';
 
-export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'PROFILE';
+export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'PROFILE' | 'REDISTRIBUTION';
 
 export interface HealthFacility {
   code: string; // Codigo IPRESS
@@ -145,3 +145,46 @@ export interface RoleConfig {
 
 // --- FILTER TYPES ---
 export type QuickFilterOption = 'ALL' | 'PENDING' | 'REQ_POSITIVE' | 'REQ_ZERO';
+
+// --- REDISTRIBUTION MODULE TYPES ---
+
+export interface AvailabilityRecord {
+  ue: string;
+  red: string;
+  microred: string;
+  codEess: string;
+  establishmentName: string;
+  category: string;
+  medCode: string;
+  medName: string;
+  ff: string;
+  price: number;
+  type: string;
+  pet: string; // Petitorio?
+  est: string; // Estrategico?
+  stock: number;
+  cpa: number;
+  monthsProvision: number;
+  status: string; // Situacion (NormoStock, etc.)
+  expiryDate?: string; // Fecha mas prox vencimiento
+  consumptionSum?: number; // Suma de consumos
+  consumptionMonths?: number; // Meses con consumo
+  monthlyConsumption?: number[]; // Array of 12 months consumption
+}
+
+export interface RedistributionItem {
+  codEess: string;
+  establishmentName: string;
+  stock: number;
+  cpa: number;
+  monthsProvision: number;
+  status: string;
+  // Redistribution fields
+  transferQty: number; // Cantidad a transferir (negativo = sale, positivo = entra)
+  receivedQty: number; // Cantidad recibida (redundante con transferQty pero útil para UI explicita)
+  need?: number; // Necesidad calculada
+  consumptionSum?: number;
+  consumptionMonths?: number;
+  monthlyConsumption?: number[];
+  isConsolidated?: boolean;
+}

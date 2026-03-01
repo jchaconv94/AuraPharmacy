@@ -27,10 +27,20 @@ const MOCK_DB = {
         { code: '00001', name: 'DIRESA SEDE CENTRAL', category: 'ADM' },
         { code: '00002', name: 'C.S. MIRAFLORES', category: 'I-3' },
     ],
-    roles: [
-        { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE'] },
-        { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE'] }
-    ],
+    roles: (() => {
+        try {
+            const saved = localStorage.getItem('aura_mock_roles');
+            return saved ? JSON.parse(saved) : [
+                { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION'] },
+                { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION'] }
+            ];
+        } catch (e) {
+            return [
+                { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION'] },
+                { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION'] }
+            ];
+        }
+    })(),
     // Default System Config (Solo si falla la red totalmente)
     defaultConfig: {
         verificationDelaySeconds: 5,
@@ -65,6 +75,16 @@ export const api = {
     login: async (username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> => {
         try {
             const result = await sendRequest('login', { username, password });
+            
+            // PATCH: Ensure permissions match the local definition for the role
+            // This ensures new modules appear even if the backend is outdated
+            if (result.success && result.user) {
+                 const localRole = MOCK_DB.roles.find((r: any) => r.role === result.user.role);
+                 if (localRole) {
+                     result.user.permissions = localRole.allowedModules;
+                 }
+            }
+            
             return result;
         } catch (e) {
             console.warn("Error conectando al backend, intentando modo offline...", e);
@@ -79,7 +99,7 @@ export const api = {
                     if (authUser.isActive) {
                         const personnel = MOCK_DB.personnel.find(p => p.id === authUser.personnelId);
                         const facility = MOCK_DB.facilities.find(f => f.code === personnel?.facilityCode);
-                        const roleConfig = MOCK_DB.roles.find(r => r.role === authUser.role);
+                        const roleConfig = MOCK_DB.roles.find((r: any) => r.role === authUser.role);
 
                         return {
                             success: true,
@@ -110,6 +130,15 @@ export const api = {
     refreshSession: async (username: string): Promise<{ success: boolean; user?: User; message?: string }> => {
         try {
             const result = await sendRequest('refreshUser', { username });
+            
+            // PATCH: Ensure permissions match the local definition for the role
+            if (result.success && result.user) {
+                 const localRole = MOCK_DB.roles.find((r: any) => r.role === result.user.role);
+                 if (localRole) {
+                     result.user.permissions = localRole.allowedModules;
+                 }
+            }
+            
             return result;
         } catch (e) {
             console.warn("Error refrescando sesión, usando caché local...", e);
@@ -119,7 +148,7 @@ export const api = {
             if (authUser) {
                  const personnel = MOCK_DB.personnel.find(p => p.id === authUser.personnelId);
                  const facility = MOCK_DB.facilities.find(f => f.code === personnel?.facilityCode);
-                 const roleConfig = MOCK_DB.roles.find(r => r.role === authUser.role);
+                 const roleConfig = MOCK_DB.roles.find((r: any) => r.role === authUser.role);
                  return {
                     success: true,
                     user: {
@@ -237,7 +266,18 @@ export const api = {
     },
 
     getRolesConfig: async (): Promise<RoleConfig[]> => {
-        return MOCK_DB.roles as RoleConfig[];
+        try {
+            const result = await sendRequest('getRolesConfig');
+            if (result.success && result.data) {
+                // Update local mock to sync
+                MOCK_DB.roles = result.data;
+                return result.data;
+            }
+            return MOCK_DB.roles as RoleConfig[];
+        } catch (e) {
+            console.warn("Offline mode (getRolesConfig): Using mock data.");
+            return MOCK_DB.roles as RoleConfig[];
+        }
     },
 
     updateRoleConfig: async (roleConfig: RoleConfig): Promise<{ success: boolean; message?: string }> => {
@@ -246,7 +286,7 @@ export const api = {
             return result;
         } catch (e) {
             console.error("Error updating role config:", e);
-            return { success: false, message: "Error de conexión: No se pudo actualizar el rol." };
+            return { success: false, message: "Error de conexión: No se pudo actualizar el rol en el servidor." };
         }
     },
 

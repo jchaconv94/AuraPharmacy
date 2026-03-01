@@ -10,7 +10,7 @@ import { ReportOptionsModal } from './components/ReportOptionsModal';
 import { ReviewWarningModal } from './components/ReviewWarningModal';
 import { ManualEntryModal } from './components/ManualEntryModal';
 import { SuccessModal } from './components/SuccessModal';
-import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle, LogOut, Settings, BarChart2, LayoutGrid, ChevronDown } from 'lucide-react';
+import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle, LogOut, Settings, BarChart2, LayoutGrid, ChevronDown, ArrowRightLeft } from 'lucide-react';
 
 // NEW IMPORTS
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -18,6 +18,8 @@ import { LoginScreen } from './components/LoginScreen';
 import { AdminPanel } from './components/AdminPanel';
 import { UserProfile } from './components/UserProfile';
 import { WelcomeModal } from './components/WelcomeModal'; // Importar Modal
+import { RedistributionModule } from './components/RedistributionModule';
+import { Toaster } from 'sonner';
 
 const STORAGE_KEY = 'aura_data_v1';
 const REVIEW_KEY = 'aura_reviews_v1';
@@ -28,6 +30,7 @@ const WELCOME_KEY = 'aura_welcome_shown_session'; // Clave de sesión
 const App: React.FC = () => {
     return (
         <AuthProvider>
+            <Toaster position="top-center" richColors closeButton theme="light" />
             <AuthenticatedApp />
         </AuthProvider>
     );
@@ -100,6 +103,8 @@ const AuthenticatedApp: React.FC = () => {
                             </div>
                         </div>
 
+
+
                         {/* CENTER: FLOATING NAVIGATION PILL */}
                         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:block">
                             <nav className="flex items-center gap-1 bg-gray-900/80 border border-white/5 p-1 rounded-full shadow-inner">
@@ -113,7 +118,22 @@ const AuthenticatedApp: React.FC = () => {
                                         }`}
                                     >
                                         <BarChart2 className="h-4 w-4 2xl:h-5 2xl:w-5" />
-                                        Análisis de Requerimiento
+                                        Análisis
+                                    </button>
+                                )}
+
+                                {/* NEW: REDISTRIBUTION BUTTON */}
+                                {hasPermission('REDISTRIBUTION') && (
+                                    <button 
+                                        onClick={() => setCurrentView('REDISTRIBUTION')}
+                                        className={`flex items-center gap-2 px-4 2xl:px-6 py-2 2xl:py-2.5 rounded-full text-xs 2xl:text-sm font-bold transition-all duration-300 ${
+                                            currentView === 'REDISTRIBUTION' 
+                                            ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/50' 
+                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                        }`}
+                                    >
+                                        <ArrowRightLeft className="h-4 w-4 2xl:h-5 2xl:w-5" />
+                                        Redistribución
                                     </button>
                                 )}
                                 
@@ -171,10 +191,13 @@ const AuthenticatedApp: React.FC = () => {
                     </div>
                 </div>
             </header>
-            
+
+
+
             {/* CONTENT AREA SWITCHER */}
             <main className="mx-auto w-full">
                 {currentView === 'DASHBOARD' && <AnalysisModule />}
+                {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
                 {(currentView === 'ADMIN_USERS' || currentView === 'ADMIN_ROLES') && <AdminPanel />}
                 {currentView === 'PROFILE' && <UserProfile />}
             </main>

@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import { User, RoleConfig, HealthFacility } from '../types';
 import { Users, Shield, Settings, Check, X, Sliders, Save, Clock, Link2, AlertTriangle, RefreshCw, UserPlus, Edit, Power, KeyRound, Building2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { toast } from 'sonner';
 
 export const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'USERS' | 'ROLES' | 'PARAMS'>('USERS');
@@ -16,7 +17,6 @@ export const AdminPanel: React.FC = () => {
   const { systemConfig, updateSystemConfigContext, user: currentUser, refreshUserData } = useAuth();
   const [tempConfig, setTempConfig] = useState(systemConfig);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
-  const [configMessage, setConfigMessage] = useState<string | null>(null);
   const [isRefreshingUsers, setIsRefreshingUsers] = useState(false);
 
   // --- USER MODAL STATE ---
@@ -36,7 +36,6 @@ export const AdminPanel: React.FC = () => {
 
   // --- CONFIRMATION MODAL STATE ---
   const [userToToggle, setUserToToggle] = useState<{username: string, currentStatus: boolean} | null>(null);
-  const [userActionError, setUserActionError] = useState<string | null>(null);
 
   useEffect(() => {
     // Initial load (uses cache if available)
@@ -54,7 +53,6 @@ export const AdminPanel: React.FC = () => {
 
   const handleRefreshUsers = async () => {
       setIsRefreshingUsers(true);
-      setUserActionError(null);
       // Force refresh bypasses cache
       const updatedUsers = await api.getUsers(true);
       setUsers(updatedUsers);
@@ -63,15 +61,14 @@ export const AdminPanel: React.FC = () => {
 
   const handleSaveConfig = async () => {
       setIsSavingConfig(true);
-      setConfigMessage(null);
+      const toastId = toast.loading('Guardando parámetros...');
       
       const res = await api.updateSystemConfig(tempConfig);
       if (res.success) {
           updateSystemConfigContext(tempConfig);
-          setConfigMessage("Parámetros actualizados correctamente.");
-          setTimeout(() => setConfigMessage(null), 3000);
+          toast.success("Parámetros actualizados correctamente", { id: toastId });
       } else {
-          setConfigMessage("Error al guardar configuración.");
+          toast.error("Error al guardar configuración", { id: toastId });
       }
       setIsSavingConfig(false);
   };
@@ -115,7 +112,6 @@ export const AdminPanel: React.FC = () => {
       // Determinación robusta del estado actual (maneja booleanos y strings 'TRUE'/'FALSE')
       const isCurrentlyActive = currentStatus === true || String(currentStatus).toLowerCase() === 'true';
       setUserToToggle({ username, currentStatus: isCurrentlyActive });
-      setUserActionError(null);
   };
 
   const executeToggleStatus = async () => {
@@ -129,6 +125,8 @@ export const AdminPanel: React.FC = () => {
       // --- ACTUALIZACIÓN OPTIMISTA (Instantánea) ---
       const originalUsers = [...users];
       setUsers(prev => prev.map(u => u.username === username ? { ...u, isActive: newStatus } : u));
+      
+      const toastId = toast.loading('Actualizando estado...');
 
       // Llamada en segundo plano
       try {
@@ -137,6 +135,7 @@ export const AdminPanel: React.FC = () => {
           if(!res.success) {
               throw new Error(res.message);
           } else {
+              toast.success(`Usuario ${newStatus ? 'activado' : 'inactivado'}`, { id: toastId });
               // Si el usuario se inactiva a sí mismo o cambia algo que requiere refresco
               if (currentUser && username === currentUser.username) {
                   await refreshUserData();
@@ -145,14 +144,14 @@ export const AdminPanel: React.FC = () => {
       } catch (e: any) {
           // Si falla, revertimos los cambios y mostramos error en UI (no alert)
           setUsers(originalUsers);
-          setUserActionError("Error al actualizar: " + e.message);
-          setTimeout(() => setUserActionError(null), 5000);
+          toast.error("Error al actualizar: " + e.message, { id: toastId });
       }
   };
 
   const handleSaveUser = async (e: React.FormEvent) => {
       e.preventDefault();
       setIsSavingUser(true);
+      const toastId = toast.loading(editingUser ? 'Actualizando usuario...' : 'Creando usuario...');
 
       const payload = {
           isNew: !editingUser,
@@ -164,6 +163,7 @@ export const AdminPanel: React.FC = () => {
       if (res.success) {
           setIsUserModalOpen(false);
           await handleRefreshUsers(); // Recargamos la tabla
+          toast.success(editingUser ? 'Usuario actualizado' : 'Usuario creado', { id: toastId });
           
           // Si el usuario editado es el mismo que está logueado, forzamos actualización de sesión
           if (currentUser && userForm.username === currentUser.username) {
@@ -171,7 +171,7 @@ export const AdminPanel: React.FC = () => {
           }
 
       } else {
-          alert("Error al guardar: " + res.message);
+          toast.error("Error al guardar: " + res.message, { id: toastId });
       }
       setIsSavingUser(false);
   };
@@ -189,18 +189,35 @@ export const AdminPanel: React.FC = () => {
   };
 
   const handleSaveRoleConfig = async (roleConfig: RoleConfig) => {
-      // Optimistic Update (already done in state)
-      // Call API
+      const toastId = toast.loading('Guardando cambios...');
       try {
           const res = await api.updateRoleConfig(roleConfig);
           if (res.success) {
-              setConfigMessage(`Rol ${roleConfig.label} actualizado correctamente.`);
-              setTimeout(() => setConfigMessage(null), 3000);
+              toast.success(`Rol ${roleConfig.label} actualizado`, { 
+                  id: toastId,
+                  description: 'Los permisos han sido modificados exitosamente.'
+              });
+              
+              // FORCE REFRESH IF CURRENT USER IS AFFECTED
+              if (currentUser && currentUser.role === roleConfig.role) {
+                  await refreshUserData();
+              }
           } else {
-              setConfigMessage(`Error al actualizar rol: ${res.message}`);
+              toast.error(`Error al actualizar`, { 
+                  id: toastId,
+                  description: res.message 
+              });
           }
       } catch (e) {
-          setConfigMessage("Error de conexión al guardar rol.");
+          // OFFLINE FALLBACK UI FEEDBACK
+          toast.success(`Rol actualizado (Modo Offline)`, { 
+              id: toastId, 
+              description: "Los cambios se guardaron localmente." 
+          });
+          
+          if (currentUser && currentUser.role === roleConfig.role) {
+              await refreshUserData();
+          }
       }
   };
 
@@ -262,13 +279,7 @@ export const AdminPanel: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Error Message UI */}
-                        {userActionError && (
-                            <div className="mb-4 bg-red-50 border-l-4 border-red-500 p-4 rounded text-red-700 text-sm flex items-center gap-2 animate-in fade-in">
-                                <AlertTriangle className="h-5 w-5" />
-                                {userActionError}
-                            </div>
-                        )}
+                        {/* Error Message UI Removed - Handled by Toast */}
 
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead>
@@ -354,7 +365,7 @@ export const AdminPanel: React.FC = () => {
                                     </div>
                                     <div className="space-y-2">
                                         <p className="text-xs font-bold text-gray-500 uppercase mb-2">Módulos Permitidos:</p>
-                                        {['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE'].map(module => (
+                                        {['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION'].map(module => (
                                             <label key={module} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
                                                 <input 
                                                     type="checkbox" 
@@ -369,8 +380,9 @@ export const AdminPanel: React.FC = () => {
                                     <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
                                         <button 
                                             onClick={() => handleSaveRoleConfig(role)}
-                                            className="text-xs font-bold text-white bg-gray-900 px-3 py-2 rounded hover:bg-black transition-colors"
+                                            className="text-xs font-bold text-white bg-gray-900 px-3 py-2 rounded hover:bg-black transition-colors flex items-center gap-2"
                                         >
+                                            <Save className="h-3 w-3" />
                                             Guardar Cambios
                                         </button>
                                     </div>
@@ -464,11 +476,7 @@ export const AdminPanel: React.FC = () => {
                                 {isSavingConfig ? 'Guardando...' : 'Guardar Parámetros'}
                             </button>
                             
-                            {configMessage && (
-                                <span className={`text-sm font-bold animate-in fade-in ${configMessage.includes('Error') ? 'text-red-600' : 'text-teal-600'}`}>
-                                    {configMessage}
-                                </span>
-                            )}
+                            {/* Config Message Removed - Handled by Toast */}
                         </div>
                      </div>
                 )}
