@@ -187,4 +187,6 @@ export interface RedistributionItem {
   consumptionMonths?: number;
   monthlyConsumption?: number[];
   isConsolidated?: boolean;
+  simulationQty?: number; // Cantidad simulada (positivo o negativo)
+  simulationInput?: string; // Input raw para manejar estados intermedios (ej: "-")
 }
