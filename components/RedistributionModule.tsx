@@ -1953,6 +1953,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     const newStock = item.stock - (item.transferQty || 0) + (item.receivedQty || 0) + (item.simulationQty || 0);
                                     const newMonths = item.cpa > 0 ? (newStock / item.cpa) : (newStock > 0 ? 999 : 0);
 
+                                    // Recalculate Need based on New Stock
+                                    const currentNeed = calculateNeed(newStock, item.cpa, item.status, Number(item.consumptionMonths || 0));
+
                                     // Check if record is effectively empty (no stock, no cpa, no consumption)
                                     const isGhost = item.stock === 0 && item.cpa === 0 && item.consumptionSum === 0;
 
@@ -2081,10 +2084,10 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                                             {/* NECESIDAD / EXCEDENTE / BALANCE */}
                                             <td className={`p-3 text-center font-mono font-bold ${isSelected ? 'text-indigo-700' :
-                                                (item.need || 0) > 0 ? 'text-blue-600 bg-blue-50 group-hover:bg-transparent' :
-                                                    (item.need || 0) < 0 ? 'text-red-600 bg-red-50 group-hover:bg-transparent' : 'text-gray-400 bg-gray-50 group-hover:bg-transparent'
-                                                }`} title={`Stock: ${item.stock}, CPA: ${item.cpa}, MesesCons: ${item.consumptionMonths}, Status: ${item.status}, NeedCalc: ${item.need}`}>
-                                                {isGhost ? '' : ((item.need || 0) !== 0 ? (item.need || 0) : '-')}
+                                                (currentNeed || 0) > 0 ? 'text-blue-600 bg-blue-50 group-hover:bg-transparent' :
+                                                    (currentNeed || 0) < 0 ? 'text-red-600 bg-red-50 group-hover:bg-transparent' : 'text-gray-400 bg-gray-50 group-hover:bg-transparent'
+                                                }`} title={`Stock: ${newStock}, CPA: ${item.cpa}, MesesCons: ${item.consumptionMonths}, Status: ${item.status}, NeedCalc: ${currentNeed}`}>
+                                                {isGhost ? '' : ((currentNeed || 0) !== 0 ? (currentNeed || 0) : '-')}
                                             </td>
 
                                             {/* ESTIMAR (Simulation Input) */}
