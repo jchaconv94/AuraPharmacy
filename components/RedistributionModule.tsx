@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import localforage from 'localforage';
-import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, Check } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, Check, Download } from 'lucide-react';
 
 const MultiSelectFilter = ({
     title,
@@ -577,11 +577,13 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                 name: data.name,
                 cpa: cpa,
                 months: months,
+                activeMonths: activeMonths,
                 status: status,
                 type: data.type,
                 pet: data.pet,
                 est: data.est,
-                totalStock: data.totalStock
+                totalStock: data.totalStock,
+                monthlyVector: data.monthlyVector
             };
         }).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     }, [records, selectedMicrored, selectedEstablishment]);
@@ -1219,6 +1221,71 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     // --- 5. EXPORT FUNCTIONS ---
     // Removed as per user request
 
+    const handleDownloadFilteredProducts = () => {
+        if (filteredProductOptions.length === 0) {
+            toast.error('No hay productos para descargar');
+            return;
+        }
+
+        const exportData = filteredProductOptions.map(p => ({
+            'Código': p.code,
+            'Descripción': p.name,
+            'TIPO': p.type || '',
+            'PET': p.pet || '',
+            'EST': p.est || '',
+            'Mes 1': p.monthlyVector?.[0] || 0,
+            'Mes 2': p.monthlyVector?.[1] || 0,
+            'Mes 3': p.monthlyVector?.[2] || 0,
+            'Mes 4': p.monthlyVector?.[3] || 0,
+            'Mes 5': p.monthlyVector?.[4] || 0,
+            'Mes 6': p.monthlyVector?.[5] || 0,
+            'Mes 7': p.monthlyVector?.[6] || 0,
+            'Mes 8': p.monthlyVector?.[7] || 0,
+            'Mes 9': p.monthlyVector?.[8] || 0,
+            'Mes 10': p.monthlyVector?.[9] || 0,
+            'Mes 11': p.monthlyVector?.[10] || 0,
+            'Mes 12': p.monthlyVector?.[11] || 0,
+            'STOCK': p.totalStock,
+            'CPA': Number(p.cpa).toFixed(2),
+            'Meses': p.months === 999 ? '>99' : Number(p.months).toFixed(1),
+            'Situación': p.status
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        
+        // Set column widths
+        ws['!cols'] = [
+            { wch: 8 },   // Código
+            { wch: 60 },  // Descripción
+            { wch: 5 },   // TIPO
+            { wch: 5 },   // PET
+            { wch: 5 },   // EST
+            { wch: 6 },   // Mes 1
+            { wch: 6 },   // Mes 2
+            { wch: 6 },   // Mes 3
+            { wch: 6 },   // Mes 4
+            { wch: 6 },   // Mes 5
+            { wch: 6 },   // Mes 6
+            { wch: 6 },   // Mes 7
+            { wch: 6 },   // Mes 8
+            { wch: 6 },   // Mes 9
+            { wch: 7 },   // Mes 10
+            { wch: 7 },   // Mes 11
+            { wch: 7 },   // Mes 12
+            { wch: 8 },   // STOCK
+            { wch: 8 },   // CPA
+            { wch: 8 },   // Meses
+            { wch: 15 }   // Situación
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Productos Filtrados");
+        
+        const fileName = `Productos_${selectedMicrored || 'Todas'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+        toast.success('Listado descargado correctamente');
+    };
+
     // --- RENDER ---
     if (!isLoaded) {
         return (
@@ -1431,7 +1498,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 </div>
                                 <div className="flex flex-col">
                                     <span className="text-xs font-bold text-gray-800 leading-tight">Lista de Productos</span>
-                                    <span className="text-[10px] text-gray-400 font-medium uppercase tracking-tighter">{productOptions.length} disponibles</span>
+                                    <span className="text-[10px] text-gray-400 font-medium uppercase tracking-tighter">{filteredProductOptions.length} disponibles</span>
                                 </div>
                             </div>
 
@@ -1533,8 +1600,18 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 />
                             </div>
 
-                            <div className="text-xs text-gray-500 font-normal shrink-0">
-                                {reviewedProducts.size} rev.
+                            <div className="flex items-center gap-3 shrink-0">
+                                <div className="text-xs text-gray-500 font-normal">
+                                    {reviewedProducts.size} rev.
+                                </div>
+                                <button
+                                    onClick={handleDownloadFilteredProducts}
+                                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100 flex items-center gap-1"
+                                    title="Descargar listado filtrado"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">Excel</span>
+                                </button>
                             </div>
                         </div>
                         <div className="overflow-y-auto flex-1 p-0 custom-scrollbar">
