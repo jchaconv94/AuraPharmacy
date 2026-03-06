@@ -874,6 +874,15 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             if (a.isWarehouse) return -1;
             if (b.isWarehouse) return 1;
 
+            // If ALL microreds are selected, group by Microred first
+            if (selectedMicrored === 'ALL') {
+                const microredA = String(a.microred || '');
+                const microredB = String(b.microred || '');
+                if (microredA !== microredB) {
+                    return microredA.localeCompare(microredB);
+                }
+            }
+
             const nameA = (a as any)._sortName;
             const nameB = (b as any)._sortName;
 
@@ -1936,7 +1945,11 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {redistributionData.map((item) => {
+                                {redistributionData.map((item, index) => {
+                                    const showMicroredHeader = selectedMicrored === 'ALL' &&
+                                        !item.isWarehouse &&
+                                        (index === 0 || redistributionData[index - 1].microred !== item.microred || redistributionData[index - 1].isWarehouse);
+
                                     const newStock = item.stock - (item.transferQty || 0) + (item.receivedQty || 0) + (item.simulationQty || 0);
                                     const newMonths = item.cpa > 0 ? (newStock / item.cpa) : (newStock > 0 ? 999 : 0);
 
@@ -1992,9 +2005,16 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     }
 
                                     return (
-                                        <tr
-                                            key={item.codEess}
-                                            className={`
+                                        <React.Fragment key={item.codEess}>
+                                            {showMicroredHeader && (
+                                                <tr className="bg-slate-100 border-y border-slate-200">
+                                                    <td colSpan={15} className="px-4 py-2 font-bold text-slate-700 text-xs uppercase tracking-wider">
+                                                        MICRORED: {item.microred}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            <tr
+                                                className={`
                                         transition-colors cursor-pointer group
                                         ${item.isWarehouse
                                                     ? 'bg-slate-50 border-l-4 border-l-indigo-500'
@@ -2147,6 +2167,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                 </button>
                                             </td>
                                         </tr>
+                                        </React.Fragment>
                                     );
                                 })}
                             </tbody>
