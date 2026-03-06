@@ -3,6 +3,31 @@ import { createPortal } from 'react-dom';
 import localforage from 'localforage';
 import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, Check, Download, Maximize, Minimize } from 'lucide-react';
 
+// Hook para persistir estado en localStorage
+function useLocalStorage<T>(key: string, initialValue: T) {
+    const [storedValue, setStoredValue] = useState<T>(() => {
+        try {
+            const item = window.localStorage.getItem(key);
+            return item ? JSON.parse(item) : initialValue;
+        } catch (error) {
+            console.warn(`Error reading localStorage key "${key}":`, error);
+            return initialValue;
+        }
+    });
+
+    const setValue = (value: T | ((val: T) => T)) => {
+        try {
+            const valueToStore = value instanceof Function ? value(storedValue) : value;
+            setStoredValue(valueToStore);
+            window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        } catch (error) {
+            console.warn(`Error setting localStorage key "${key}":`, error);
+        }
+    };
+
+    return [storedValue, setValue] as const;
+}
+
 const MultiSelectFilter = ({
     title,
     options,
@@ -166,12 +191,12 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
     // --- REVIEW STATE ---
     const [reviewedProducts, setReviewedProducts] = useState<Set<string>>(new Set());
-    const [productSearch, setProductSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string[]>([]);
-    const [reviewFilter, setReviewFilter] = useState<string[]>([]);
-    const [tipoFilter, setTipoFilter] = useState<string[]>([]);
-    const [petFilter, setPetFilter] = useState<string[]>([]);
-    const [estFilter, setEstFilter] = useState<string[]>([]);
+    const [productSearch, setProductSearch] = useLocalStorage<string>('aura_productSearch', '');
+    const [statusFilter, setStatusFilter] = useLocalStorage<string[]>('aura_statusFilter', []);
+    const [reviewFilter, setReviewFilter] = useLocalStorage<string[]>('aura_reviewFilter', []);
+    const [tipoFilter, setTipoFilter] = useLocalStorage<string[]>('aura_tipoFilter', []);
+    const [petFilter, setPetFilter] = useLocalStorage<string[]>('aura_petFilter', []);
+    const [estFilter, setEstFilter] = useLocalStorage<string[]>('aura_estFilter', []);
 
     // --- CONFIRMATION MODAL STATE ---
     const [isReviewConfirmOpen, setIsReviewConfirmOpen] = useState(false);
@@ -345,6 +370,13 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setReviewedProducts(new Set());
         setTransferList([]);
         setSimulationData({});
+        setProductSearch('');
+        setStatusFilter([]);
+        setReviewFilter([]);
+        setTipoFilter([]);
+        setPetFilter([]);
+        setEstFilter([]);
+        
         localforage.removeItem('aura_records');
         localforage.removeItem('aura_selectedMicrored');
         localforage.removeItem('aura_selectedEstablishment');
@@ -354,6 +386,17 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         localforage.removeItem('aura_reviewedProducts');
         localforage.removeItem('aura_transferList');
         localforage.removeItem('aura_simulationData');
+        window.localStorage.removeItem('aura_productSearch');
+        window.localStorage.removeItem('aura_statusFilter');
+        window.localStorage.removeItem('aura_reviewFilter');
+        window.localStorage.removeItem('aura_tipoFilter');
+        window.localStorage.removeItem('aura_petFilter');
+        window.localStorage.removeItem('aura_estFilter');
+    };
+
+    const renderModal = (modalContent: React.ReactNode) => {
+        const target = isFullscreen && tableContainerRef.current ? tableContainerRef.current : document.body;
+        return createPortal(modalContent, target);
     };
 
     const processFile = (file: File) => {
@@ -2101,7 +2144,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             )}
 
             {/* QUICK TRANSFER CONFIRMATION MODAL */}
-            {isQuickTransferConfirmOpen && quickTransferSource && quickTransferDestination && (
+            {isQuickTransferConfirmOpen && quickTransferSource && quickTransferDestination && renderModal(
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[90] p-4 backdrop-blur-md animate-in fade-in duration-200">
                     <div className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-800 transform transition-all scale-100">
                         {/* Premium Header */}
@@ -2212,7 +2255,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             )}
 
             {/* TRANSFER LIST MODAL */}
-            {isTransferListOpen && (
+            {isTransferListOpen && renderModal(
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden border border-gray-200 flex flex-col max-h-[85vh]">
                         <div className="bg-gray-900 text-white p-4 flex justify-between items-center shrink-0">
@@ -2294,7 +2337,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             )}
 
             {/* CONSOLIDATION MODAL */}
-            {isConsolidateModalOpen && (
+            {isConsolidateModalOpen && renderModal(
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 flex flex-col max-h-[80vh]">
                         <div className="bg-gray-900 text-white p-4 flex justify-between items-center shrink-0">
@@ -2389,7 +2432,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             )}
 
             {/* REVIEW CONFIRMATION MODAL */}
-            {isReviewConfirmOpen && (
+            {isReviewConfirmOpen && renderModal(
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-200">
                         <div className="p-6 text-center">
@@ -2438,7 +2481,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             )}
 
             {/* CONFIRMATION MODAL */}
-            {isConfirmUploadModalOpen && (
+            {isConfirmUploadModalOpen && renderModal(
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                     <div className="bg-gray-900 p-6 rounded-lg shadow-xl max-w-md w-full">
                         <h2 className="text-xl font-bold text-white mb-4">Confirmar nueva carga</h2>
@@ -2472,7 +2515,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             )}
 
             {/* GLOBAL SEARCH MODAL */}
-            {isGlobalSearchModalOpen && (
+            {isGlobalSearchModalOpen && renderModal(
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[80] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95%] overflow-hidden border border-gray-200 flex flex-col max-h-[85vh]">
                         <div className="bg-indigo-900 text-white p-5 flex justify-between items-center shrink-0">
@@ -2664,12 +2707,11 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         </div>
                     </div>
                 </div>
-            )
-            }
+            )}
 
             {/* DETAIL MODAL */}
             {
-                isDetailModalOpen && selectedDetailItem && (
+                isDetailModalOpen && selectedDetailItem && renderModal(
                     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                         <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl overflow-hidden border border-gray-800 flex flex-col max-h-[90vh]">
                             {/* Header */}
