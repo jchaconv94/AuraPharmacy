@@ -1,37 +1,37 @@
-import React, { useState, useMemo } from 'react';
-import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import localforage from 'localforage';
+import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { AvailabilityRecord, RedistributionItem } from '../types';
 import { toast } from 'sonner';
+import { useAuth } from '../contexts/AuthContext';
 
 interface RedistributionModuleProps {
   onBack?: () => void;
 }
 
 export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBack }) => {
+  const { systemConfig } = useAuth();
+  // --- STATE INITIALIZATION ---
+  const [isLoaded, setIsLoaded] = useState(false);
   const [records, setRecords] = useState<AvailabilityRecord[]>([]);
   const [selectedMicrored, setSelectedMicrored] = useState<string>('');
+  const [selectedEstablishment, setSelectedEstablishment] = useState<string>('');
   const [selectedProductCode, setSelectedProductCode] = useState<string>('');
   const [selectedProductName, setSelectedProductName] = useState<string>('');
-  
-  // Raw data for the current view (before consolidation)
-  const [baseRedistributionData, setBaseRedistributionData] = useState<RedistributionItem[]>([]);
-  // The data actually displayed (after consolidation)
-  const [redistributionData, setRedistributionData] = useState<RedistributionItem[]>([]);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // --- CONSOLIDATION STATE ---
   const [isConsolidateModalOpen, setIsConsolidateModalOpen] = useState(false);
-  const [consolidationSelection, setConsolidationSelection] = useState<Set<string>>(new Set()); // IDs of secondary pharmacies to consolidate
+  const [consolidationSelection, setConsolidationSelection] = useState<Set<string>>(new Set());
 
   // --- REVIEW STATE ---
   const [reviewedProducts, setReviewedProducts] = useState<Set<string>>(new Set());
   const [productSearch, setProductSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [reviewFilter, setReviewFilter] = useState('ALL');
-
 
   // --- CONFIRMATION MODAL STATE ---
   const [isReviewConfirmOpen, setIsReviewConfirmOpen] = useState(false);
@@ -41,6 +41,16 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
   // --- DETAIL MODAL STATE ---
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<RedistributionItem | null>(null);
+
+  // --- UPLOAD CONFIRMATION MODAL ---
+  const [isConfirmUploadModalOpen, setIsConfirmUploadModalOpen] = useState(false);
+  const [estSearchTerm, setEstSearchTerm] = useState('');
+  const [isEstDropdownOpen, setIsEstDropdownOpen] = useState(false);
+  const [mrSearchTerm, setMrSearchTerm] = useState('');
+  const [isMrDropdownOpen, setIsMrDropdownOpen] = useState(false);
+  const [isGlobalSearchModalOpen, setIsGlobalSearchModalOpen] = useState(false);
+  const [globalSearchTerm, setGlobalSearchTerm] = useState('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // --- TRANSFER LIST STATE ---
   const [transferList, setTransferList] = useState<{
@@ -53,26 +63,122 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
       destinationCod: string;
       destinationName: string;
   }[]>([]);
+  
+  const [simulationData, setSimulationData] = useState<Record<string, Record<string, { qty: number, input: string }>>>({});
   const [isTransferListOpen, setIsTransferListOpen] = useState(false);
   const [quickTransferSource, setQuickTransferSource] = useState<RedistributionItem | null>(null);
   const [quickTransferDestination, setQuickTransferDestination] = useState<RedistributionItem | null>(null);
   const [isQuickTransferConfirmOpen, setIsQuickTransferConfirmOpen] = useState(false);
   const [quickTransferQty, setQuickTransferQty] = useState<string>('');
 
+  // --- LOAD FROM LOCALFORAGE ---
+  useEffect(() => {
+      const loadData = async () => {
+          try {
+              const savedRecords = await localforage.getItem<AvailabilityRecord[]>('aura_records');
+              if (savedRecords && Array.isArray(savedRecords)) setRecords(savedRecords);
 
+              const savedMicrored = await localforage.getItem<string>('aura_selectedMicrored');
+              if (savedMicrored) setSelectedMicrored(savedMicrored);
+
+              const savedEstablishment = await localforage.getItem<string>('aura_selectedEstablishment');
+              if (savedEstablishment) setSelectedEstablishment(savedEstablishment);
+
+              const savedProductCode = await localforage.getItem<string>('aura_selectedProductCode');
+              if (savedProductCode) setSelectedProductCode(savedProductCode);
+
+              const savedProductName = await localforage.getItem<string>('aura_selectedProductName');
+              if (savedProductName) setSelectedProductName(savedProductName);
+
+              const savedConsolidation = await localforage.getItem<string[]>('aura_consolidationSelection');
+              if (savedConsolidation && Array.isArray(savedConsolidation)) setConsolidationSelection(new Set(savedConsolidation));
+
+              const savedReviewed = await localforage.getItem<string[]>('aura_reviewedProducts');
+              if (savedReviewed && Array.isArray(savedReviewed)) setReviewedProducts(new Set(savedReviewed));
+
+              const savedTransferList = await localforage.getItem<any[]>('aura_transferList');
+              if (savedTransferList && Array.isArray(savedTransferList)) setTransferList(savedTransferList);
+
+              const savedSimulation = await localforage.getItem<any>('aura_simulationData');
+              if (savedSimulation && typeof savedSimulation === 'object' && !Array.isArray(savedSimulation)) setSimulationData(savedSimulation);
+          } catch (e) {
+              console.error("Error loading data from localforage", e);
+          } finally {
+              setIsLoaded(true);
+          }
+      };
+      loadData();
+  }, []);
+
+  // --- SYNC TO LOCALFORAGE ---
+  useEffect(() => {
+      if (!isLoaded) return;
+      localforage.setItem('aura_records', records).catch(e => console.warn("Could not save records to localforage", e));
+  }, [records, isLoaded]);
+
+  useEffect(() => {
+      if (!isLoaded) return;
+      localforage.setItem('aura_selectedMicrored', selectedMicrored).catch(() => {});
+  }, [selectedMicrored, isLoaded]);
+
+  useEffect(() => {
+      if (!isLoaded) return;
+      localforage.setItem('aura_selectedEstablishment', selectedEstablishment).catch(() => {});
+  }, [selectedEstablishment, isLoaded]);
+
+  useEffect(() => {
+      if (!isLoaded) return;
+      localforage.setItem('aura_selectedProductCode', selectedProductCode).catch(() => {});
+  }, [selectedProductCode, isLoaded]);
+
+  useEffect(() => {
+      if (!isLoaded) return;
+      localforage.setItem('aura_selectedProductName', selectedProductName).catch(() => {});
+  }, [selectedProductName, isLoaded]);
+
+  useEffect(() => {
+      if (!isLoaded) return;
+      localforage.setItem('aura_consolidationSelection', Array.from(consolidationSelection)).catch(() => {});
+  }, [consolidationSelection, isLoaded]);
+
+  useEffect(() => {
+      if (!isLoaded) return;
+      localforage.setItem('aura_reviewedProducts', Array.from(reviewedProducts)).catch(() => {});
+  }, [reviewedProducts, isLoaded]);
+
+  useEffect(() => {
+      if (!isLoaded) return;
+      localforage.setItem('aura_transferList', transferList).catch(() => {});
+  }, [transferList, isLoaded]);
+
+  useEffect(() => {
+      if (!isLoaded) return;
+      localforage.setItem('aura_simulationData', simulationData).catch(() => {});
+  }, [simulationData, isLoaded]);
 
   // --- 1. FILE UPLOAD ---
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const clearRedistributionData = () => {
+    setRecords([]);
+    setSelectedMicrored('');
+    setSelectedEstablishment('');
+    setSelectedProductCode('');
+    setSelectedProductName('');
+    setConsolidationSelection(new Set());
+    setReviewedProducts(new Set());
+    setTransferList([]);
+    setSimulationData({});
+    localforage.removeItem('aura_records');
+    localforage.removeItem('aura_selectedMicrored');
+    localforage.removeItem('aura_selectedEstablishment');
+    localforage.removeItem('aura_selectedProductCode');
+    localforage.removeItem('aura_selectedProductName');
+    localforage.removeItem('aura_consolidationSelection');
+    localforage.removeItem('aura_reviewedProducts');
+    localforage.removeItem('aura_transferList');
+    localforage.removeItem('aura_simulationData');
+  };
 
-    // Validate File Extension
-    const fileName = file.name.toLowerCase();
-    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
-        toast.error("Formato de archivo incorrecto. Por favor suba un archivo Excel (.xlsx o .xls).");
-        return;
-    }
-
+  const processFile = (file: File) => {
     setLoading(true);
     setError(null);
 
@@ -156,25 +262,55 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     }
                 });
 
+                // --- NEW CALCULATION LOGIC (User Request) ---
+                // CPA = Total Consumption / Months with Consumption
+                let calculatedCpa = 0;
+                if (consumptionMonths > 0) {
+                    calculatedCpa = consumptionSum / consumptionMonths;
+                }
+
+                // Months Provision = Stock / Calculated CPA
+                let calculatedMonthsProvision = 0;
+                if (calculatedCpa > 0.01) {
+                    calculatedMonthsProvision = stock / calculatedCpa;
+                } else if (stock > 0) {
+                    calculatedMonthsProvision = 999; // Infinite provision if stock > 0 but no consumption
+                }
+
+                // Recalculate Status based on new metrics (User Request: ALWAYS CALCULATE)
+                let calculatedStatus = '';
+                
+                if (stock === 0) {
+                    calculatedStatus = 'Desabastecido';
+                } else if (calculatedCpa <= 0.01) {
+                     calculatedStatus = 'Sin Rotación';
+                } else if (calculatedMonthsProvision < 2) {
+                    calculatedStatus = 'SubStock';
+                } else if (calculatedMonthsProvision > 6) {
+                    calculatedStatus = 'SobreStock';
+                } else {
+                    calculatedStatus = 'NormoStock';
+                }
+
                 parsedRecords.push({
-                    ue: getVal("UE") || '',
-                    red: getVal("RED") || '',
-                    microred: microred,
-                    codEess: getVal("COD EESS") || getVal("COD. EESS") || '',
-                    establishmentName: getVal("ESTABLECIMIENTO") || getVal("EESS") || '',
-                    category: getVal("CAT") || '',
-                    medCode: medCode,
-                    medName: getVal("DESCRIPCION") || getVal("PRODUCTO") || '',
-                    ff: getVal("F.F") || '',
+                    ue: String(getVal("UE") || ''),
+                    red: String(getVal("RED") || ''),
+                    microred: String(microred),
+                    codEess: String(getVal("COD EESS") || getVal("COD. EESS") || ''),
+                    establishmentName: String(getVal("ESTABLECIMIENTO") || getVal("EESS") || ''),
+                    category: String(getVal("CAT") || ''),
+                    medCode: String(medCode),
+                    medName: String(getVal("DESCRIPCION") || getVal("PRODUCTO") || ''),
+                    ff: String(getVal("F.F") || ''),
                     price: Number(getVal("PRECIO") || 0),
-                    type: getVal("TIPO") || '',
-                    pet: getVal("PET") || '',
-                    est: getVal("EST") || '',
+                    type: String(getVal("TIPO") || ''),
+                    pet: String(getVal("PET") || ''),
+                    est: String(getVal("EST") || ''),
                     stock: stock,
-                    cpa: cpa,
-                    monthsProvision: monthsProvision,
-                    status: getVal("SITUACIÓN") || getVal("SITUACION") || '',
-                    expiryDate: getVal("VENCIMIENTO") || getVal("VENC") || '',
+                    cpa: calculatedCpa, // Use Calculated CPA
+                    monthsProvision: calculatedMonthsProvision, // Use Calculated Months
+                    status: calculatedStatus,
+                    expiryDate: String(getVal("VENCIMIENTO") || getVal("VENC") || ''),
                     consumptionSum: consumptionSum,
                     consumptionMonths: consumptionMonths,
                     monthlyConsumption: monthlyConsumption
@@ -192,7 +328,21 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
           }
         };
         reader.readAsBinaryString(file);
-    }, 1500); // 1.5s delay for animation
+    }, 500);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate File Extension
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+        toast.error("Formato de archivo incorrecto. Por favor suba un archivo Excel (.xlsx o .xls).");
+        return;
+    }
+
+    processFile(file);
   };
 
   // --- 2. FILTERS ---
@@ -203,7 +353,14 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
   const productOptions = useMemo(() => {
     if (!selectedMicrored) return [];
-    const filtered = records.filter(r => r.microred === selectedMicrored);
+    
+    let filtered = records;
+    if (selectedMicrored !== 'ALL') {
+        filtered = filtered.filter(r => r.microred === selectedMicrored);
+    }
+    if (selectedEstablishment) {
+        filtered = filtered.filter(r => r.codEess === selectedEstablishment);
+    }
     
     // Aggregate data by product code
     const productMap = new Map<string, {
@@ -224,9 +381,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         entry.totalStock += r.stock;
         
         // Sum monthly consumption vector to calculate consolidated CPA correctly
-        if (r.monthlyConsumption && r.monthlyConsumption.length === 12) {
+        if (Array.isArray(r.monthlyConsumption) && r.monthlyConsumption.length === 12) {
             for(let i = 0; i < 12; i++) {
-                entry.monthlyVector[i] += r.monthlyConsumption[i];
+                entry.monthlyVector[i] += Number(r.monthlyConsumption[i]) || 0;
             }
         }
     });
@@ -251,18 +408,18 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             months: months,
             status: status
         };
-    }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [records, selectedMicrored]);
+    }).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  }, [records, selectedMicrored, selectedEstablishment]);
 
   const filteredProductOptions = useMemo(() => {
       let result = productOptions;
 
       // 1. Text Search
       if (productSearch) {
-          const lower = productSearch.toLowerCase();
+          const lower = String(productSearch || '').toLowerCase();
           result = result.filter(p => 
-              p.name.toLowerCase().includes(lower) || 
-              p.code.toLowerCase().includes(lower)
+              String(p.name || '').toLowerCase().includes(lower) || 
+              String(p.code || '').toLowerCase().includes(lower)
           );
       }
 
@@ -284,20 +441,28 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
   const microredStats = useMemo(() => {
       if (!selectedMicrored) return null;
-      const mrRecords = records.filter(r => r.microred === selectedMicrored);
+      const mrRecords = selectedMicrored === 'ALL' ? records : records.filter(r => r.microred === selectedMicrored);
       const establishments = new Set(mrRecords.map(r => r.codEess)).size;
       const totalItems = mrRecords.length;
-      return { establishments, totalItems };
+      const uniqueProducts = new Set(mrRecords.map(r => r.medCode)).size;
+      return { establishments, totalItems, uniqueProducts };
   }, [selectedMicrored, records]);
+
+  const establishmentOptions = useMemo(() => {
+    if (!selectedMicrored) return [];
+    const mrRecords = selectedMicrored === 'ALL' ? records : records.filter(r => r.microred === selectedMicrored);
+    const establishments = Array.from(new Map(mrRecords.map(r => [r.codEess, r.establishmentName])).entries())
+        .map(([cod, name]) => ({ cod, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    return establishments;
+  }, [records, selectedMicrored]);
 
   // --- 3. REDISTRIBUTION LOGIC ---
   const handleMicroredChange = (microred: string) => {
     setSelectedMicrored(microred);
+    setSelectedEstablishment('');
     setSelectedProductCode('');
     setSelectedProductName('');
-    setBaseRedistributionData([]);
-    setRedistributionData([]);
-    setConsolidationSelection(new Set()); // Reset consolidation on microred change
     setProductSearch('');
     setStatusFilter('ALL');
     setReviewFilter('ALL');
@@ -325,215 +490,227 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     if (product) setSelectedProductName(product.name);
 
     if (!productCode) {
-      setRedistributionData([]);
       setSelectedProductName('');
       return;
     }
-
-    // 1. Get ALL establishments for the selected Microred (from all records)
-    const allEstablishmentsInMicrored: { cod: string, name: string }[] = Array.from(new Set(
-        records
-            .filter(r => r.microred === selectedMicrored)
-            .map(r => JSON.stringify({ cod: r.codEess, name: r.establishmentName }))
-    )).map(s => JSON.parse(s));
-
-    // 2. Get existing records for the selected product
-    const productRecords = records.filter(r => 
-        r.microred === selectedMicrored && r.medCode === productCode
-    );
-
-    // 3. Merge: Create a row for EVERY establishment
-    const initialData: RedistributionItem[] = allEstablishmentsInMicrored.map(eess => {
-        // Find if this establishment has the product
-        const r = productRecords.find(pr => pr.codEess === eess.cod);
-
-        if (r) {
-            // Existing Record Logic
-            const need = calculateNeed(r.stock, r.cpa, r.status);
-            
-            // Calculate redistribution suggestion (negative need)
-            // If Overstock and Months > 6, suggest transferring out excess to reach 6 months
-            let redistributionSuggestion = 0;
-            if (r.status === 'SobreStock' && r.monthsProvision > 6) {
-                redistributionSuggestion = Math.floor(r.stock - (6 * r.cpa));
-            }
-
-            return {
-                codEess: r.codEess,
-                establishmentName: r.establishmentName,
-                stock: r.stock,
-                cpa: r.cpa,
-                monthsProvision: r.monthsProvision,
-                status: r.status,
-                transferQty: 0, // Default to 0, user must input manually
-                receivedQty: 0,
-                need: need > 0 ? need : (redistributionSuggestion > 0 ? -redistributionSuggestion : 0), // Positive = Need, Negative = Excess to distribute
-                consumptionSum: r.consumptionSum || 0,
-                consumptionMonths: r.consumptionMonths || 0,
-                monthlyConsumption: r.monthlyConsumption || Array(12).fill(0),
-                simulationQty: 0
-            };
-        } else {
-            // Missing Record (Zero values)
-            return {
-                codEess: eess.cod,
-                establishmentName: eess.name,
-                stock: 0,
-                cpa: 0,
-                monthsProvision: 0,
-                status: 'Sin Stock', // Or empty string
-                transferQty: 0,
-                receivedQty: 0,
-                need: 0,
-                consumptionSum: 0,
-                consumptionMonths: 0,
-                monthlyConsumption: Array(12).fill(0),
-                simulationQty: 0
-            };
-        }
-    });
-
-    // Sort by codEess to ensure F01 (Principal) is above F02, F03 (Secondary)
-    initialData.sort((a, b) => a.codEess.localeCompare(b.codEess));
-
-    setBaseRedistributionData(initialData);
-    // Initially, redistributionData is same as base (no consolidation applied yet unless persisted)
-    // We trigger consolidation update via effect or direct call. For now direct:
-    updateConsolidatedData(initialData, consolidationSelection);
   };
 
-  // Helper to apply consolidation
-  const updateConsolidatedData = (data: RedistributionItem[], selection: Set<string>) => {
-      if (selection.size === 0) {
-          setRedistributionData(data);
-          return;
+  const baseRedistributionData = useMemo(() => {
+      if (!selectedProductCode || !selectedMicrored || records.length === 0) return [];
+
+      const allEstablishments: { cod: string, name: string, microred: string }[] = Array.from(new Set(
+          records
+              .filter(r => selectedMicrored === 'ALL' || r.microred === selectedMicrored)
+              .map(r => JSON.stringify({ cod: r.codEess, name: r.establishmentName, microred: r.microred }))
+      )).map(s => JSON.parse(s));
+
+
+      if (systemConfig.warehouseCode && systemConfig.warehouseName) {
+          if (!allEstablishments.find(e => e.cod === systemConfig.warehouseCode)) {
+              allEstablishments.push({ 
+                  cod: systemConfig.warehouseCode, 
+                  name: systemConfig.warehouseName,
+                  microred: 'ALMACEN'
+              });
+          }
       }
 
-      const consolidatedMap = new Map<string, RedistributionItem>();
-      const processedSecondaries = new Set<string>();
+      const productRecords = records.filter(r => 
+          r.medCode === selectedProductCode && (
+              selectedMicrored === 'ALL' || 
+              r.microred === selectedMicrored
+          )
+      );
 
-      // Deep copy to avoid mutating base
-      const workingData = data.map(item => ({...item}));
+      const transfersForProduct = transferList.filter(t => t.productCode === selectedProductCode);
+      const simDataForProduct = simulationData[selectedProductCode] || {};
 
-      workingData.forEach(item => {
-          // Check if this item is a secondary pharmacy selected for consolidation
-          if (selection.has(item.codEess)) {
-              // Find its principal (Base Code + F01)
-              // Assuming format XXXXXFyy -> Base is XXXXX
-              const baseCode = item.codEess.substring(0, 5); 
-              const principalCode = baseCode + 'F01';
-              
-              // If the principal exists in our data
-              const principalItem = workingData.find(p => p.codEess === principalCode);
-              
-              if (principalItem) {
-                  // Mark as processed so we don't add it to the final list as a standalone row
-                  processedSecondaries.add(item.codEess);
-                  
-                  // Merge into Principal
-                  // Note: We are mutating principalItem inside workingData array, which is fine as it's a copy
-                  principalItem.stock += item.stock;
-                  
-                  // Recalculate Consumption from Monthly Data
-                  if (principalItem.monthlyConsumption && item.monthlyConsumption) {
-                      // Sum monthly vectors
-                      for (let i = 0; i < 12; i++) {
-                          principalItem.monthlyConsumption[i] = (principalItem.monthlyConsumption[i] || 0) + (item.monthlyConsumption[i] || 0);
-                      }
-                      
-                      // Recalculate Sum and Months from new vector
-                      principalItem.consumptionSum = principalItem.monthlyConsumption.reduce((a, b) => a + b, 0);
-                      principalItem.consumptionMonths = principalItem.monthlyConsumption.filter(v => v > 0).length;
-                      
-                      // Recalculate CPA
-                      // CPA = Total Consumption / Months with Consumption (if > 0)
-                      if (principalItem.consumptionMonths > 0) {
-                          principalItem.cpa = principalItem.consumptionSum / principalItem.consumptionMonths;
-                      } else {
-                          principalItem.cpa = 0;
-                      }
-                  } else {
-                      // Fallback if no monthly data (shouldn't happen with new parsing)
-                      principalItem.cpa += item.cpa;
-                      principalItem.consumptionSum = (principalItem.consumptionSum || 0) + (item.consumptionSum || 0);
-                      principalItem.consumptionMonths = Math.max(principalItem.consumptionMonths || 0, item.consumptionMonths || 0);
-                  }
-                  
-                  // Recalculate derived fields for Principal
-                  if (principalItem.cpa > 0) {
-                      principalItem.monthsProvision = principalItem.stock / principalItem.cpa;
-                  } else {
-                      principalItem.monthsProvision = principalItem.stock > 0 ? 999 : 0;
-                  }
-                  
-                  // Recalculate Status
-                  if (principalItem.stock === 0) principalItem.status = 'Desabastecido';
-                  else if (principalItem.monthsProvision < 2) principalItem.status = 'SubStock';
-                  else if (principalItem.monthsProvision > 6) principalItem.status = 'SobreStock';
-                  else principalItem.status = 'NormoStock';
-                  
-                  // Recalculate Need
-                  const baseNeed = calculateNeed(principalItem.stock, principalItem.cpa, principalItem.status);
-                  let baseRedist = 0;
-                  if (principalItem.status === 'SobreStock' && principalItem.monthsProvision > 6) {
-                      baseRedist = Math.floor(principalItem.stock - (6 * principalItem.cpa));
-                  }
-                  principalItem.need = baseNeed > 0 ? baseNeed : (baseRedist > 0 ? -baseRedist : 0);
+      const initialData: RedistributionItem[] = allEstablishments.map(eess => {
+          const r = productRecords.find(pr => pr.codEess === eess.cod);
+          
+          const transferQty = transfersForProduct.filter(t => t.originCod === eess.cod).reduce((sum, t) => sum + t.quantity, 0);
+          const receivedQty = transfersForProduct.filter(t => t.destinationCod === eess.cod).reduce((sum, t) => sum + t.quantity, 0);
+          
+          const simQty = simDataForProduct[eess.cod]?.qty || 0;
+          const simInput = simDataForProduct[eess.cod]?.input || '';
 
-                  // Mark visually as consolidated
-                  principalItem.isConsolidated = true;
+          const isWarehouse = eess.cod === systemConfig.warehouseCode;
+
+          if (r) {
+              const need = calculateNeed(r.stock, r.cpa, r.status);
+              let redistributionSuggestion = 0;
+              if (r.status === 'SobreStock' && r.monthsProvision > 6) {
+                  redistributionSuggestion = Math.floor(r.stock - (6 * r.cpa));
               }
+
+              return {
+                  codEess: r.codEess,
+                  establishmentName: r.establishmentName,
+                  microred: r.microred,
+                  stock: r.stock,
+                  cpa: r.cpa,
+                  monthsProvision: r.monthsProvision,
+                  status: r.status,
+                  transferQty,
+                  receivedQty,
+                  need: need > 0 ? need : (redistributionSuggestion > 0 ? -redistributionSuggestion : 0),
+                  consumptionSum: r.consumptionSum || 0,
+                  consumptionMonths: r.consumptionMonths || 0,
+                  monthlyConsumption: Array.isArray(r.monthlyConsumption) ? r.monthlyConsumption : Array(12).fill(0),
+                  simulationQty: simQty,
+                  simulationInput: simInput,
+                  isWarehouse
+              };
+          } else {
+              return {
+                  codEess: eess.cod,
+                  establishmentName: eess.name,
+                  microred: eess.microred,
+                  stock: 0,
+                  cpa: 0,
+                  monthsProvision: 0,
+                  status: 'Sin Stock',
+                  transferQty,
+                  receivedQty,
+                  need: 0,
+                  consumptionSum: 0,
+                  consumptionMonths: 0,
+                  monthlyConsumption: Array(12).fill(0),
+                  simulationQty: simQty,
+                  simulationInput: simInput,
+                  isWarehouse
+              };
           }
       });
 
-      // Filter out consolidated secondaries
-      const finalData = workingData.filter(item => !processedSecondaries.has(item.codEess));
-      setRedistributionData(finalData);
-  };
+      initialData.sort((a, b) => {
+          if (a.isWarehouse) return -1;
+          if (b.isWarehouse) return 1;
+          
+          return String(a.establishmentName || '').localeCompare(String(b.establishmentName || ''));
+      });
+      return initialData;
+  }, [records, selectedMicrored, selectedProductCode, transferList, simulationData, systemConfig]);
 
-  const handleTransferChange = (codEess: string, field: 'transferQty' | 'receivedQty', value: string) => {
-    // Allow clearing the input
-    if (value === '') {
-        const newBase = baseRedistributionData.map(item => {
-            if (item.codEess === codEess) {
-                return { ...item, [field]: 0 };
-            }
-            return item;
-        });
-        setBaseRedistributionData(newBase);
-        updateConsolidatedData(newBase, consolidationSelection);
-        return;
-    }
+  // Memoized data for Global Search Modal
+  const globalNetworkData = useMemo(() => {
+      if (!selectedProductCode || records.length === 0) return [];
 
-    const numValue = parseFloat(value);
-    if (isNaN(numValue) || numValue < 0) return;
+      // Get all establishments that have this product across the entire network, excluding the selected microred
+      const productRecords = records.filter(r => 
+          r.medCode === selectedProductCode && 
+          r.stock > 0 && 
+          (selectedMicrored !== 'ALL' ? r.microred !== selectedMicrored : true)
+      );
+      
+      const transfersForProduct = transferList.filter(t => t.productCode === selectedProductCode);
+      const simDataForProduct = simulationData[selectedProductCode] || {};
 
-    // Validation: Cannot transfer more than stock
-    if (field === 'transferQty') {
-        const visibleItem = redistributionData.find(i => i.codEess === codEess);
-        if (visibleItem && numValue > visibleItem.stock) {
-            toast.error(`No puede transferir más del stock disponible (${visibleItem.stock})`);
-            return;
-        }
-    }
-    
-    // Update BOTH base and visible data to keep them in sync for exports/logic
-    // This is tricky. If we update visible, we must update base.
-    // Simpler: Update base, then re-apply consolidation.
-    
-    const newBase = baseRedistributionData.map(item => {
-      if (item.codEess === codEess) {
-        return { ...item, [field]: numValue };
-      }
-      return item;
-    });
-    
-    setBaseRedistributionData(newBase);
-    updateConsolidatedData(newBase, consolidationSelection);
-  };
+      return productRecords.map(r => {
+          const transferQty = transfersForProduct.filter(t => t.originCod === r.codEess).reduce((sum, t) => sum + t.quantity, 0);
+          const receivedQty = transfersForProduct.filter(t => t.destinationCod === r.codEess).reduce((sum, t) => sum + t.quantity, 0);
+          
+          const simQty = simDataForProduct[r.codEess]?.qty || 0;
+          const simInput = simDataForProduct[r.codEess]?.input || '';
+
+          return {
+              codEess: r.codEess,
+              establishmentName: r.establishmentName,
+              microred: r.microred,
+              stock: r.stock,
+              cpa: r.cpa,
+              monthsProvision: r.monthsProvision,
+              status: r.status,
+              transferQty,
+              receivedQty,
+              need: calculateNeed(r.stock, r.cpa, r.status),
+              consumptionSum: r.consumptionSum || 0,
+              consumptionMonths: r.consumptionMonths || 0,
+              monthlyConsumption: Array.isArray(r.monthlyConsumption) ? r.monthlyConsumption : Array(12).fill(0),
+              simulationQty: simQty,
+              simulationInput: simInput,
+              isWarehouse: false
+          } as RedistributionItem;
+      }).sort((a, b) => b.stock - a.stock);
+  }, [selectedProductCode, records, transferList, simulationData]);
+
+   const redistributionData = useMemo(() => {
+       let result = baseRedistributionData;
+
+       if (consolidationSelection.size > 0) {
+           const processedSecondaries = new Set<string>();
+           const workingData = baseRedistributionData.map(item => ({
+               ...item, 
+               monthlyConsumption: Array.isArray(item.monthlyConsumption) ? [...item.monthlyConsumption] : Array(12).fill(0)
+           }));
+
+           workingData.forEach(item => {
+               if (consolidationSelection.has(item.codEess)) {
+                   const safeCodEess = String(item.codEess || '');
+                   const baseCode = safeCodEess.substring(0, 5); 
+                   const principalCode = baseCode + 'F01';
+                   const principalItem = workingData.find(p => p.codEess === principalCode);
+                   
+                   if (principalItem) {
+                       processedSecondaries.add(item.codEess);
+                       
+                       principalItem.stock += item.stock;
+                       
+                       if (Array.isArray(principalItem.monthlyConsumption) && Array.isArray(item.monthlyConsumption)) {
+                           for (let i = 0; i < 12; i++) {
+                               principalItem.monthlyConsumption[i] = (Number(principalItem.monthlyConsumption[i]) || 0) + (Number(item.monthlyConsumption[i]) || 0);
+                           }
+                           principalItem.consumptionSum = principalItem.monthlyConsumption.reduce((a, b) => a + b, 0);
+                           principalItem.consumptionMonths = principalItem.monthlyConsumption.filter(v => v > 0).length;
+                           if (principalItem.consumptionMonths > 0) {
+                               principalItem.cpa = (principalItem.consumptionSum || 0) / principalItem.consumptionMonths;
+                           } else {
+                               principalItem.cpa = 0;
+                           }
+                       } else {
+                           principalItem.cpa += item.cpa;
+                           principalItem.consumptionSum = (principalItem.consumptionSum || 0) + (item.consumptionSum || 0);
+                           principalItem.consumptionMonths = Math.max(principalItem.consumptionMonths || 0, item.consumptionMonths || 0);
+                       }
+                       
+                       if (principalItem.cpa > 0.01) {
+                           principalItem.monthsProvision = principalItem.stock / principalItem.cpa;
+                       } else {
+                           principalItem.monthsProvision = principalItem.stock > 0 ? 999 : 0;
+                       }
+                       
+                       if (principalItem.stock === 0) principalItem.status = 'Desabastecido';
+                       else if (principalItem.cpa <= 0.01) principalItem.status = 'Sin Rotación';
+                       else if (principalItem.monthsProvision < 2) principalItem.status = 'SubStock';
+                       else if (principalItem.monthsProvision > 6) principalItem.status = 'SobreStock';
+                       else principalItem.status = 'NormoStock';
+                       
+                       const baseNeed = calculateNeed(principalItem.stock, principalItem.cpa, principalItem.status);
+                       let baseRedist = 0;
+                       if (principalItem.status === 'SobreStock' && principalItem.monthsProvision > 6) {
+                           baseRedist = Math.floor(principalItem.stock - (6 * principalItem.cpa));
+                       }
+                       principalItem.need = baseNeed > 0 ? baseNeed : (baseRedist > 0 ? -baseRedist : 0);
+
+                       principalItem.isConsolidated = true;
+                   }
+               }
+           });
+
+           result = workingData.filter(item => !processedSecondaries.has(item.codEess));
+       }
+
+       // Filter warehouse visibility
+       return result.filter(item => {
+           if (item.isWarehouse) {
+               // Show only if there's an active origin selection or active transfers/received
+               return quickTransferSource !== null || (item.transferQty || 0) > 0 || (item.receivedQty || 0) > 0;
+           }
+           return true;
+       });
+   }, [baseRedistributionData, consolidationSelection, quickTransferSource]);
 
   const handleSimulationChange = (codEess: string, value: string) => {
-      // Allow clearing the input (empty string) or typing "-"
       let numValue = 0;
       
       if (value === '' || value === '-') {
@@ -547,19 +724,13 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
           }
       }
 
-      const newBase = baseRedistributionData.map(item => {
-        if (item.codEess === codEess) {
-          return { 
-              ...item, 
-              simulationQty: numValue,
-              simulationInput: value 
-          };
-        }
-        return item;
-      });
-      
-      setBaseRedistributionData(newBase);
-      updateConsolidatedData(newBase, consolidationSelection);
+      setSimulationData(prev => ({
+          ...prev,
+          [selectedProductCode]: {
+              ...(prev[selectedProductCode] || {}),
+              [codEess]: { qty: numValue, input: value }
+          }
+      }));
   };
 
   // --- CONSOLIDATION HANDLERS ---
@@ -598,7 +769,6 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
   };
 
   const applyConsolidationSelection = () => {
-      updateConsolidatedData(baseRedistributionData, consolidationSelection);
       setIsConsolidateModalOpen(false);
       toast.success("Vista actualizada");
   };
@@ -723,24 +893,6 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
       }
   };
 
-  const executeTransfer = (sourceCod: string, destCod: string, qty: number) => {
-      // Update BOTH base and visible data to keep them in sync for exports/logic
-      const newBase = baseRedistributionData.map(item => {
-          // 1. Subtract from Origin
-          if (item.codEess === sourceCod) {
-              return { ...item, transferQty: (item.transferQty || 0) + qty };
-          }
-          // 2. Add to Destination
-          if (item.codEess === destCod) {
-              return { ...item, receivedQty: (item.receivedQty || 0) + qty };
-          }
-          return item;
-      });
-      
-      setBaseRedistributionData(newBase);
-      updateConsolidatedData(newBase, consolidationSelection);
-  };
-
   const confirmQuickTransfer = () => {
       if (!quickTransferSource || !quickTransferDestination) return;
 
@@ -770,9 +922,6 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
       setTransferList(prev => [...prev, newTransfer]);
       
-      // Execute Transfer (Updates both Source and Destination visually)
-      executeTransfer(quickTransferSource.codEess, quickTransferDestination.codEess, qty);
-
       toast.success("Transferencia agregada a la lista");
       
       // Reset state
@@ -792,8 +941,6 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
   const removeTransferFromList = (id: string) => {
       const transfer = transferList.find(t => t.id === id);
       if (transfer) {
-          // Reverse the transfer in the main table
-          executeTransfer(transfer.originCod, transfer.destinationCod, -transfer.quantity);
           toast.info("Transferencia revertida");
       }
       setTransferList(prev => prev.filter(t => t.id !== id));
@@ -822,6 +969,17 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
   // Removed as per user request
 
   // --- RENDER ---
+  if (!isLoaded) {
+      return (
+          <div className="flex items-center justify-center min-h-screen">
+              <div className="flex flex-col items-center gap-4">
+                  <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-gray-500 font-medium">Cargando datos guardados...</p>
+              </div>
+          </div>
+      );
+  }
+
   return (
     <div className="p-6 w-full max-w-[98%] mx-auto space-y-6 animate-in fade-in duration-300">
       
@@ -855,12 +1013,22 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                 </div>
             ) : (
                 <>
-                    <div className="w-full max-w-2xl mx-auto border-2 border-dashed border-indigo-200 rounded-xl p-10 bg-indigo-50/30 hover:bg-indigo-50 transition-all group cursor-pointer relative">
+                    <div 
+                        className="w-full max-w-2xl mx-auto border-2 border-dashed border-indigo-200 rounded-xl p-10 bg-indigo-50/30 hover:bg-indigo-50 transition-all group cursor-pointer relative"
+                        onClick={() => {
+                            if (records.length > 0) {
+                                setIsConfirmUploadModalOpen(true);
+                            } else {
+                                fileInputRef.current?.click();
+                            }
+                        }}
+                    >
                         <input 
                             type="file" 
+                            ref={fileInputRef}
                             accept=".xlsx, .xls"
                             onChange={handleFileUpload}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            className="hidden"
                         />
                         <div className="flex flex-col items-center gap-4 group-hover:scale-105 transition-transform duration-300">
                             <div className="bg-white p-4 rounded-full shadow-md group-hover:shadow-lg transition-shadow">
@@ -908,66 +1076,209 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
       {records.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
             {/* MICRORED SELECTOR */}
-            <div className="md:col-span-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200 h-[220px] flex flex-col">
-                <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-gray-400" />
+            <div className="md:col-span-4 bg-white p-5 rounded-xl shadow-sm border border-gray-200 min-h-[220px] flex flex-col relative z-30">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <Building2 className="h-3.5 w-3.5 text-indigo-500" />
                     Seleccionar Microred
                 </label>
-                <select 
-                    value={selectedMicrored}
-                    onChange={(e) => handleMicroredChange(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none mb-4"
-                >
-                    <option value="">-- Seleccione --</option>
-                    {microredOptions.map(mr => (
-                        <option key={mr} value={mr}>{mr}</option>
-                    ))}
-                </select>
+                
+                <div className="relative mb-3">
+                    <div 
+                        onClick={() => setIsMrDropdownOpen(!isMrDropdownOpen)}
+                        className={`w-full pl-3 pr-10 py-2 bg-gray-50 border ${isMrDropdownOpen ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200'} rounded-xl text-sm text-gray-900 font-bold transition-all cursor-pointer flex items-center justify-between min-h-[38px]`}
+                    >
+                        <span className="truncate">
+                            {selectedMicrored === 'ALL' ? 'TODAS LAS MICROREDES' : (selectedMicrored || '-- Seleccione Microred --')}
+                        </span>
+                        <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isMrDropdownOpen ? 'rotate-180' : ''}`} />
+                    </div>
 
-                {/* Stats Summary to fill space */}
-                <div className="flex-1 bg-gray-50 rounded-lg p-3 border border-gray-100 flex flex-col justify-center gap-2">
+                    {isMrDropdownOpen && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={() => setIsMrDropdownOpen(false)} />
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div className="p-2 border-b border-gray-100 bg-gray-50">
+                                    <div className="relative">
+                                        <Search className="h-3 w-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input 
+                                            type="text"
+                                            autoFocus
+                                            placeholder="Buscar microred..."
+                                            className="w-full pl-8 pr-3 py-1.5 text-[11px] bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                            value={mrSearchTerm}
+                                            onChange={(e) => setMrSearchTerm(e.target.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="max-h-[200px] overflow-y-auto py-1 custom-scrollbar">
+                                    <button
+                                        onClick={() => {
+                                            handleMicroredChange('ALL');
+                                            setIsMrDropdownOpen(false);
+                                            setMrSearchTerm('');
+                                        }}
+                                        className={`w-full text-left px-3 py-2 text-[11px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored === 'ALL' ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
+                                    >
+                                        <Building2 className="h-3.5 w-3.5 opacity-50" />
+                                        TODAS LAS MICROREDES
+                                    </button>
+                                    {microredOptions
+                                        .filter(mr => mr.toLowerCase().includes(mrSearchTerm.toLowerCase()))
+                                        .map(mr => (
+                                            <button
+                                                key={mr}
+                                                onClick={() => {
+                                                    handleMicroredChange(mr);
+                                                    setIsMrDropdownOpen(false);
+                                                    setMrSearchTerm('');
+                                                }}
+                                                className={`w-full text-left px-3 py-2 text-[11px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored === mr ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
+                                            >
+                                                <div className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+                                                <span className="truncate">{mr}</span>
+                                            </button>
+                                        ))
+                                    }
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* Stats Summary */}
+                <div className="flex-1 bg-gray-50/50 rounded-xl p-3 border border-gray-100 flex flex-col justify-center gap-2">
                     {selectedMicrored && microredStats ? (
                         <>
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500">Establecimientos:</span>
-                                <span className="font-bold text-gray-900">{microredStats.establishments}</span>
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-500 font-medium">Establecimientos:</span>
+                                <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded-lg border border-gray-100 shadow-sm min-w-[32px] text-center">{microredStats.establishments}</span>
                             </div>
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500">Total Productos:</span>
-                                <span className="font-bold text-gray-900">{productOptions.length}</span>
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-500 font-medium">Total Productos:</span>
+                                <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded-lg border border-gray-100 shadow-sm min-w-[32px] text-center">{microredStats.uniqueProducts}</span>
                             </div>
-                             <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500">Registros:</span>
-                                <span className="font-bold text-gray-900">{microredStats.totalItems.toLocaleString()}</span>
+                             <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-500 font-medium">Registros:</span>
+                                <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded-lg border border-gray-100 shadow-sm min-w-[32px] text-center">{microredStats.totalItems.toLocaleString()}</span>
                             </div>
                         </>
                     ) : (
-                        <div className="text-center text-gray-400 text-xs italic">
-                            Seleccione una microred para ver el resumen de datos disponibles.
+                        <div className="text-center text-gray-400 text-[11px] italic">
+                            Seleccione una microred para ver el resumen.
                         </div>
                     )}
                 </div>
             </div>
 
             {/* PRODUCT REVIEW TABLE (REPLACES DROPDOWN) */}
-            <div className="md:col-span-8 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[220px]">
-                <div className="p-3 border-b border-gray-200 bg-gray-50 font-bold text-sm text-gray-700 flex justify-between items-center gap-4">
-                    <div className="flex items-center gap-2 shrink-0">
-                        <Package className="h-4 w-4 text-indigo-600" />
-                        <span className="hidden sm:inline">Lista de Productos</span>
-                        <span className="sm:hidden">Productos</span>
-                        <span className="text-xs text-gray-500 font-normal">({productOptions.length})</span>
+            <div className="md:col-span-8 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[220px] relative z-20">
+                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center gap-4">
+                    <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="p-1.5 bg-indigo-50 rounded-lg">
+                            <Package className="h-4 w-4 text-indigo-600" />
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-xs font-bold text-gray-800 leading-tight">Lista de Productos</span>
+                            <span className="text-[10px] text-gray-400 font-medium uppercase tracking-tighter">{productOptions.length} disponibles</span>
+                        </div>
+                    </div>
+
+                    {/* Establishment Filter (Searchable Dropdown) */}
+                    <div className="flex-1 max-w-[320px] flex items-center gap-2">
+                        <div className="relative flex-1 group">
+                            <div 
+                                onClick={() => !(!selectedMicrored) && setIsEstDropdownOpen(!isEstDropdownOpen)}
+                                className={`w-full pl-4 pr-10 py-2 text-[11px] bg-white border ${isEstDropdownOpen ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200'} rounded-xl text-gray-900 font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-between min-h-[34px] ${!selectedMicrored ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                <span className="truncate">
+                                    {selectedEstablishment 
+                                        ? establishmentOptions.find(e => e.cod === selectedEstablishment)?.name 
+                                        : '-- Todos los Establecimientos --'}
+                                </span>
+                                <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${isEstDropdownOpen ? 'rotate-180' : ''}`} />
+                            </div>
+
+                            {isEstDropdownOpen && (
+                                <>
+                                    <div 
+                                        className="fixed inset-0 z-10" 
+                                        onClick={() => setIsEstDropdownOpen(false)}
+                                    />
+                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="p-2 border-b border-gray-100 bg-gray-50">
+                                            <div className="relative">
+                                                <Search className="h-3 w-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                <input 
+                                                    type="text"
+                                                    autoFocus
+                                                    placeholder="Buscar establecimiento..."
+                                                    className="w-full pl-8 pr-3 py-1.5 text-[10px] bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                                    value={estSearchTerm}
+                                                    onChange={(e) => setEstSearchTerm(e.target.value)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="max-h-[200px] overflow-y-auto py-1 custom-scrollbar">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedEstablishment('');
+                                                    setIsEstDropdownOpen(false);
+                                                    setEstSearchTerm('');
+                                                }}
+                                                className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${!selectedEstablishment ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
+                                            >
+                                                <Building2 className="h-3 w-3 opacity-50" />
+                                                -- Todos los Establecimientos --
+                                            </button>
+                                            {establishmentOptions
+                                                .filter(e => e.name.toLowerCase().includes(estSearchTerm.toLowerCase()))
+                                                .map(est => (
+                                                    <button
+                                                        key={est.cod}
+                                                        onClick={() => {
+                                                            setSelectedEstablishment(est.cod);
+                                                            setIsEstDropdownOpen(false);
+                                                            setEstSearchTerm('');
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedEstablishment === est.cod ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
+                                                    >
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+                                                        <span className="truncate">{est.name}</span>
+                                                    </button>
+                                                ))
+                                            }
+                                            {establishmentOptions.filter(e => e.name.toLowerCase().includes(estSearchTerm.toLowerCase())).length === 0 && (
+                                                <div className="px-3 py-4 text-center text-[10px] text-gray-400 italic">
+                                                    No se encontraron resultados
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        {selectedEstablishment && (
+                            <button 
+                                onClick={() => setSelectedEstablishment('')}
+                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shrink-0 border border-transparent hover:border-red-100"
+                                title="Limpiar filtro"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        )}
                     </div>
                     
                     {/* Search Input */}
-                    <div className="flex-1 max-w-xs relative">
-                        <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <div className="flex-1 max-w-xs relative group">
+                        <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
                         <input 
                             type="text"
-                            placeholder="Buscar por código o nombre..."
+                            placeholder="Buscar producto..."
                             value={productSearch}
                             onChange={(e) => setProductSearch(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1 text-xs border border-gray-300 rounded-md focus:ring-1 focus:ring-indigo-500 outline-none"
+                            className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg text-gray-700 font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all shadow-sm"
                         />
                     </div>
 
@@ -975,23 +1286,23 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         {reviewedProducts.size} rev.
                     </div>
                 </div>
-                <div className="overflow-y-auto flex-1 p-0">
+                <div className="overflow-y-auto flex-1 p-0 custom-scrollbar">
                     {productOptions.length === 0 ? (
                         <div className="flex items-center justify-center h-full text-gray-400 text-sm italic p-4">
                             Seleccione una Microred para ver los productos
                         </div>
                     ) : (
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-100 text-gray-600 font-semibold text-xs sticky top-0 z-10 shadow-sm">
+                            <thead className="bg-slate-50/80 text-slate-500 font-bold text-[10px] uppercase tracking-widest sticky top-0 z-10 backdrop-blur-sm border-b border-slate-100">
                                 <tr>
-                                    <th className="p-2 border-b w-14 text-center relative group hover:bg-gray-200 transition-colors cursor-pointer">
+                                    <th className="p-2 w-14 text-center relative group hover:bg-slate-100 transition-colors cursor-pointer">
                                         <div className="flex items-center justify-center gap-1">
                                             <span>Rev.</span>
-                                            <Filter className={`h-3 w-3 ${reviewFilter !== 'ALL' ? 'text-indigo-600 fill-indigo-600' : 'text-gray-400'}`} />
+                                            <Filter className={`h-3 w-3 ${reviewFilter !== 'ALL' ? 'text-indigo-600 fill-indigo-600' : 'text-slate-300'}`} />
                                         </div>
                                         <select 
                                             value={reviewFilter}
-                                            onChange={(e) => setReviewFilter(e.target.value)}
+                                            onChange={(e) => setReviewFilter(e.target.value as any)}
                                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                             title="Filtrar por estado de revisión"
                                         >
@@ -1000,14 +1311,14 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             <option value="PENDING">Pendientes</option>
                                         </select>
                                     </th>
-                                    <th className="p-2 border-b w-20 text-left">Código</th>
-                                    <th className="p-2 border-b text-left">Descripción</th>
-                                    <th className="p-2 border-b w-16 text-center">CPA</th>
-                                    <th className="p-2 border-b w-16 text-center">Meses</th>
-                                    <th className="p-2 border-b w-28 text-center relative group hover:bg-gray-200 transition-colors cursor-pointer">
+                                    <th className="p-2 w-20 text-left">Código</th>
+                                    <th className="p-2 text-left">Descripción</th>
+                                    <th className="p-2 w-16 text-center">CPA</th>
+                                    <th className="p-2 w-16 text-center">Meses</th>
+                                    <th className="p-2 w-28 text-center relative group hover:bg-slate-100 transition-colors cursor-pointer">
                                         <div className="flex items-center justify-center gap-1">
                                             <span>Situación</span>
-                                            <Filter className={`h-3 w-3 ${statusFilter !== 'ALL' ? 'text-indigo-600 fill-indigo-600' : 'text-gray-400'}`} />
+                                            <Filter className={`h-3 w-3 ${statusFilter !== 'ALL' ? 'text-indigo-600 fill-indigo-600' : 'text-slate-300'}`} />
                                         </div>
                                         <select 
                                             value={statusFilter}
@@ -1036,34 +1347,34 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         const isSelected = selectedProductCode === prod.code;
                                         const isReviewed = reviewedProducts.has(prod.code);
                                         
-                                        let statusColor = "bg-gray-100 text-gray-600";
-                                        if (prod.status === "NormoStock") statusColor = "bg-green-100 text-green-800";
-                                        if (prod.status === "SobreStock") statusColor = "bg-indigo-100 text-indigo-800";
-                                        if (prod.status === "SubStock") statusColor = "bg-orange-100 text-orange-800";
-                                        if (prod.status === "Desabastecido") statusColor = "bg-red-100 text-red-800";
+                                        let statusColor = "bg-slate-100 text-slate-600";
+                                        if (prod.status === "NormoStock") statusColor = "bg-emerald-50 text-emerald-700 border-emerald-100";
+                                        if (prod.status === "SobreStock") statusColor = "bg-indigo-50 text-indigo-700 border-indigo-100";
+                                        if (prod.status === "SubStock") statusColor = "bg-amber-50 text-amber-700 border-amber-100";
+                                        if (prod.status === "Desabastecido") statusColor = "bg-rose-50 text-rose-700 border-rose-100";
 
                                         return (
                                             <tr 
                                                 key={prod.code} 
                                                 className={`
-                                                    cursor-pointer transition-colors hover:bg-indigo-50
-                                                    ${isSelected ? 'bg-indigo-100' : ''}
+                                                    cursor-pointer transition-all duration-200 border-b border-slate-50
+                                                    ${isSelected ? 'bg-indigo-50/80 text-indigo-900' : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'}
                                                 `}
                                                 onClick={() => handleProductChange(prod.code)}
                                             >
                                                 <td className="p-2 text-center" onClick={(e) => { e.stopPropagation(); toggleProductReview(prod.code); }}>
                                                     {isReviewed ? (
-                                                        <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto" />
+                                                        <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" />
                                                     ) : (
-                                                        <Circle className="h-5 w-5 text-gray-300 mx-auto hover:text-gray-400" />
+                                                        <Circle className="h-4 w-4 text-slate-200 mx-auto hover:text-slate-400 transition-colors" />
                                                     )}
                                                 </td>
-                                                <td className="p-2 font-mono text-xs font-bold text-gray-600">{prod.code}</td>
-                                                <td className="p-2 text-xs text-gray-800 truncate max-w-[200px]" title={prod.name}>{prod.name}</td>
-                                                <td className="p-2 text-center text-xs font-mono">{prod.cpa.toFixed(1)}</td>
-                                                <td className="p-2 text-center text-xs font-mono font-bold">{prod.months === 999 ? '∞' : prod.months.toFixed(1)}</td>
+                                                <td className="p-2 font-mono text-[11px] font-bold text-slate-500">{prod.code}</td>
+                                                <td className="p-2 text-[11px] font-medium text-slate-800 truncate max-w-[200px]" title={prod.name}>{prod.name}</td>
+                                                <td className="p-2 text-center text-[11px] font-mono">{prod.cpa.toFixed(1)}</td>
+                                                <td className="p-2 text-center text-[11px] font-mono font-bold">{prod.months === 999 ? '∞' : prod.months.toFixed(1)}</td>
                                                 <td className="p-2 text-center">
-                                                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${statusColor}`}>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter border ${statusColor}`}>
                                                         {prod.status}
                                                     </span>
                                                 </td>
@@ -1121,13 +1432,25 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     )}
 
                     {/* Consolidate Button - Only show if there are secondary pharmacies */}
-                    {baseRedistributionData.some(item => /F\d{2}$/.test(item.codEess) && !item.codEess.endsWith('F01')) && (
+                    {baseRedistributionData.some(item => /F\d{2}$/.test(String(item.codEess || '')) && !String(item.codEess || '').endsWith('F01')) && (
                         <button
                             onClick={handleOpenConsolidateModal}
                             className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors shadow-sm"
                         >
                             <Merge className="h-4 w-4" />
                             <span className="hidden sm:inline">Consolidar</span>
+                        </button>
+                    )}
+
+                    {/* Global Search Button - Only show if source is selected and not in 'ALL' view */}
+                    {quickTransferSource && selectedMicrored !== 'ALL' && (
+                        <button
+                            onClick={() => setIsGlobalSearchModalOpen(true)}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white border border-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm animate-in zoom-in-95 duration-200"
+                            title="Buscar destino en toda la red"
+                        >
+                            <Search className="h-4 w-4" />
+                            <span className="hidden sm:inline">Buscar Destino en Red</span>
                         </button>
                     )}
                     
@@ -1190,8 +1513,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                             // Indentation Logic for Secondary Pharmacies (e.g., F02, F03...)
                             // Check if code ends with Fxx where xx > 01
-                            const isSecondary = /F\d{2}$/.test(item.codEess) && !item.codEess.endsWith('F01');
+                            const isSecondary = /F\d{2}$/.test(String(item.codEess || '')) && !String(item.codEess || '').endsWith('F01');
                             
+                            const isExternal = selectedMicrored !== 'ALL' && item.microred !== selectedMicrored && !item.isWarehouse;
                             const isSelected = quickTransferSource?.codEess === item.codEess;
 
                             // --- SMART ANALYSIS BADGES ---
@@ -1227,14 +1551,18 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     key={item.codEess} 
                                     className={`
                                         transition-colors cursor-pointer group
-                                        ${quickTransferSource?.codEess === item.codEess 
-                                            ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-inset' 
-                                            : quickTransferSource 
-                                                ? 'hover:bg-green-100 hover:ring-2 hover:ring-green-500 hover:ring-inset cursor-crosshair' 
-                                                : 'hover:bg-blue-100'
+                                        ${item.isWarehouse 
+                                            ? 'bg-slate-50 border-l-4 border-l-indigo-500' 
+                                            : isExternal
+                                                ? 'bg-purple-50/30 border-l-4 border-l-purple-400'
+                                                : quickTransferSource?.codEess === item.codEess 
+                                                    ? 'bg-indigo-50 ring-2 ring-indigo-500 ring-inset' 
+                                                    : quickTransferSource 
+                                                        ? 'hover:bg-green-100 hover:ring-2 hover:ring-green-500 hover:ring-inset cursor-crosshair' 
+                                                        : 'hover:bg-blue-100'
                                         }
                                     `}
-                                    onClick={() => handleOpenDetailModal(item)}
+                                    onClick={() => !item.isWarehouse && handleOpenDetailModal(item)}
                                 >
                                     <td className="p-3 font-mono text-xs text-gray-500 font-bold">
                                         {item.codEess}
@@ -1242,6 +1570,11 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     <td className={`p-3 font-medium text-gray-900 max-w-[200px] truncate ${isSecondary ? 'pl-8 text-gray-600 italic' : ''}`} title={item.establishmentName}>
                                         <div className="flex items-center">
                                             <span className="truncate">{item.establishmentName}</span>
+                                            {isExternal && (
+                                                <span className="shrink-0 ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded uppercase tracking-wider border border-purple-200">
+                                                    EXT
+                                                </span>
+                                            )}
                                             {item.isConsolidated && (
                                                 <div className="shrink-0 bg-amber-100 text-amber-700 p-1 rounded border border-amber-200 ml-2" title="Farmacia Consolidada">
                                                     <Merge className="h-3 w-3" />
@@ -1261,7 +1594,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     </td>
 
                                     <td className="p-3 text-center font-mono">{isGhost ? '' : item.cpa.toFixed(1)}</td>
-                                    <td className="p-3 text-center font-mono font-bold">{isGhost ? '' : item.monthsProvision.toFixed(1)}</td>
+                                    <td className="p-3 text-center font-mono font-bold">
+                                        {isGhost ? '' : (item.monthsProvision === 999 ? '∞' : item.monthsProvision.toFixed(1))}
+                                    </td>
                                     <td className="p-3 text-center">
                                         {!isGhost && (
                                             <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${statusColor}`}>
@@ -1328,11 +1663,13 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             {newStock > 0 && (
                                                 <div 
                                                     className={`w-3 h-3 rounded-full shadow-sm border border-white ${
+                                                        newMonths === 999 ? 'bg-gray-500' :
                                                         newMonths > 6 ? 'bg-indigo-500' : 
                                                         newMonths >= 2 ? 'bg-green-500' : 
                                                         newMonths > 0 ? 'bg-orange-500' : 'bg-red-500'
                                                     }`} 
                                                     title={
+                                                        newMonths === 999 ? 'Sin Rotación Estimado' :
                                                         newMonths > 6 ? 'SobreStock Estimado' : 
                                                         newMonths >= 2 ? 'NormoStock Estimado' : 
                                                         newMonths > 0 ? 'SubStock Estimado' : 'Desabastecido Estimado'
@@ -1584,13 +1921,14 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                           {/* Group by Base Code */}
                           {Object.entries(
                               baseRedistributionData.reduce((acc, item) => {
-                                  const baseCode = item.codEess.substring(0, 5);
+                                  const safeCodEess = String(item.codEess || '');
+                                  const baseCode = safeCodEess.substring(0, 5);
                                   if (!acc[baseCode]) acc[baseCode] = [];
                                   acc[baseCode].push(item);
                                   return acc;
                               }, {} as Record<string, RedistributionItem[]>)
                           ).filter(([_, group]) => group.length > 1).map(([baseCode, group]) => {
-                              const principal = group.find(i => i.codEess.endsWith('F01')) || group[0];
+                              const principal = group.find(i => String(i.codEess || '').endsWith('F01')) || group[0];
                               const secondaries = group.filter(i => i !== principal);
                               
                               if (secondaries.length === 0) return null;
@@ -1634,7 +1972,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                           
                           {/* Empty State if no groups found */}
                           {Object.values(baseRedistributionData.reduce((acc, item) => {
-                                  const baseCode = item.codEess.substring(0, 5);
+                                  const safeCodEess = String(item.codEess || '');
+                                  const baseCode = safeCodEess.substring(0, 5);
                                   if (!acc[baseCode]) acc[baseCode] = [];
                                   acc[baseCode].push(item);
                                   return acc;
@@ -1699,6 +2038,166 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                               Cancelar
                           </button>
                       </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* CONFIRMATION MODAL */}
+      {isConfirmUploadModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-900 p-6 rounded-lg shadow-xl max-w-md w-full">
+            <h2 className="text-xl font-bold text-white mb-4">Confirmar nueva carga</h2>
+            <p className="text-gray-300 mb-6">
+              Subir un nuevo archivo borrará todos los datos actuales de redistribución (registros, selecciones, transferencias, simulación). ¿Está seguro de continuar?
+            </p>
+            <div className="flex justify-end gap-4">
+              <button
+                onClick={() => {
+                  setIsConfirmUploadModalOpen(false);
+                }}
+                className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setIsConfirmUploadModalOpen(false);
+                  clearRedistributionData();
+                  setTimeout(() => {
+                    fileInputRef.current?.click();
+                  }, 100);
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-500"
+              >
+                Confirmar y Cargar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GLOBAL SEARCH MODAL */}
+      {isGlobalSearchModalOpen && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[80] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden border border-gray-200 flex flex-col max-h-[85vh]">
+                  <div className="bg-indigo-900 text-white p-5 flex justify-between items-center shrink-0">
+                      <div className="flex items-center gap-3">
+                          <div className="p-2 bg-indigo-800 rounded-lg">
+                              <Search className="h-5 w-5 text-indigo-300" />
+                          </div>
+                          <div>
+                              <h3 className="font-bold text-lg leading-tight">BUSCAR DESTINO EN TODA LA RED</h3>
+                              <p className="text-xs text-indigo-300 font-medium">Seleccione un establecimiento de otra microred como destino</p>
+                          </div>
+                      </div>
+                      <button onClick={() => setIsGlobalSearchModalOpen(false)} className="text-indigo-300 hover:text-white transition-colors"><X className="h-6 w-6" /></button>
+                  </div>
+
+                  <div className="p-4 bg-gray-50 border-b border-gray-200 shrink-0">
+                      <div className="relative group">
+                          <Search className="h-5 w-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                          <input 
+                              type="text"
+                              autoFocus
+                              placeholder="Buscar por nombre o código de establecimiento..."
+                              value={globalSearchTerm}
+                              onChange={(e) => setGlobalSearchTerm(e.target.value)}
+                              className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-700 font-medium focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                          />
+                      </div>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-0 custom-scrollbar">
+                      {globalNetworkData.filter(item => 
+                          item.establishmentName.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
+                          item.codEess.toLowerCase().includes(globalSearchTerm.toLowerCase())
+                      ).length === 0 ? (
+                          <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                              <Search className="h-12 w-12 mb-3 opacity-20" />
+                              <p className="font-medium">No se encontraron establecimientos con stock</p>
+                              <p className="text-sm mt-1">Intente con otro término de búsqueda</p>
+                          </div>
+                      ) : (
+                          <table className="w-full text-sm text-left">
+                              <thead className="bg-gray-100 text-gray-600 font-bold uppercase text-[10px] tracking-wider sticky top-0 z-10 border-b border-gray-200">
+                                  <tr>
+                                      <th className="p-4">Establecimiento</th>
+                                      <th className="p-4">Microred</th>
+                                      <th className="p-4 text-center">Stock</th>
+                                      <th className="p-4 text-center">CPA</th>
+                                      <th className="p-4 text-center">Meses</th>
+                                      <th className="p-4 text-center">Situación</th>
+                                      <th className="p-4 text-center">Acción</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                  {globalNetworkData
+                                      .filter(item => 
+                                          item.establishmentName.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
+                                          item.codEess.toLowerCase().includes(globalSearchTerm.toLowerCase())
+                                      )
+                                      .map((item) => (
+                                          <tr 
+                                              key={item.codEess} 
+                                              className="hover:bg-indigo-50/50 transition-colors cursor-pointer group"
+                                              onClick={() => {
+                                                  setSelectedDetailItem(item);
+                                                  setIsDetailModalOpen(true);
+                                              }}
+                                          >
+                                              <td className="p-4">
+                                                  <div className="font-bold text-gray-900">{item.establishmentName}</div>
+                                                  <div className="font-mono text-[10px] text-gray-500">{item.codEess}</div>
+                                              </td>
+                                              <td className="p-4">
+                                                  <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold uppercase">
+                                                      {item.microred}
+                                                  </span>
+                                              </td>
+                                              <td className="p-4 text-center font-mono font-bold text-indigo-600">{item.stock}</td>
+                                              <td className="p-4 text-center font-mono text-gray-500">{item.cpa.toFixed(1)}</td>
+                                              <td className="p-4 text-center font-mono font-bold">
+                                                  {item.monthsProvision === 999 ? '∞' : item.monthsProvision.toFixed(1)}
+                                              </td>
+                                              <td className="p-4 text-center">
+                                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                                                      item.status === 'NormoStock' ? 'bg-green-100 text-green-700' :
+                                                      item.status === 'SobreStock' ? 'bg-indigo-100 text-indigo-700' :
+                                                      item.status === 'SubStock' ? 'bg-orange-100 text-orange-700' :
+                                                      'bg-red-100 text-red-700'
+                                                  }`}>
+                                                      {item.status}
+                                                  </span>
+                                              </td>
+                                              <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                                  <button 
+                                                      onClick={() => {
+                                                          setQuickTransferDestination(item);
+                                                          setIsGlobalSearchModalOpen(false);
+                                                          setIsQuickTransferConfirmOpen(true);
+                                                          toast.success(`Destino seleccionado: ${item.establishmentName}`);
+                                                      }}
+                                                      className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all shadow-sm border border-green-100"
+                                                      title="Seleccionar como Destino"
+                                                  >
+                                                      <MousePointerClick className="h-4 w-4" />
+                                                  </button>
+                                              </td>
+                                          </tr>
+                                      ))}
+                              </tbody>
+                          </table>
+                      )}
+                  </div>
+                  
+                  <div className="p-4 bg-gray-50 border-t border-gray-200 flex justify-end shrink-0">
+                      <button 
+                          onClick={() => setIsGlobalSearchModalOpen(false)}
+                          className="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                          Cerrar
+                      </button>
                   </div>
               </div>
           </div>
@@ -1838,7 +2337,32 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                   </div>
 
                   {/* Footer */}
-                  <div className="p-6 border-t border-gray-800 bg-gray-900/50 flex justify-end">
+                  <div className="p-6 border-t border-gray-800 bg-gray-900/50 flex justify-between items-center">
+                      <div className="flex gap-3">
+                          {!selectedDetailItem.isWarehouse && (
+                              <button 
+                                  onClick={() => {
+                                      if (isGlobalSearchModalOpen) {
+                                          // If global search is open, this is a destination
+                                          setQuickTransferDestination(selectedDetailItem);
+                                          setIsDetailModalOpen(false);
+                                          setIsGlobalSearchModalOpen(false);
+                                          setIsQuickTransferConfirmOpen(true);
+                                          toast.success(`Destino seleccionado: ${selectedDetailItem.establishmentName}`);
+                                      } else {
+                                          // Otherwise, this is a source
+                                          setQuickTransferSource(selectedDetailItem);
+                                          setIsDetailModalOpen(false);
+                                          toast.success(`Origen seleccionado: ${selectedDetailItem.establishmentName}`);
+                                      }
+                                  }}
+                                  className={`px-6 py-2 ${isGlobalSearchModalOpen ? 'bg-green-600 hover:bg-green-700 shadow-green-500/20' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'} text-white font-bold rounded-lg transition-colors flex items-center gap-2 shadow-lg`}
+                              >
+                                  <MousePointerClick className="h-4 w-4" />
+                                  {isGlobalSearchModalOpen ? 'Transferir a este destino' : 'Transferir desde aquí'}
+                              </button>
+                          )}
+                      </div>
                       <button 
                           onClick={() => setIsDetailModalOpen(false)}
                           className="px-6 py-2 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-colors"

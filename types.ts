@@ -128,6 +128,8 @@ export interface User {
 export interface SystemConfig {
   verificationDelaySeconds: number; // Tiempo de espera para el botón de validar
   apiUrl?: string; // NUEVO: URL dinámica del backend
+  warehouseCode?: string; // NUEVO: Código del Almacén General
+  warehouseName?: string; // NUEVO: Nombre del Almacén General
 }
 
 export interface AuthState {
@@ -189,4 +191,6 @@ export interface RedistributionItem {
   isConsolidated?: boolean;
   simulationQty?: number; // Cantidad simulada (positivo o negativo)
   simulationInput?: string; // Input raw para manejar estados intermedios (ej: "-")
+  isWarehouse?: boolean;
+  microred?: string;
 }

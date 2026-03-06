@@ -299,7 +299,9 @@ export const api = {
             if (result.success && result.data) {
                 const config = {
                     verificationDelaySeconds: Number(result.data.verificationDelaySeconds) || 5,
-                    apiUrl: result.data.apiUrl || BOOTSTRAP_URL
+                    apiUrl: result.data.apiUrl || BOOTSTRAP_URL,
+                    warehouseCode: result.data.warehouseCode || '',
+                    warehouseName: result.data.warehouseName || ''
                 };
 
                 // CRITICAL: Update the active URL immediately if one is found in the DB

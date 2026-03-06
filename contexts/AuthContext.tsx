@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthState, AppModule, SystemConfig } from '../types';
 import { api } from '../services/api';
+import { auth } from '../firebase';
+import { signInAnonymously, signOut } from 'firebase/auth';
 
 interface AuthContextType extends AuthState {
   login: (u: string, p: string) => Promise<{ success: boolean; message?: string }>;
@@ -70,8 +72,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                          localStorage.removeItem('aura_auth_user');
                          setState(prev => ({ ...prev, user: null, isAuthenticated: false }));
                     }
+                    
+                    // Restore Firebase Session
+                    await signInAnonymously(auth);
+
                 } catch (refreshError) {
                     console.warn("Could not refresh session (Offline?), using cached data.", refreshError);
+                    // Try to restore firebase session even if API fails
+                    try { await signInAnonymously(auth); } catch (e) { console.warn("Firebase auth failed offline", e); }
                 }
 
             } catch {
@@ -108,6 +116,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const userToSet = result.user as User;
         setState(prev => ({ ...prev, user: userToSet, isAuthenticated: true, isLoading: false }));
+        
+        // Sign in to Firebase
+        try {
+            await signInAnonymously(auth);
+        } catch (e) {
+            console.error("Firebase login failed", e);
+        }
     } 
     // Si falla, no cambiamos el estado global, simplemente devolvemos el resultado
     // para que LoginScreen muestre el error.
@@ -119,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('aura_auth_user');
     sessionStorage.removeItem('aura_welcome_shown_session');
     setState(prev => ({ ...prev, user: null, isAuthenticated: false, isLoading: false }));
+    signOut(auth).catch(e => console.warn("Firebase signout failed", e));
   };
 
   const hasPermission = (module: AppModule): boolean => {

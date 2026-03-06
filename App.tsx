@@ -10,6 +10,7 @@ import { ReportOptionsModal } from './components/ReportOptionsModal';
 import { ReviewWarningModal } from './components/ReviewWarningModal';
 import { ManualEntryModal } from './components/ManualEntryModal';
 import { SuccessModal } from './components/SuccessModal';
+import { Toaster } from 'sonner';
 import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle, LogOut, Settings, BarChart2, LayoutGrid, ChevronDown, ArrowRightLeft } from 'lucide-react';
 
 // NEW IMPORTS
@@ -19,7 +20,8 @@ import { AdminPanel } from './components/AdminPanel';
 import { UserProfile } from './components/UserProfile';
 import { WelcomeModal } from './components/WelcomeModal'; // Importar Modal
 import { RedistributionModule } from './components/RedistributionModule';
-import { Toaster } from 'sonner';
+
+import { GoogleSyncButton } from './components/GoogleSyncButton';
 
 const STORAGE_KEY = 'aura_data_v1';
 const REVIEW_KEY = 'aura_reviews_v1';
@@ -156,7 +158,10 @@ const AuthenticatedApp: React.FC = () => {
                         {/* RIGHT: USER PROFILE & ACTIONS */}
                         <div className="flex items-center gap-4">
                             
-                            {/* Mobile Nav Toggle could go here */}
+                            {/* Google Sheets Sync */}
+                            <div className="hidden md:block">
+                                <GoogleSyncButton />
+                            </div>
 
                             <div className="flex items-center gap-3 pl-4 border-l border-white/5">
                                 <button 
@@ -259,6 +264,24 @@ const AnalysisModule: React.FC = () => {
       }
   });
   const [isManualEntryModalOpen, setIsManualEntryModalOpen] = useState(false);
+
+  // --- LOCAL STORAGE SESSION MANAGEMENT ---
+  // Save to LocalStorage whenever relevant state changes
+  useEffect(() => {
+      if (result) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+      } else {
+          localStorage.removeItem(STORAGE_KEY);
+      }
+  }, [result]);
+
+  useEffect(() => {
+      localStorage.setItem(REVIEW_KEY, JSON.stringify(Array.from(reviewedIds)));
+  }, [reviewedIds]);
+
+  useEffect(() => {
+      localStorage.setItem(ADDITIONAL_ITEMS_KEY, JSON.stringify(additionalItems));
+  }, [additionalItems]);
 
   // --- FULL SCREEN STATE & NATIVE API LOGIC ---
   const [isFullScreen, setIsFullScreen] = useState(false);

@@ -63,6 +63,7 @@ export const AdminPanel: React.FC = () => {
       setIsSavingConfig(true);
       const toastId = toast.loading('Guardando parámetros...');
       
+      console.log("Saving config:", tempConfig);
       const res = await api.updateSystemConfig(tempConfig);
       if (res.success) {
           updateSystemConfigContext(tempConfig);
@@ -404,7 +405,7 @@ export const AdminPanel: React.FC = () => {
                              </div>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                             {/* TIMER CONFIG */}
                             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm h-full">
                                 <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
@@ -453,14 +454,41 @@ export const AdminPanel: React.FC = () => {
                                             placeholder="https://script.google.com/macros/s/..."
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono text-gray-600 focus:ring-2 focus:ring-teal-500 outline-none break-all h-24 resize-none"
                                         />
-                                        <div className="bg-blue-50 border-l-4 border-blue-500 p-3 mt-3">
-                                            <div className="flex items-start gap-2">
-                                                <AlertTriangle className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-                                                <div className="text-xs text-blue-800">
-                                                    <strong>Importante:</strong> Si actualiza el código de Apps Script, pegue la nueva URL aquí.
-                                                </div>
-                                            </div>
-                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* WAREHOUSE CONFIG */}
+                            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm h-full">
+                                <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
+                                    <Building2 className="h-5 w-5 text-gray-500" />
+                                    Configuración de Almacén General
+                                </h3>
+                                
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                                            Código del Almacén
+                                        </label>
+                                        <input 
+                                            type="text"
+                                            value={tempConfig.warehouseCode || ''}
+                                            onChange={(e) => setTempConfig({...tempConfig, warehouseCode: e.target.value})}
+                                            placeholder="Ej: ALM-001"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-gray-900 focus:ring-2 focus:ring-teal-500 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                                            Nombre del Almacén
+                                        </label>
+                                        <input 
+                                            type="text"
+                                            value={tempConfig.warehouseName || ''}
+                                            onChange={(e) => setTempConfig({...tempConfig, warehouseName: e.target.value})}
+                                            placeholder="Ej: Almacén General de Medicamentos"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-teal-500 outline-none"
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -475,8 +503,6 @@ export const AdminPanel: React.FC = () => {
                                 <Save className="h-4 w-4" />
                                 {isSavingConfig ? 'Guardando...' : 'Guardar Parámetros'}
                             </button>
-                            
-                            {/* Config Message Removed - Handled by Toast */}
                         </div>
                      </div>
                 )}
