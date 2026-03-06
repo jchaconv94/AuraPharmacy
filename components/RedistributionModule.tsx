@@ -1819,8 +1819,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* REDISTRIBUTION TABLE */}
             {redistributionData.length > 0 && (
-                <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-50' : ''}`}>
-                    <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-50' : 'max-h-[85vh]'}`}>
+                    <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center shrink-0">
                         <h3 className="font-bold text-gray-800 flex items-center gap-3">
                             {(() => {
                                 const selectedProduct = productOptions.find(p => p.code === selectedProductCode);
@@ -1916,7 +1916,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     </div>
                     <div className="overflow-auto flex-1 custom-scrollbar">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-xs">
+                            <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-xs sticky top-0 z-10 shadow-sm">
                                 <tr>
                                     <th className="p-3 border-b text-left w-px whitespace-nowrap pr-2">COD</th>
                                     <th className="p-3 border-b text-left">Establecimiento</th>
