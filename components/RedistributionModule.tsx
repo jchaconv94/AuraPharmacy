@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import localforage from 'localforage';
-import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, Check, Download } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, Check, Download, Maximize, Minimize } from 'lucide-react';
 
 const MultiSelectFilter = ({
     title,
@@ -136,6 +136,29 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // --- FULLSCREEN STATE ---
+    const tableContainerRef = React.useRef<HTMLDivElement>(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            tableContainerRef.current?.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    };
 
     // --- CONSOLIDATION STATE ---
     const [isConsolidateModalOpen, setIsConsolidateModalOpen] = useState(false);
@@ -1741,15 +1764,21 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* REDISTRIBUTION TABLE */}
             {redistributionData.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-50' : ''}`}>
                     <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                        <h3 className="font-bold text-gray-800 flex items-center gap-3">
                             {(() => {
                                 const selectedProduct = productOptions.find(p => p.code === selectedProductCode);
+                                const isReviewed = reviewedProducts.has(selectedProductCode);
                                 return selectedProduct ? (
                                     <>
-                                        <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-mono border border-indigo-200">{selectedProduct.code}</span>
-                                        <span className="truncate max-w-md text-sm sm:text-base" title={selectedProduct.name}>{selectedProduct.name}</span>
+                                        <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-md text-sm font-mono border border-indigo-200 shadow-sm">{selectedProduct.code}</span>
+                                        <span className="truncate max-w-2xl text-lg sm:text-xl text-gray-900 tracking-tight" title={selectedProduct.name}>{selectedProduct.name}</span>
+                                        {isReviewed && (
+                                            <div title="Revisado">
+                                                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
                                     "Matriz de Redistribución"
@@ -1759,23 +1788,23 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         <div className="flex items-center gap-3">
                             {/* Navigation Arrows */}
                             {selectedProductCode && (
-                                <div className="flex items-center bg-gray-100 rounded-lg p-0.5 border border-gray-200 mr-2">
+                                <div className="flex items-center bg-white rounded-full p-1 border border-gray-200 shadow-sm mr-2 ring-1 ring-black/5">
                                     <button
                                         onClick={() => handleNavigateProduct('prev')}
                                         disabled={filteredProductOptions.findIndex(p => p.code === selectedProductCode) <= 0}
-                                        className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:shadow-none transition-all"
+                                        className="flex items-center justify-center w-8 h-8 rounded-full text-gray-600 hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-600 transition-all"
                                         title="Producto Anterior"
                                     >
-                                        <ChevronLeft className="h-4 w-4" />
+                                        <ChevronLeft className="h-5 w-5" />
                                     </button>
-                                    <div className="w-px h-4 bg-gray-300 mx-0.5"></div>
+                                    <div className="w-px h-4 bg-gray-200 mx-1"></div>
                                     <button
                                         onClick={() => handleNavigateProduct('next')}
                                         disabled={filteredProductOptions.findIndex(p => p.code === selectedProductCode) >= filteredProductOptions.length - 1}
-                                        className="p-1.5 hover:bg-white hover:shadow-sm rounded-md text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:shadow-none transition-all"
+                                        className="flex items-center justify-center w-8 h-8 rounded-full text-gray-600 hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-600 transition-all"
                                         title="Siguiente Producto"
                                     >
-                                        <ChevronRight className="h-4 w-4" />
+                                        <ChevronRight className="h-5 w-5" />
                                     </button>
                                 </div>
                             )}
@@ -1817,14 +1846,20 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 )}
                             </button>
 
-
+                            <button
+                                onClick={toggleFullscreen}
+                                className="flex items-center justify-center p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors border border-gray-300"
+                                title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+                            >
+                                {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+                            </button>
 
                             <div className="text-xs text-gray-500 ml-2 border-l pl-3 border-gray-300 font-medium">
                                 {redistributionData.length} Est.
                             </div>
                         </div>
                     </div>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-auto flex-1 custom-scrollbar">
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-xs">
                                 <tr>
