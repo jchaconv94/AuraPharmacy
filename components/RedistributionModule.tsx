@@ -726,15 +726,31 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setEstFilter([]);
     };
 
-    const calculateNeed = (stock: number, cpa: number, status: string): number => {
-        // Formula: =SI.ERROR(SI(O(((6-J3)*I3)<0;K3="Sin Rotación");"";(6-J3)*I3);"")
-        // Modified to return negative (surplus) based on user feedback
+    const calculateNeed = (stock: number, cpa: number, status: string, consumptionMonths: number): number => {
+        const stockNum = Number(stock);
+        const cpaNum = Number(cpa);
+        const monthsNum = Number(consumptionMonths);
+
+        // Formula: NEED = (CPA * 6) - STOCK
         if (status === "Sin Rotación") return 0;
 
-        const monthsProv = cpa > 0 ? stock / cpa : 0;
-        const need = (6 - monthsProv) * cpa;
+        // Calculate with precision
+        let need = (cpaNum * 6) - stockNum;
 
-        return need < 0 ? Math.floor(need) : Math.ceil(need);
+        // Apply adjustment for regular consumption (consumptionMonths > 6)
+        if (monthsNum > 6) {
+            need = Math.round(need) + Math.round(cpaNum);
+        } else {
+            need = Math.round(need);
+        }
+
+        // If balance is positive and status is SobreStock, consider balance 0
+        // Case insensitive check for status
+        if (need > 0 && String(status).toLowerCase() === "sobrestock") {
+            return 0;
+        }
+
+        return need;
     };
 
     const handleProductChange = (productCode: string) => {
@@ -792,11 +808,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             const isWarehouse = eess.cod === systemConfig.warehouseCode;
 
             if (r) {
-                const need = calculateNeed(r.stock, r.cpa, r.status);
-                let redistributionSuggestion = 0;
-                if (r.status === 'SobreStock' && r.monthsProvision > 6) {
-                    redistributionSuggestion = Math.floor(r.stock - (6 * r.cpa));
-                }
+                const need = calculateNeed(r.stock, r.cpa, r.status, Number(r.consumptionMonths || 0));
 
                 return {
                     codEess: r.codEess,
@@ -808,7 +820,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     status: r.status,
                     transferQty,
                     receivedQty,
-                    need: need > 0 ? need : (redistributionSuggestion > 0 ? -redistributionSuggestion : 0),
+                    need: need,
                     consumptionSum: r.consumptionSum || 0,
                     consumptionMonths: r.consumptionMonths || 0,
                     monthlyConsumption: Array.isArray(r.monthlyConsumption) ? r.monthlyConsumption : Array(12).fill(0),
@@ -909,7 +921,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                 status: r.status,
                 transferQty,
                 receivedQty,
-                need: calculateNeed(r.stock, r.cpa, r.status),
+                need: calculateNeed(r.stock, r.cpa, r.status, Number(r.consumptionMonths || 0)),
                 consumptionSum: r.consumptionSum || 0,
                 consumptionMonths: r.consumptionMonths || 0,
                 monthlyConsumption: Array.isArray(r.monthlyConsumption) ? r.monthlyConsumption : Array(12).fill(0),
@@ -971,7 +983,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         else if (principalItem.monthsProvision > 6) principalItem.status = 'SobreStock';
                         else principalItem.status = 'NormoStock';
 
-                        const baseNeed = calculateNeed(principalItem.stock, principalItem.cpa, principalItem.status);
+                        const baseNeed = calculateNeed(principalItem.stock, principalItem.cpa, principalItem.status, principalItem.consumptionMonths || 0);
                         let baseRedist = 0;
                         if (principalItem.status === 'SobreStock' && principalItem.monthsProvision > 6) {
                             baseRedist = Math.floor(principalItem.stock - (6 * principalItem.cpa));
@@ -2051,7 +2063,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             <td className={`p-3 text-center font-mono font-bold ${isSelected ? 'text-indigo-700' :
                                                 (item.need || 0) > 0 ? 'text-blue-600 bg-blue-50 group-hover:bg-transparent' :
                                                     (item.need || 0) < 0 ? 'text-red-600 bg-red-50 group-hover:bg-transparent' : 'text-gray-400 bg-gray-50 group-hover:bg-transparent'
-                                                }`}>
+                                                }`} title={`Stock: ${item.stock}, CPA: ${item.cpa}, MesesCons: ${item.consumptionMonths}, Status: ${item.status}, NeedCalc: ${item.need}`}>
                                                 {isGhost ? '' : ((item.need || 0) !== 0 ? (item.need || 0) : '-')}
                                             </td>
 
