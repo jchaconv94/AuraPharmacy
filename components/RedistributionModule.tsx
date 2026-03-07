@@ -1271,13 +1271,21 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const handleNavigateDetailItem = (direction: 'prev' | 'next') => {
         if (!selectedDetailItem) return;
 
-        const currentIndex = redistributionData.findIndex(item => item.codEess === selectedDetailItem.codEess);
+        let currentList = redistributionData;
+        if (isGlobalSearchModalOpen) {
+            currentList = globalNetworkData.filter(item =>
+                item.establishmentName.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
+                item.codEess.toLowerCase().includes(globalSearchTerm.toLowerCase())
+            );
+        }
+
+        const currentIndex = currentList.findIndex(item => item.codEess === selectedDetailItem.codEess);
         if (currentIndex === -1) return;
 
         const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
 
-        if (newIndex >= 0 && newIndex < redistributionData.length) {
-            setSelectedDetailItem(redistributionData[newIndex]);
+        if (newIndex >= 0 && newIndex < currentList.length) {
+            setSelectedDetailItem(currentList[newIndex]);
         }
     };
 
@@ -2901,23 +2909,38 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 <div className="flex items-center gap-3 shrink-0">
                                     {/* Navigation */}
                                     <div className="flex items-center bg-gray-800 rounded-lg p-1 border border-gray-700">
-                                        <button
-                                            onClick={() => handleNavigateDetailItem('prev')}
-                                            disabled={redistributionData.findIndex(i => i.codEess === selectedDetailItem.codEess) <= 0}
-                                            className="p-2 hover:bg-gray-700 rounded-md text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-all"
-                                            title="Establecimiento Anterior"
-                                        >
-                                            <ChevronLeft className="h-5 w-5" />
-                                        </button>
-                                        <div className="w-px h-5 bg-gray-700 mx-1"></div>
-                                        <button
-                                            onClick={() => handleNavigateDetailItem('next')}
-                                            disabled={redistributionData.findIndex(i => i.codEess === selectedDetailItem.codEess) >= redistributionData.length - 1}
-                                            className="p-2 hover:bg-gray-700 rounded-md text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-all"
-                                            title="Siguiente Establecimiento"
-                                        >
-                                            <ChevronRight className="h-5 w-5" />
-                                        </button>
+                                        {(() => {
+                                            let currentList = redistributionData;
+                                            if (isGlobalSearchModalOpen) {
+                                                currentList = globalNetworkData.filter(item =>
+                                                    item.establishmentName.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
+                                                    item.codEess.toLowerCase().includes(globalSearchTerm.toLowerCase())
+                                                );
+                                            }
+                                            const currentIndex = currentList.findIndex(i => i.codEess === selectedDetailItem.codEess);
+                                            
+                                            return (
+                                                <>
+                                                    <button
+                                                        onClick={() => handleNavigateDetailItem('prev')}
+                                                        disabled={currentIndex <= 0}
+                                                        className="p-2 hover:bg-gray-700 rounded-md text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+                                                        title="Establecimiento Anterior"
+                                                    >
+                                                        <ChevronLeft className="h-5 w-5" />
+                                                    </button>
+                                                    <div className="w-px h-5 bg-gray-700 mx-1"></div>
+                                                    <button
+                                                        onClick={() => handleNavigateDetailItem('next')}
+                                                        disabled={currentIndex >= currentList.length - 1 || currentIndex === -1}
+                                                        className="p-2 hover:bg-gray-700 rounded-md text-gray-400 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+                                                        title="Siguiente Establecimiento"
+                                                    >
+                                                        <ChevronRight className="h-5 w-5" />
+                                                    </button>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
 
                                     <button
