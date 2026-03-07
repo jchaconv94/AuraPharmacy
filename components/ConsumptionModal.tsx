@@ -306,9 +306,12 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
           }
           if (e.target instanceof HTMLInputElement) return; 
           
-          if (e.key === 'ArrowRight' && nextItemId && onNavigate) {
+          const canNavigateForward = !(needsReview && !isReviewed);
+
+          if (e.key === 'ArrowRight' && nextItemId && onNavigate && canNavigateForward) {
               onNavigate(nextItemId);
           }
+          // Allow going back regardless of review status
           if (e.key === 'ArrowLeft' && prevItemId && onNavigate) {
               onNavigate(prevItemId);
           }
@@ -450,10 +453,10 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     </button>
                     <div className="w-px bg-white/20 my-2"></div>
                     <button 
-                        onClick={() => nextItemId && !isLockedTimer && onNavigate(nextItemId)}
-                        disabled={!nextItemId || isLockedTimer}
+                        onClick={() => nextItemId && !isLockedTimer && !(needsReview && !isReviewed) && onNavigate(nextItemId)}
+                        disabled={!nextItemId || isLockedTimer || (needsReview && !isReviewed)}
                         className="p-2 text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent rounded-r-lg transition-colors"
-                        title="Siguiente (Flecha Der)"
+                        title={(needsReview && !isReviewed) ? "Debe validar este producto primero" : "Siguiente (Flecha Der)"}
                     >
                         <ChevronRight className="h-5 w-5" />
                     </button>

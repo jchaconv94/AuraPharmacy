@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Trash2, Activity, Upload, FileSpreadsheet, Calendar, Check, AlertCircle, AlertTriangle, X, Syringe, Settings2, Play, RefreshCw } from 'lucide-react';
+import { Trash2, Activity, Upload, FileSpreadsheet, Calendar, Check, AlertCircle, AlertTriangle, X, Syringe, Settings2, Play, RefreshCw, AlertOctagon, Sparkles } from 'lucide-react';
 import { read, utils } from 'xlsx';
 import { MedicationInput } from '../types';
 
@@ -72,6 +72,8 @@ export const InputSection: React.FC<InputSectionProps> = ({
   const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
   const [showClearWarning, setShowClearWarning] = useState(false); 
   const [showReanalysisWarning, setShowReanalysisWarning] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
 
   // Default to CURRENT month
   const [referenceDate, setReferenceDate] = useState<string>(() => {
@@ -95,93 +97,133 @@ export const InputSection: React.FC<InputSectionProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      const data = await file.arrayBuffer();
-      const workbook = read(data, { type: 'array' });
-      
-      if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
-        alert("El archivo no contiene hojas válidas.");
-        return;
-      }
+    setUploadError(null);
+    setIsProcessingFile(true);
 
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      
-      const jsonData = utils.sheet_to_json<any>(worksheet);
-      const rawData = utils.sheet_to_json<any>(worksheet, { header: "A" });
+    // Simulate processing delay for animation
+    setTimeout(async () => {
+        try {
+          const data = await file.arrayBuffer();
+          const workbook = read(data, { type: 'array' });
+          
+          if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+            setUploadError("Error al procesar el archivo: El archivo no contiene hojas válidas.");
+            setIsProcessingFile(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
 
-      const parsedItems: MedicationInput[] = jsonData.map((row: any, index: number): MedicationInput | null => {
-        const findKey = (keys: string[]) => Object.keys(row).find(k => keys.some(key => k.toLowerCase().includes(key.toLowerCase())));
-        const findExactKey = (keys: string[]) => Object.keys(row).find(k => keys.some(key => k.toLowerCase() === key.toLowerCase()));
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          const jsonData = utils.sheet_to_json<any>(worksheet);
+          
+          // Validate required headers
+          if (jsonData.length === 0) {
+            setUploadError("Error al procesar el archivo: El archivo está vacío.");
+            setIsProcessingFile(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
+          
+          const REQUIRED_HEADERS = [
+            'codigo_med', 'descrip', 'medtip', 'medpet', 'mes01', 'mes02', 'mes03', 
+            'mes04', 'mes05', 'mes06', 'mes07', 'mes08', 'mes09', 'mes10', 'mes11', 
+            'mes12', 'precio', 'stock', 'sumames', 'cuenta', 'cpa', 'meses_prov', 
+            'situacion', 'ff', 'medest'
+          ];
+          
+          const fileHeaders = Object.keys(jsonData[0]).map(h => h.toLowerCase().trim());
+          const missingHeaders = REQUIRED_HEADERS.filter(h => !fileHeaders.includes(h));
 
-        const nameKey = findKey(['descrip', 'medicamento', 'nombre']);
-        const stockKey = findExactKey(['stock', 'stock_actual', 'stk']);
-        const priceKey = findKey(['precio', 'costo', 'unit']);
-        const codeKey = findKey(['codigo', 'cod']);
-        const ffKey = findKey(['ff', 'forma', 'presentacion', 'farmaceutica']);
-        const tipKey = findKey(['tip', 'tipo', 'medtip']);
-        const petKey = findKey(['pet', 'petitorio', 'medpet']);
-        
-        let estValue = undefined;
-        // Safe access for rawData lookahead
-        if (rawData && rawData[index + 1] && rawData[index + 1]['AH']) {
-            estValue = rawData[index + 1]['AH'];
-        } 
-        if (!estValue) {
-            const estKey = findKey(['estrategico', 'medest', 'situacion', 'condicion']);
-            if (estKey) estValue = row[estKey];
-        }
+          if (missingHeaders.length > 0) {
+            setUploadError("Error al procesar el archivo: Estructura inválida. El archivo no contiene las columnas necesarias. Verifique que sea la plantilla correcta.");
+            setIsProcessingFile(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
 
-        const name = nameKey ? row[nameKey] : `Item ${index + 1}`;
-        const stock = stockKey ? Number(row[stockKey]) : 0;
-        const price = priceKey ? Number(row[priceKey]) : 0;
-        const code = codeKey ? String(row[codeKey]) : (Date.now() + index).toString();
-        
-        const months: number[] = [];
-        const monthNames = [
-            ['enero', 'ene', 'mes01', 'mes1'], ['febrero', 'feb', 'mes02', 'mes2'], ['marzo', 'mar', 'mes03', 'mes3'],
-            ['abril', 'abr', 'mes04', 'mes4'], ['mayo', 'may', 'mes05', 'mes5'], ['junio', 'jun', 'mes06', 'mes6'],
-            ['julio', 'jul', 'mes07', 'mes7'], ['agosto', 'ago', 'mes08', 'mes8'], ['setiembre', 'septiembre', 'set', 'sep', 'mes09', 'mes9'],
-            ['octubre', 'oct', 'mes10'], ['noviembre', 'nov', 'mes11'], ['diciembre', 'dic', 'mes12']
-        ];
+          const rawData = utils.sheet_to_json<any>(worksheet, { header: "A" });
 
-        monthNames.forEach(names => {
-            const key = findKey(names);
-            if (key) {
-                const val = Number(row[key]);
-                months.push(isNaN(val) ? 0 : val);
-            } else {
-                months.push(0); 
+          const parsedItems: MedicationInput[] = jsonData.map((row: any, index: number): MedicationInput | null => {
+            const findKey = (keys: string[]) => Object.keys(row).find(k => keys.some(key => k.toLowerCase().includes(key.toLowerCase())));
+            const findExactKey = (keys: string[]) => Object.keys(row).find(k => keys.some(key => k.toLowerCase() === key.toLowerCase()));
+
+            const nameKey = findKey(['descrip', 'medicamento', 'nombre']);
+            const stockKey = findExactKey(['stock', 'stock_actual', 'stk']);
+            const priceKey = findKey(['precio', 'costo', 'unit']);
+            const codeKey = findKey(['codigo', 'cod']);
+            const ffKey = findKey(['ff', 'forma', 'presentacion', 'farmaceutica']);
+            const tipKey = findKey(['tip', 'tipo', 'medtip']);
+            const petKey = findKey(['pet', 'petitorio', 'medpet']);
+            
+            let estValue = undefined;
+            // Safe access for rawData lookahead
+            if (rawData && rawData[index + 1] && rawData[index + 1]['AH']) {
+                estValue = rawData[index + 1]['AH'];
+            } 
+            if (!estValue) {
+                const estKey = findKey(['estrategico', 'medest', 'situacion', 'condicion']);
+                if (estKey) estValue = row[estKey];
             }
-        });
 
-        if (!nameKey && !stockKey) return null;
+            const name = nameKey ? row[nameKey] : `Item ${index + 1}`;
+            const stock = stockKey ? Number(row[stockKey]) : 0;
+            const price = priceKey ? Number(row[priceKey]) : 0;
+            const code = codeKey ? String(row[codeKey]) : (Date.now() + index).toString();
+            
+            const months: number[] = [];
+            const monthNames = [
+                ['enero', 'ene', 'mes01', 'mes1'], ['febrero', 'feb', 'mes02', 'mes2'], ['marzo', 'mar', 'mes03', 'mes3'],
+                ['abril', 'abr', 'mes04', 'mes4'], ['mayo', 'may', 'mes05', 'mes5'], ['junio', 'jun', 'mes06', 'mes6'],
+                ['julio', 'jul', 'mes07', 'mes7'], ['agosto', 'ago', 'mes08', 'mes8'], ['setiembre', 'septiembre', 'set', 'sep', 'mes09', 'mes9'],
+                ['octubre', 'oct', 'mes10'], ['noviembre', 'nov', 'mes11'], ['diciembre', 'dic', 'mes12']
+            ];
 
-        return {
-          id: code,
-          name: String(name),
-          currentStock: isNaN(stock) ? 0 : stock,
-          unitPrice: isNaN(price) ? 0 : price,
-          monthlyConsumption: months,
-          ff: ffKey ? String(row[ffKey]) : undefined,
-          medtip: tipKey ? String(row[tipKey]) : undefined,
-          medpet: petKey ? String(row[petKey]) : undefined,
-          medest: estValue ? String(estValue) : undefined,
-        };
-      }).filter((item): item is MedicationInput => item !== null);
+            monthNames.forEach(names => {
+                const key = findKey(names);
+                if (key) {
+                    const val = Number(row[key]);
+                    months.push(isNaN(val) ? 0 : val);
+                } else {
+                    months.push(0); 
+                }
+            });
 
-      if (parsedItems.length === 0) {
-        alert("Error: No se detectaron columnas válidas.");
-        return;
-      }
+            if (!nameKey && !stockKey) return null;
 
-      processData(parsedItems);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+            return {
+              id: code,
+              name: String(name),
+              currentStock: isNaN(stock) ? 0 : stock,
+              unitPrice: isNaN(price) ? 0 : price,
+              monthlyConsumption: months,
+              ff: ffKey ? String(row[ffKey]) : undefined,
+              medtip: tipKey ? String(row[tipKey]) : undefined,
+              medpet: petKey ? String(row[petKey]) : undefined,
+              medest: estValue ? String(estValue) : undefined,
+            };
+          }).filter((item): item is MedicationInput => item !== null);
 
-    } catch (err: any) {
-      console.error("Error parsing Excel:", err);
-      alert(`Error al procesar: ${err.message}`);
-    }
+          if (parsedItems.length === 0) {
+            setUploadError("Error al procesar el archivo: No se detectaron filas válidas con información de medicamentos.");
+            setIsProcessingFile(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
+
+          setUploadError(null);
+          setIsProcessingFile(false);
+          processData(parsedItems);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+
+        } catch (err: any) {
+          console.error("Error parsing Excel:", err);
+          setUploadError(`Error al procesar el archivo: ${err.message}`);
+          setIsProcessingFile(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    }, 800); // 800ms delay for animation
   };
 
   const triggerFileUpload = () => {
@@ -195,7 +237,18 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
   const confirmOverwrite = () => {
       setShowOverwriteWarning(false);
-      fileInputRef.current?.click();
+      // Clear the existing data to allow a fresh upload
+      setItems([]);
+      onReset(); // This triggers the reset in App.tsx which clears analyzed data
+      setUploadError(null);
+      
+      // Use setTimeout to ensure the modal state updates before triggering the click
+      setTimeout(() => {
+          if (fileInputRef.current) {
+              fileInputRef.current.value = ''; // Reset input value
+              fileInputRef.current.click();
+          }
+      }, 100);
   };
 
   const handleConfirmDate = () => {
@@ -255,43 +308,68 @@ export const InputSection: React.FC<InputSectionProps> = ({
       
       {/* Upload Section */}
       <div className="mb-8 flex flex-col items-center">
-        <div className="w-full max-w-2xl bg-teal-50 border-2 border-dashed border-teal-200 rounded-xl p-4 sm:p-8 text-center relative hover:bg-teal-100/50 transition-colors">
-            <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileUpload} 
-                className="hidden" 
-                accept=".xlsx, .xls, .csv"
-            />
-            
-            <div className="flex flex-col items-center gap-3">
-                <div className="bg-white p-3 rounded-full shadow-sm">
-                    <FileSpreadsheet className="h-8 w-8 text-teal-600" />
+        {isProcessingFile ? (
+            <div className="w-full max-w-2xl bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[300px] animate-in fade-in duration-300">
+                <div className="relative mb-6">
+                    <div className="absolute inset-0 border-4 border-teal-100 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-teal-600 rounded-full border-t-transparent animate-spin"></div>
+                    <div className="w-16 h-16 flex items-center justify-center bg-white rounded-full">
+                        <FileSpreadsheet className="h-6 w-6 text-teal-600" />
+                    </div>
                 </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Procesando Archivo Excel</h3>
+                <p className="text-sm text-slate-500">Validando estructura y cargando registros...</p>
+            </div>
+        ) : (
+            <div 
+                className="w-full max-w-2xl mx-auto border-2 border-dashed border-teal-200 rounded-xl p-10 bg-teal-50/30 hover:bg-teal-50 transition-all group cursor-pointer relative"
+                onClick={triggerFileUpload}
+            >
+                <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileUpload} 
+                    className="hidden" 
+                    accept=".xlsx, .xls, .csv"
+                />
                 
-                <h3 className="text-lg font-semibold text-gray-900 mt-2">Cargar Requerimiento IPRESS</h3>
-                <p className="text-sm text-gray-500 max-w-md mx-auto hidden sm:block">
-                    Suba su Excel de consumos histórico (12 meses de consumo).
-                    <br />
-                    <span className="text-xs text-teal-600 font-bold">
-                        El sistema detectará automáticamente los picos anormales y calculará el "CPA".
-                    </span>
-                </p>
-                <p className="text-sm text-gray-500 max-w-md mx-auto block sm:hidden">
-                   Suba su archivo Excel para comenzar el análisis.
-                </p>
+                <div className="flex flex-col items-center gap-4 group-hover:scale-105 transition-transform duration-300">
+                    <div className="bg-white p-4 rounded-full shadow-md group-hover:shadow-lg transition-shadow">
+                        <FileSpreadsheet className="h-10 w-10 text-teal-600" />
+                    </div>
+                    
+                    <div className="text-center">
+                        <h3 className="text-lg font-bold text-gray-900">Cargar Requerimiento IPRESS</h3>
+                        <p className="text-sm text-gray-500 mt-1">Arrastre su archivo Excel aquí o haga clic para buscar</p>
+                    </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 mt-4 sm:mt-6 w-full sm:w-auto justify-center">
-                    <button 
-                        onClick={triggerFileUpload}
-                        className="w-full sm:w-auto justify-center px-6 py-3 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2 shadow-sm"
-                    >
-                        <Upload className="h-4 w-4" />
-                        Subir Archivo
-                    </button>
+                    <div className="flex items-center gap-2 text-xs text-teal-600 font-medium bg-teal-100 px-3 py-1 rounded-full">
+                        <Sparkles className="h-3 w-3" />
+                        <span>Formato .xlsx o .xls requerido</span>
+                    </div>
+
+                    <div className="mt-4 w-full sm:w-auto flex justify-center">
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                triggerFileUpload();
+                            }}
+                            className="w-full sm:w-auto justify-center px-6 py-2.5 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2 shadow-sm"
+                        >
+                            <Upload className="h-4 w-4" />
+                            Subir Archivo
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
+        )}
+        
+        {uploadError && !isProcessingFile && (
+            <div className="w-full max-w-2xl mt-4 bg-red-50 text-red-700 p-4 rounded-xl border border-red-100 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4">
+                <AlertCircle className="h-5 w-5 shrink-0" />
+                <p className="text-sm font-medium">{uploadError}</p>
+            </div>
+        )}
       </div>
 
       {/* Item Preview */}
@@ -324,8 +402,8 @@ export const InputSection: React.FC<InputSectionProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
-                {items.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
+                {items.map((item, index) => (
+                  <tr key={`${item.id}-${index}`} className="hover:bg-gray-50">
                     <td className="px-3 py-1.5 text-xs font-mono text-gray-500 font-medium w-24 whitespace-nowrap">{item.id}</td>
                     <td className="px-3 py-1.5 text-gray-900 truncate max-w-[150px] sm:max-w-[300px] text-xs font-medium" title={item.name}>{item.name}</td>
                     <td className="px-3 py-1.5 text-right font-mono text-xs font-bold text-gray-700 whitespace-nowrap">{item.currentStock.toLocaleString()}</td>

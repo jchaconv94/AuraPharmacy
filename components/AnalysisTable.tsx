@@ -455,7 +455,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                   </div>
 
                   {/* Action Buttons Container - Hide Text on Laptops (XL breakpoint for full text) */}
-                  <div className="flex items-center gap-2" ref={mainFilterRef}>
+                  <div className="flex items-center gap-2 relative" ref={mainFilterRef}>
                       <button 
                         onClick={() => setIsMainFilterOpen(!isMainFilterOpen)}
                         className={`flex items-center gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all ${
@@ -472,7 +472,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                       </button>
 
                       {isMainFilterOpen && (
-                          <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 text-gray-900 animate-in fade-in zoom-in-95 duration-100">
+                          <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[100] text-gray-900 animate-in fade-in zoom-in-95 duration-100">
                               <div className="px-3 py-2 border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
                                   Vistas Disponibles
                               </div>
