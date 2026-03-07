@@ -399,7 +399,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         return createPortal(modalContent, target);
     };
 
-    const processFile = (file: File) => {
+    const processFile = (file: File, lastMonth: number, lastYear: number) => {
         setLoading(true);
         setError(null);
 
@@ -420,11 +420,32 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     let headerRowIndex = -1;
                     const colMap: Record<string, string> = {}; // Map Field Name -> Column Letter (e.g., "STOCK" -> "K")
 
+                    // Define required headers for each format (with variations)
+                    const requiredNew = [
+                        ["RED"],
+                        ["MICRORED"],
+                        ["COD EESS", "COD. EESS"],
+                        ["ESTABLECIMIENTO", "EESS"],
+                        ["PRODUCTO", "DESCRIPCION"],
+                        ["STOCK"],
+                        ["MES_1"]
+                    ];
+                    const requiredOld = [
+                        ["COD EESS", "COD. EESS"],
+                        ["ESTABLECIMIENTO", "EESS"],
+                        ["PRODUCTO", "DESCRIPCION"],
+                        ["STOCK"],
+                        ["CPA"]
+                    ];
+
                     for (let i = 0; i < Math.min(20, rawData.length); i++) {
                         const row = rawData[i];
-                        const values = Object.values(row).map(v => String(v).toUpperCase());
+                        const values = Object.values(row).map(v => String(v).toUpperCase().trim());
 
-                        if (values.includes("STOCK") && values.includes("CPA")) {
+                        const hasNew = requiredNew.every(variations => variations.some(v => values.some(val => val.includes(v))));
+                        const hasOld = requiredOld.every(variations => variations.some(v => values.some(val => val.includes(v))));
+
+                        if (hasNew || hasOld) {
                             headerRowIndex = i;
                             // Build Column Map
                             Object.entries(row).forEach(([key, val]) => {
@@ -436,7 +457,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     }
 
                     if (headerRowIndex === -1) {
-                        throw new Error("Estructura inválida: No se encontró la fila de cabecera con 'STOCK' y 'CPA'.");
+                        throw new Error("Estructura inválida: El archivo no contiene las columnas necesarias. Verifique que sea la plantilla correcta.");
                     }
 
                     // 2. Process Data Rows (Start after header)
@@ -458,7 +479,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                         // Basic Validation: Must have Microred and Med Code
                         const microred = getVal("MICRORED");
-                        const medCode = getVal("MED COD") || getVal("CODIGO") || getVal("COD");
+                        const medCode = getVal("COD PRODUCTO") || getVal("CODIGO PRODUCTO") || getVal("MED COD") || getVal("CODIGO") || getVal("COD");
 
                         if (!microred || !medCode) continue;
 
@@ -471,34 +492,69 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                             monthsProvision = stock / cpa;
                         }
 
-                        // 3. Calculate Consumption from Columns O-Z
+                        // 3. Calculate Consumption from Columns
                         let consumptionSum = 0;
                         let consumptionMonths = 0;
                         const monthlyConsumption: number[] = [];
 
-                        consumptionCols.forEach(colKey => {
-                            const val = Number(row[colKey]);
-                            if (!isNaN(val)) {
+                        // Check if we have MES_1...MES_12 columns
+                        const mesCols = ['MES_1', 'MES_2', 'MES_3', 'MES_4', 'MES_5', 'MES_6', 'MES_7', 'MES_8', 'MES_9', 'MES_10', 'MES_11', 'MES_12'];
+                        const hasMesCols = mesCols.some(col => colMap[col]);
+
+                        if (hasMesCols) {
+                            // Map MES_1...MES_12 to actual months based on lastMonth
+                            // MES_1 is the oldest, MES_12 is the newest (lastMonth)
+                            // lastMonth is 1-indexed (1=Jan, 12=Dec)
+                            
+                            // We need to store the consumption in a way that the UI can display them correctly
+                            // based on the selected lastMonth.
+                            // Let's store them in an array where index 0 is Jan, index 11 is Dec.
+                            const consumptionByMonth = new Array(12).fill(0);
+                            
+                            for (let m = 0; m < 12; m++) {
+                                const colName = `MES_${m + 1}`;
+                                const val = Number(getVal(colName) || 0);
+                                
+                                // Calculate the actual month index (0-11)
+                                // lastMonth is 1-based, so lastMonth-1 is the index of the newest month.
+                                // MES_12 corresponds to lastMonth-1
+                                // MES_1 corresponds to (lastMonth - 12 + 12) % 12
+                                
+                                const monthIndex = (lastMonth - 1 - (11 - m) + 12) % 12;
+                                consumptionByMonth[monthIndex] = val;
+                                
                                 consumptionSum += val;
                                 if (val > 0) consumptionMonths++;
-                                monthlyConsumption.push(val);
-                            } else {
-                                monthlyConsumption.push(0);
                             }
-                        });
+                            
+                            // Replace monthlyConsumption with the ordered array
+                            monthlyConsumption.push(...consumptionByMonth);
+                        } else {
+                            // Fallback to old consumption columns
+                            consumptionCols.forEach(colKey => {
+                                const val = Number(row[colKey]);
+                                if (!isNaN(val)) {
+                                    consumptionSum += val;
+                                    if (val > 0) consumptionMonths++;
+                                    monthlyConsumption.push(val);
+                                } else {
+                                    monthlyConsumption.push(0);
+                                }
+                            });
+                        }
 
                         // --- NEW CALCULATION LOGIC (User Request) ---
                         // CPA = Total Consumption / Months with Consumption
-                        let calculatedCpa = 0;
-                        if (consumptionMonths > 0) {
+                        let calculatedCpa = Number(getVal("CPA") || 0);
+                        if (calculatedCpa === 0 && consumptionMonths > 0) {
                             calculatedCpa = consumptionSum / consumptionMonths;
                         }
 
                         // Months Provision = Stock / Calculated CPA
-                        let calculatedMonthsProvision = 0;
-                        if (calculatedCpa > 0.01) {
+                        let calculatedMonthsProvision = Number(getVal("MES PROV") || getVal("MESES") || 0);
+                        if (calculatedMonthsProvision === 0 && calculatedCpa > 0.01) {
                             calculatedMonthsProvision = stock / calculatedCpa;
-                        } else if (stock > 0) {
+                        } else if (stock > 0 && calculatedCpa <= 0.01) {
                             calculatedMonthsProvision = 999; // Infinite provision if stock > 0 but no consumption
                         }
 
@@ -556,6 +612,27 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         }, 500);
     };
 
+    const [isLastMonthModalOpen, setIsLastMonthModalOpen] = useState(false);
+    const [fileToProcess, setFileToProcess] = useState<File | null>(null);
+    // lastMonthYear should be YYYY-MM
+    const [lastMonthYear, setLastMonthYear] = useState<string>(
+        `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+    );
+
+    const downloadTemplate = () => {
+        const headers = [
+            "RED", "MICRORED", "COD EESS", "ESTABLECIMIENTO", "CAT",
+            "COD PRODUCTO", "PRODUCTO", "F.F", "PRECIO", "TIPO", "PET", "EST",
+            "MES_1", "MES_2", "MES_3", "MES_4", "MES_5", "MES_6",
+            "MES_7", "MES_8", "MES_9", "MES_10", "MES_11", "MES_12",
+            "STOCK"
+        ];
+        const ws = XLSX.utils.aoa_to_sheet([headers]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
+        XLSX.writeFile(wb, "Plantilla_Disponibilidad.xlsx");
+    };
+
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -567,8 +644,20 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             return;
         }
 
-        processFile(file);
+        setFileToProcess(file);
+        setIsLastMonthModalOpen(true);
     };
+
+    const confirmFileProcessing = () => {
+        if (fileToProcess) {
+            // Parse YYYY-MM to month (1-12) and year
+            const [year, month] = lastMonthYear.split('-').map(Number);
+            processFile(fileToProcess, month, year);
+            setIsLastMonthModalOpen(false);
+            setFileToProcess(null);
+        }
+    };
+
 
     // --- 2. FILTERS ---
     const microredOptions = useMemo(() => {
@@ -1447,8 +1536,43 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         <Sparkles className="h-3 w-3" />
                                         <span>Formato .xlsx o .xls requerido</span>
                                     </div>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); downloadTemplate(); }}
+                                        className="text-xs text-slate-500 hover:text-indigo-600 underline mt-2"
+                                    >
+                                        Descargar Plantilla Estándar
+                                    </button>
                                 </div>
                             </div>
+
+                            {/* Last Month Selection Modal */}
+                            {isLastMonthModalOpen && (
+                                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                                    <div className="bg-white p-6 rounded-2xl shadow-xl w-96">
+                                        <h3 className="text-lg font-bold text-gray-900 mb-4">Confirme la Fecha del Reporte</h3>
+                                        <p className="text-sm text-gray-500 mb-6">Para realizar un cálculo preciso, Aura necesita saber a qué mes corresponde la última columna de datos.</p>
+                                        <div className="mb-6">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">MES DE CORTE (MES 12)</label>
+                                            <input 
+                                                type="month"
+                                                className="w-full p-3 border rounded-lg text-center font-bold text-lg"
+                                                value={lastMonthYear}
+                                                onChange={(e) => setLastMonthYear(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="bg-blue-50 p-4 rounded-lg mb-6 flex gap-3">
+                                            <span className="text-blue-600">ℹ️</span>
+                                            <p className="text-xs text-blue-800"><strong>Nota:</strong> Si descargó el reporte hoy, la fecha por defecto suele ser correcta.</p>
+                                        </div>
+                                        <button 
+                                            onClick={confirmFileProcessing}
+                                            className="w-full py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-bold flex items-center justify-center gap-2"
+                                        >
+                                            ✓ Confirmar y Cargar Datos
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {records.length > 0 && (
                                 <div className="mt-8 flex items-center gap-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -2857,9 +2981,28 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 </div>
                                 <div className="border border-gray-700 rounded-lg overflow-hidden">
                                     <div className="grid grid-cols-12 divide-x divide-gray-700 bg-gray-950 text-gray-400 text-xs font-bold uppercase text-center">
-                                        {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'].map((month, i) => (
-                                            <div key={i} className="p-3">{month}</div>
-                                        ))}
+                                        {Array.from({ length: 12 }).map((_, i) => {
+                                            // Extract month and year from lastMonthYear (YYYY-MM)
+                                            const [selectedYear, selectedMonth] = lastMonthYear.split('-').map(Number);
+                                            
+                                            // Calculate the month index (0-11) and the corresponding year
+                                            // We are looking at the 12 months ending in selectedMonth/selectedYear
+                                            // The sequence starts 11 months before selectedMonth
+                                            let monthIndex = (selectedMonth - 12 + i) % 12;
+                                            if (monthIndex < 0) monthIndex += 12;
+                                            
+                                            // Calculate year for this specific month
+                                            // If monthIndex is greater than selectedMonth-1, it belongs to the previous year
+                                            let year = selectedYear;
+                                            if (monthIndex > (selectedMonth - 1)) {
+                                                year -= 1;
+                                            }
+                                            
+                                            const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+                                            const yearShort = String(year).slice(-2);
+                                            
+                                            return <div key={i} className="p-3">{`${monthNames[monthIndex]} ${yearShort}`}</div>;
+                                        })}
                                     </div>
                                     <div className="grid grid-cols-12 divide-x divide-gray-700 bg-gray-900 text-white font-mono text-sm font-bold text-center">
                                         {selectedDetailItem.monthlyConsumption && selectedDetailItem.monthlyConsumption.length === 12 ? (
