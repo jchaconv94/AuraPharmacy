@@ -271,10 +271,10 @@ export const InputSection: React.FC<InputSectionProps> = ({
                 
                 <h3 className="text-lg font-semibold text-gray-900 mt-2">Cargar Requerimiento IPRESS</h3>
                 <p className="text-sm text-gray-500 max-w-md mx-auto hidden sm:block">
-                    Suba su Excel con histórico (Ene-Dic o Jul-Dic).
+                    Suba su Excel de consumos histórico (12 meses de consumo).
                     <br />
                     <span className="text-xs text-teal-600 font-bold">
-                        Aura detectará automáticamente los picos anormales y calculará el "CPA".
+                        El sistema detectará automáticamente los picos anormales y calculará el "CPA".
                     </span>
                 </p>
                 <p className="text-sm text-gray-500 max-w-md mx-auto block sm:hidden">

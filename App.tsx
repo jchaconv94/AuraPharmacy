@@ -552,7 +552,7 @@ const AnalysisModule: React.FC = () => {
             <div>
               <h2 className="text-xl 2xl:text-2xl font-bold text-gray-900">Módulo de Análisis Inteligente</h2>
               <p className="text-gray-600 mt-2 max-w-3xl leading-relaxed text-sm 2xl:text-base">
-                Ingrese su inventario para recibir un análisis basado en la Ficha Técnica N° 30.
+                Cargue su archivo Excel de requerimiento descargado del SISMED, para que el sistema lo analice.
               </p>
             </div>
           </div>
