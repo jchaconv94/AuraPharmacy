@@ -113,6 +113,13 @@ const MultiSelectFilter = ({
         setIsOpen(false);
     };
 
+    const isFilterActive = useMemo(() => {
+        if (selectedValues.length === 0) return false;
+        if (options.length === 0) return false;
+        if (selectedValues.length !== options.length) return true;
+        return !options.every(o => selectedValues.includes(o.value));
+    }, [selectedValues, options]);
+
     return (
         <div className="relative inline-flex items-center justify-center w-full h-full" ref={triggerRef}>
             <div
@@ -120,7 +127,7 @@ const MultiSelectFilter = ({
                 onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
             >
                 <span>{title}</span>
-                <Filter className={`h-3 w-3 ${selectedValues.length !== options.length ? 'text-indigo-600 fill-indigo-600' : 'text-slate-300'}`} />
+                <Filter className={`h-3 w-3 ${isFilterActive ? 'text-indigo-600 fill-indigo-600' : 'text-slate-300'}`} />
             </div>
 
             {isOpen && createPortal(
@@ -1006,6 +1013,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const handleEstablishmentChange = (establishmentCod: string) => {
         if (establishmentCod === 'ALL') {
             setSelectedEstablishment([]);
+            setSelectedEstablecimientoFilter([]);
+            setSelectedSituacion([]);
             return;
         }
         
@@ -1018,6 +1027,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         }
         
         setSelectedEstablishment(newSelection);
+        setSelectedEstablecimientoFilter([]);
+        setSelectedSituacion([]);
         setSelectedProductCode('');
         setSelectedProductName('');
         setProductSearch('');
@@ -1031,6 +1042,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         if (microred === 'ALL') {
             setSelectedMicrored(['ALL']);
             setSelectedEstablishment([]);
+            setSelectedEstablecimientoFilter([]);
+            setSelectedSituacion([]);
             return;
         }
         
@@ -1051,6 +1064,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         
         setSelectedMicrored(newSelection);
         setSelectedEstablishment([]);
+        setSelectedEstablecimientoFilter([]);
+        setSelectedSituacion([]);
         setSelectedProductCode('');
         setSelectedProductName('');
         setProductSearch('');
@@ -2370,7 +2385,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             )}
 
             {/* REDISTRIBUTION TABLE */}
-            {redistributionData.length > 0 && (
+            {selectedMicrored.length > 0 && records.length > 0 && (
                 <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-[100]' : 'max-h-[85vh]'}`}>
                     <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center shrink-0">
                         <h3 className="font-bold text-gray-800 flex items-center gap-3">
@@ -2520,7 +2535,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredRedistributionData.map((item, index) => {
+                                {filteredRedistributionData.length > 0 ? (
+                                    filteredRedistributionData.map((item, index) => {
                                     const showMicroredHeader = selectedMicrored.includes('ALL') &&
                                         !item.isWarehouse &&
                                         (index === 0 || filteredRedistributionData[index - 1].microred !== item.microred || filteredRedistributionData[index - 1].isWarehouse);
@@ -2747,7 +2763,28 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         </tr>
                                         </React.Fragment>
                                     );
-                                })}
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan={15} className="p-20 text-center">
+                                            <div className="flex flex-col items-center justify-center gap-4 text-gray-400">
+                                                <div className="p-4 bg-gray-50 rounded-full border border-gray-100 shadow-inner">
+                                                    <Package className="h-10 w-10 opacity-20" />
+                                                </div>
+                                                <div className="max-w-xs">
+                                                    <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">
+                                                        {selectedProductCode ? "Sin resultados" : "Esperando selección"}
+                                                    </p>
+                                                    <p className="text-xs italic leading-relaxed">
+                                                        {selectedProductCode 
+                                                            ? "No se encontraron establecimientos con datos para este producto con los filtros actuales." 
+                                                            : "Seleccione un producto de la lista superior para visualizar su matriz de redistribución y balance de stock."}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
