@@ -1694,18 +1694,20 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                                     {/* Export/Import Session Buttons */}
                                     <div className="flex flex-row gap-4 mt-6 z-10">
-                                        <button 
-                                            onClick={(e) => { 
-                                                e.stopPropagation(); 
-                                                e.preventDefault();
-                                                handleExportSession(); 
-                                            }}
-                                            className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-sm font-bold transition-all shadow-sm"
-                                            title="Exportar avance actual para continuar en otra PC"
-                                        >
-                                            <Download className="w-4 h-4" />
-                                            Exportar Avance
-                                        </button>
+                                        {records.length > 0 && (
+                                            <button 
+                                                onClick={(e) => { 
+                                                    e.stopPropagation(); 
+                                                    e.preventDefault();
+                                                    handleExportSession(); 
+                                                }}
+                                                className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-sm font-bold transition-all shadow-sm"
+                                                title="Exportar avance actual para continuar en otra PC"
+                                            >
+                                                <Download className="w-4 h-4" />
+                                                Exportar Avance
+                                            </button>
+                                        )}
                                         <button 
                                             onClick={(e) => { 
                                                 e.stopPropagation(); 
