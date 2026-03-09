@@ -32,17 +32,28 @@ const MultiSelectFilter = ({
     title,
     options,
     selectedValues,
-    onChange
+    onChange,
+    portalTarget
 }: {
     title: string;
     options: { value: string; label: string }[];
     selectedValues: string[];
     onChange: (values: string[]) => void;
+    portalTarget?: HTMLElement | null;
 }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [tempSelected, setTempSelected] = useState<string[]>(selectedValues);
+    const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = React.useRef<HTMLDivElement>(null);
     const triggerRef = React.useRef<HTMLDivElement>(null);
     const [menuStyles, setMenuStyles] = useState<React.CSSProperties>({});
+
+    useEffect(() => {
+        if (isOpen) {
+            setTempSelected(selectedValues);
+            setSearchTerm('');
+        }
+    }, [isOpen, selectedValues]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -55,11 +66,12 @@ const MultiSelectFilter = ({
         const updatePosition = () => {
             if (isOpen && triggerRef.current) {
                 const rect = triggerRef.current.getBoundingClientRect();
+                const containerRect = portalTarget?.getBoundingClientRect() || { top: 0, left: 0 };
                 setMenuStyles({
-                    top: rect.bottom + 4,
-                    left: rect.left + rect.width / 2,
+                    top: rect.bottom - containerRect.top + 4,
+                    left: rect.left - containerRect.left + rect.width / 2,
                     transform: 'translateX(-50%)',
-                    maxHeight: window.innerHeight - rect.bottom - 20
+                    maxHeight: (portalTarget?.clientHeight || window.innerHeight) - (rect.bottom - containerRect.top) - 20
                 });
             }
         };
@@ -76,17 +88,31 @@ const MultiSelectFilter = ({
             window.removeEventListener('resize', updatePosition);
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [isOpen]);
+    }, [isOpen, portalTarget]);
 
-    const toggleValue = (val: string) => {
-        if (selectedValues.includes(val)) {
-            onChange(selectedValues.filter(v => v !== val));
+    const filteredOptions = options.filter(o => o.label.toLowerCase().includes(searchTerm.toLowerCase()));
+    const allSelected = filteredOptions.length > 0 && filteredOptions.every(o => tempSelected.includes(o.value));
+
+    const toggleSelectAll = () => {
+        if (allSelected) {
+            setTempSelected(prev => prev.filter(v => !filteredOptions.some(o => o.value === v)));
         } else {
-            onChange([...selectedValues, val]);
+            setTempSelected(prev => Array.from(new Set([...prev, ...filteredOptions.map(o => o.value)])));
         }
     };
 
-    const isAllSelected = selectedValues.length === 0;
+    const toggleOption = (value: string) => {
+        setTempSelected(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+    };
+
+    const handleAccept = () => {
+        onChange(tempSelected);
+        setIsOpen(false);
+    };
+
+    const handleCancel = () => {
+        setIsOpen(false);
+    };
 
     return (
         <div className="relative inline-flex items-center justify-center w-full h-full" ref={triggerRef}>
@@ -95,47 +121,56 @@ const MultiSelectFilter = ({
                 onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
             >
                 <span>{title}</span>
-                <Filter className={`h-3 w-3 ${!isAllSelected ? 'text-indigo-600 fill-indigo-600' : 'text-slate-300'}`} />
+                <Filter className={`h-3 w-3 ${selectedValues.length !== options.length ? 'text-indigo-600 fill-indigo-600' : 'text-slate-300'}`} />
             </div>
 
             {isOpen && createPortal(
                 <div
                     ref={dropdownRef}
-                    className="fixed min-w-[140px] bg-white border border-slate-200 shadow-xl rounded-xl z-[9999] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col"
+                    className="fixed min-w-[200px] bg-white border border-slate-200 shadow-xl rounded-xl z-[9999] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
                     style={{ ...menuStyles }}
                     onClick={(e) => e.stopPropagation()}
                 >
+                    <input
+                        type="text"
+                        placeholder="Buscar..."
+                        className="w-full p-2 border border-slate-300 rounded-lg text-xs"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                     <div
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors shrink-0 mb-1 ${isAllSelected ? 'font-bold text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50/50' : ''}`}
-                        onClick={() => { onChange([]); setIsOpen(false); }}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors ${allSelected ? 'font-bold text-indigo-700 bg-indigo-50/50' : ''}`}
+                        onClick={toggleSelectAll}
                     >
-                        <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${isAllSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-slate-300'}`}>
-                            {isAllSelected && <Check className="w-2.5 h-2.5" />}
+                        <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${allSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-slate-300'}`}>
+                            {allSelected && <Check className="w-2.5 h-2.5" />}
                         </div>
-                        <span>Todos</span>
+                        <span>(Seleccionar todo)</span>
                     </div>
-
-                    <div className="h-px bg-slate-100 my-1 shrink-0"></div>
-
+                    <div className="h-px bg-slate-100 shrink-0"></div>
                     <div className="overflow-y-auto custom-scrollbar flex-1 min-h-0">
-                        {options.map(opt => {
-                            const isSelected = selectedValues.includes(opt.value);
+                        {filteredOptions.map(opt => {
+                            const isSelected = tempSelected.includes(opt.value);
                             return (
                                 <div
                                     key={opt.value}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors ${isSelected ? 'font-bold text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50/50' : ''}`}
-                                    onClick={() => toggleValue(opt.value)}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors ${isSelected ? 'font-bold text-indigo-700 bg-indigo-50/50' : ''}`}
+                                    onClick={() => toggleOption(opt.value)}
                                 >
                                     <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${isSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-slate-300'}`}>
                                         {isSelected && <Check className="w-2.5 h-2.5" />}
                                     </div>
                                     <span className="truncate">{opt.label}</span>
                                 </div>
-                            )
+                            );
                         })}
                     </div>
+                    <div className="flex gap-2 pt-2 border-t border-slate-100 shrink-0">
+                        <button className="flex-1 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-xs" onClick={handleAccept}>ACEPTAR</button>
+                        <button className="flex-1 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-xs" onClick={handleCancel}>Cancelar</button>
+                    </div>
                 </div>,
-                document.body
+                portalTarget || document.body
             )}
         </div>
     );
@@ -1329,6 +1364,15 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const situacionOptions = useMemo(() => Array.from(new Set(redistributionData.map(item => item.status || 'N/A'))).map(s => ({ value: s, label: s })), [redistributionData]);
     const establecimientoOptions = useMemo(() => Array.from(new Set(redistributionData.map(item => item.establishmentName || 'N/A'))).map(e => ({ value: e, label: e })), [redistributionData]);
 
+    useEffect(() => {
+        if (situacionOptions.length > 0 && selectedSituacion.length === 0) {
+            setSelectedSituacion(situacionOptions.map(o => o.value));
+        }
+        if (establecimientoOptions.length > 0 && selectedEstablecimientoFilter.length === 0) {
+            setSelectedEstablecimientoFilter(establecimientoOptions.map(o => o.value));
+        }
+    }, [situacionOptions, establecimientoOptions]);
+
     const handleSimulationChange = (codEess: string, value: string) => {
         let numValue = 0;
 
@@ -1932,6 +1976,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         ]}
                                         selectedValues={reviewFilter}
                                         onChange={setReviewFilter}
+                                        portalTarget={tableContainerRef.current}
                                     />
                                 </th>
                                 <th className="p-2 w-20 text-left align-middle">Código</th>
@@ -1942,6 +1987,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         options={Array.from(new Set(productOptions.map(p => String(p.type || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
                                         selectedValues={tipoFilter}
                                         onChange={setTipoFilter}
+                                        portalTarget={tableContainerRef.current}
                                     />
                                 </th>
                                 <th className="p-0 align-middle w-14 text-center">
@@ -1950,6 +1996,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         options={Array.from(new Set(productOptions.map(p => String(p.pet || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
                                         selectedValues={petFilter}
                                         onChange={setPetFilter}
+                                        portalTarget={tableContainerRef.current}
                                     />
                                 </th>
                                 <th className="p-0 align-middle w-14 text-center">
@@ -1958,6 +2005,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         options={Array.from(new Set(productOptions.map(p => String(p.est || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
                                         selectedValues={estFilter}
                                         onChange={setEstFilter}
+                                        portalTarget={tableContainerRef.current}
                                     />
                                 </th>
                                 <th className="p-2 w-16 text-center text-blue-700 bg-blue-50/50 align-middle">STOCK</th>
@@ -1975,6 +2023,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         ]}
                                         selectedValues={statusFilter}
                                         onChange={setStatusFilter}
+                                        portalTarget={tableContainerRef.current}
                                     />
                                 </th>
                             </tr>
@@ -2441,6 +2490,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                 options={establecimientoOptions}
                                                 selectedValues={selectedEstablecimientoFilter}
                                                 onChange={setSelectedEstablecimientoFilter}
+                                                portalTarget={tableContainerRef.current}
                                             />
                                         </div>
                                     </th>
@@ -2457,6 +2507,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                 options={situacionOptions}
                                                 selectedValues={selectedSituacion}
                                                 onChange={setSelectedSituacion}
+                                                portalTarget={tableContainerRef.current}
                                             />
                                         </div>
                                     </th>
