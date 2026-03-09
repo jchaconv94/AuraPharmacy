@@ -66,12 +66,11 @@ const MultiSelectFilter = ({
         const updatePosition = () => {
             if (isOpen && triggerRef.current) {
                 const rect = triggerRef.current.getBoundingClientRect();
-                const containerRect = portalTarget?.getBoundingClientRect() || { top: 0, left: 0 };
                 setMenuStyles({
-                    top: rect.bottom - containerRect.top + 4,
-                    left: rect.left - containerRect.left + rect.width / 2,
+                    top: rect.bottom + 4,
+                    left: rect.left + rect.width / 2,
                     transform: 'translateX(-50%)',
-                    maxHeight: (portalTarget?.clientHeight || window.innerHeight) - (rect.bottom - containerRect.top) - 20
+                    maxHeight: window.innerHeight - rect.bottom - 20
                 });
             }
         };
@@ -127,7 +126,7 @@ const MultiSelectFilter = ({
             {isOpen && createPortal(
                 <div
                     ref={dropdownRef}
-                    className="fixed min-w-[200px] bg-white border border-slate-200 shadow-xl rounded-xl z-[9999] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
+                    className="fixed min-w-[200px] bg-white border border-slate-200 shadow-xl rounded-xl z-[40] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
                     style={{ ...menuStyles }}
                     onClick={(e) => e.stopPropagation()}
                 >
