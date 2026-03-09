@@ -156,6 +156,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const [records, setRecords] = useState<AvailabilityRecord[]>([]);
     const [selectedMicrored, setSelectedMicrored] = useState<string[]>(['ALL']);
     const [selectedEstablishment, setSelectedEstablishment] = useState<string[]>([]);
+    const [selectedSituacion, setSelectedSituacion] = useState<string[]>([]);
+    const [selectedEstablecimientoFilter, setSelectedEstablecimientoFilter] = useState<string[]>([]);
     const [selectedProductCode, setSelectedProductCode] = useState<string>('');
     const [selectedProductName, setSelectedProductName] = useState<string>('');
 
@@ -1316,6 +1318,17 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         });
     }, [baseRedistributionData, consolidationSelection, quickTransferSource]);
 
+    const filteredRedistributionData = useMemo(() => {
+        return redistributionData.filter(item => {
+            if (selectedSituacion.length > 0 && !selectedSituacion.includes(item.status || 'N/A')) return false;
+            if (selectedEstablecimientoFilter.length > 0 && !selectedEstablecimientoFilter.includes(item.establishmentName || 'N/A')) return false;
+            return true;
+        });
+    }, [redistributionData, selectedSituacion, selectedEstablecimientoFilter]);
+
+    const situacionOptions = useMemo(() => Array.from(new Set(redistributionData.map(item => item.status || 'N/A'))).map(s => ({ value: s, label: s })), [redistributionData]);
+    const establecimientoOptions = useMemo(() => Array.from(new Set(redistributionData.map(item => item.establishmentName || 'N/A'))).map(e => ({ value: e, label: e })), [redistributionData]);
+
     const handleSimulationChange = (codEess: string, value: string) => {
         let numValue = 0;
 
@@ -2411,7 +2424,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                             </button>
 
                             <div className="text-xs text-gray-500 ml-2 border-l pl-3 border-gray-300 font-medium">
-                                {redistributionData.length} Est.
+                                {filteredRedistributionData.length} Est.
                             </div>
                         </div>
                     </div>
@@ -2420,13 +2433,33 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                             <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-xs sticky top-0 z-10 shadow-sm">
                                 <tr>
                                     <th className="p-3 border-b text-left w-px whitespace-nowrap pr-2">COD</th>
-                                    <th className="p-3 border-b text-left">Establecimiento</th>
+                                    <th className="p-3 border-b text-left">
+                                        <div className="flex items-center gap-1">
+                                            Establecimiento
+                                            <MultiSelectFilter
+                                                title=""
+                                                options={establecimientoOptions}
+                                                selectedValues={selectedEstablecimientoFilter}
+                                                onChange={setSelectedEstablecimientoFilter}
+                                            />
+                                        </div>
+                                    </th>
                                     <th className="p-3 border-b text-center">Stock</th>
                                     <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-[10px] uppercase tracking-wider">Suma Cons.</th>
                                     <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-[10px] uppercase tracking-wider">Meses Cons.</th>
                                     <th className="p-3 border-b text-center">CPA</th>
                                     <th className="p-3 border-b text-center">Meses</th>
-                                    <th className="p-3 border-b text-center">Situación</th>
+                                    <th className="p-3 border-b text-center">
+                                        <div className="flex items-center justify-center gap-1">
+                                            Situación
+                                            <MultiSelectFilter
+                                                title=""
+                                                options={situacionOptions}
+                                                selectedValues={selectedSituacion}
+                                                onChange={setSelectedSituacion}
+                                            />
+                                        </div>
+                                    </th>
                                     <th className="p-3 border-b text-center bg-gray-200 text-gray-800">Balance</th>
                                     <th className="p-3 border-b text-center bg-purple-50 text-purple-800 border-l border-purple-200 w-20">Estimar</th>
                                     <th className="p-3 border-b text-center bg-yellow-50 text-yellow-800 border-l border-yellow-200 w-16">Sale</th>
@@ -2437,10 +2470,10 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {redistributionData.map((item, index) => {
+                                {filteredRedistributionData.map((item, index) => {
                                     const showMicroredHeader = selectedMicrored.includes('ALL') &&
                                         !item.isWarehouse &&
-                                        (index === 0 || redistributionData[index - 1].microred !== item.microred || redistributionData[index - 1].isWarehouse);
+                                        (index === 0 || filteredRedistributionData[index - 1].microred !== item.microred || filteredRedistributionData[index - 1].isWarehouse);
 
                                     const newStock = item.stock - (item.transferQty || 0) + (item.receivedQty || 0) + (item.simulationQty || 0);
                                     const newMonths = item.cpa > 0 ? (newStock / item.cpa) : (newStock > 0 ? 999 : 0);
