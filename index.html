@@ -18,6 +18,33 @@
         font-family: 'Inter', sans-serif;
         background-color: #f3f4f6;
       }
+      
+      /* Global Scrollbar */
+      ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background-color: rgba(0, 0, 0, 0.03);
+        border-radius: 100px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+      }
+      *:hover::-webkit-scrollbar-thumb {
+        background-color: rgba(0, 0, 0, 0.12);
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(0, 0, 0, 0.25) !important;
+      }
+      
+      /* Firefox support */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 0, 0, 0.08) transparent;
+      }
     </style>
   <script type="importmap">
 {
