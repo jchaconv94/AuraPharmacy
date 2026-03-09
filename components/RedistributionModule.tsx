@@ -209,6 +209,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
     // --- UPLOAD CONFIRMATION MODAL ---
     const [isConfirmUploadModalOpen, setIsConfirmUploadModalOpen] = useState(false);
+    const [isConfirmImportModalOpen, setIsConfirmImportModalOpen] = useState(false);
     const [estSearchTerm, setEstSearchTerm] = useState('');
     const [isEstDropdownOpen, setIsEstDropdownOpen] = useState(false);
     const [mrSearchTerm, setMrSearchTerm] = useState('');
@@ -430,8 +431,12 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     const content = e.target?.result as string;
                     const importedData = JSON.parse(content);
 
-                    if (!importedData.localforage || !importedData.localforage.aura_records) {
+                    if (!importedData.localforage || !importedData.localforage.aura_records || !Array.isArray(importedData.localforage.aura_records)) {
                         throw new Error("Formato de archivo inválido");
+                    }
+
+                    if (importedData.localforage.aura_records.length === 0) {
+                        throw new Error("El archivo de respaldo está vacío (no contiene registros).");
                     }
 
                     // Restore localforage
@@ -450,23 +455,44 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         }
                     }
 
-                    toast.success("Sesión importada correctamente. Recargando...");
-                    
-                    // Reload the page to apply all changes cleanly
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1500);
+                    // Update state variables directly
+                    if (importedData.localforage.aura_records) setRecords(importedData.localforage.aura_records);
+                    if (importedData.localforage.aura_selectedMicrored) setSelectedMicrored(importedData.localforage.aura_selectedMicrored);
+                    if (importedData.localforage.aura_selectedEstablishment) setSelectedEstablishment(importedData.localforage.aura_selectedEstablishment);
+                    if (importedData.localforage.aura_selectedProductCode) setSelectedProductCode(importedData.localforage.aura_selectedProductCode);
+                    if (importedData.localforage.aura_selectedProductName) setSelectedProductName(importedData.localforage.aura_selectedProductName);
+                    if (importedData.localforage.aura_consolidationSelection) setConsolidationSelection(new Set(importedData.localforage.aura_consolidationSelection));
+                    if (importedData.localforage.aura_reviewedProducts) setReviewedProducts(new Set(importedData.localforage.aura_reviewedProducts));
+                    if (importedData.localforage.aura_transferList) setTransferList(importedData.localforage.aura_transferList);
+                    if (importedData.localforage.aura_simulationData) setSimulationData(importedData.localforage.aura_simulationData);
 
-                } catch (error) {
+                    if (importedData.localStorage) {
+                        if (importedData.localStorage.aura_productSearch !== undefined) setProductSearch(importedData.localStorage.aura_productSearch);
+                        if (importedData.localStorage.aura_statusFilter !== undefined) setStatusFilter(importedData.localStorage.aura_statusFilter);
+                        if (importedData.localStorage.aura_reviewFilter !== undefined) setReviewFilter(importedData.localStorage.aura_reviewFilter);
+                        if (importedData.localStorage.aura_tipoFilter !== undefined) setTipoFilter(importedData.localStorage.aura_tipoFilter);
+                        if (importedData.localStorage.aura_petFilter !== undefined) setPetFilter(importedData.localStorage.aura_petFilter);
+                        if (importedData.localStorage.aura_estFilter !== undefined) setEstFilter(importedData.localStorage.aura_estFilter);
+                    }
+
+                    toast.success("Sesión importada correctamente.");
+                    setLoading(false);
+
+                    // Reset the file input so the same file can be imported again
+                    if (importInputRef.current) {
+                        importInputRef.current.value = '';
+                    }
+
+                } catch (error: any) {
                     console.error("Error parsing imported session:", error);
-                    toast.error("Error al leer el archivo de respaldo");
+                    toast.error(error.message || "Error al leer el archivo de respaldo");
                     setLoading(false);
                 }
             };
             reader.readAsText(file);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error importing session:", error);
-            toast.error("Error al importar la sesión");
+            toast.error(error.message || "Error al importar la sesión");
             setLoading(false);
         }
         
@@ -1614,34 +1640,6 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* UPLOAD SECTION */}
             <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 transition-all hover:shadow-xl relative">
-                
-                {/* Export/Import Session Buttons */}
-                <div className="absolute top-4 right-4 flex flex-col sm:flex-row gap-2 z-10">
-                    <button 
-                        onClick={handleExportSession}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-indigo-600 rounded-lg text-xs font-bold transition-all shadow-sm"
-                        title="Exportar avance actual para continuar en otra PC"
-                    >
-                        <Download className="w-4 h-4" />
-                        Exportar Avance
-                    </button>
-                    <button 
-                        onClick={() => importInputRef.current?.click()}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-emerald-600 rounded-lg text-xs font-bold transition-all shadow-sm"
-                        title="Importar avance desde un archivo de respaldo"
-                    >
-                        <Upload className="w-4 h-4" />
-                        Importar Avance
-                    </button>
-                    <input 
-                        type="file" 
-                        ref={importInputRef} 
-                        accept=".json" 
-                        onChange={handleImportSession} 
-                        className="hidden" 
-                    />
-                </div>
-
                 <div className="flex flex-col items-center justify-center text-center mt-8 sm:mt-0">
 
                     {loading ? (
@@ -1672,6 +1670,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     ref={fileInputRef}
                                     accept=".xlsx, .xls"
                                     onChange={handleFileUpload}
+                                    onClick={(e) => e.stopPropagation()}
                                     className="hidden"
                                 />
                                 <div className="flex flex-col items-center gap-4 group-hover:scale-105 transition-transform duration-300">
@@ -1692,6 +1691,46 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     >
                                         Descargar Plantilla Estándar
                                     </button>
+
+                                    {/* Export/Import Session Buttons */}
+                                    <div className="flex flex-row gap-4 mt-6 z-10">
+                                        <button 
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                e.preventDefault();
+                                                handleExportSession(); 
+                                            }}
+                                            className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-sm font-bold transition-all shadow-sm"
+                                            title="Exportar avance actual para continuar en otra PC"
+                                        >
+                                            <Download className="w-4 h-4" />
+                                            Exportar Avance
+                                        </button>
+                                        <button 
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                e.preventDefault();
+                                                if (records.length > 0) {
+                                                    setIsConfirmImportModalOpen(true);
+                                                } else {
+                                                    importInputRef.current?.click(); 
+                                                }
+                                            }}
+                                            className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 rounded-lg text-sm font-bold transition-all shadow-sm"
+                                            title="Importar avance desde un archivo de respaldo"
+                                        >
+                                            <Upload className="w-4 h-4" />
+                                            Importar Avance
+                                        </button>
+                                        <input 
+                                            type="file" 
+                                            ref={importInputRef} 
+                                            accept=".json" 
+                                            onChange={handleImportSession} 
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="hidden" 
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -2785,6 +2824,40 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     Cancelar
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CONFIRMATION MODAL FOR IMPORT */}
+            {isConfirmImportModalOpen && renderModal(
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-gray-900 p-6 rounded-lg shadow-xl max-w-md w-full">
+                        <h2 className="text-xl font-bold text-white mb-4">Confirmar nueva carga</h2>
+                        <p className="text-gray-300 mb-6">
+                            Subir un nuevo archivo borrará todos los datos actuales de redistribución (registros, selecciones, transferencias, simulación). ¿Está seguro de continuar?
+                        </p>
+                        <div className="flex justify-end gap-4">
+                            <button
+                                onClick={() => {
+                                    setIsConfirmImportModalOpen(false);
+                                }}
+                                className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setIsConfirmImportModalOpen(false);
+                                    clearRedistributionData();
+                                    setTimeout(() => {
+                                        importInputRef.current?.click();
+                                    }, 100);
+                                }}
+                                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-500 font-bold"
+                            >
+                                Confirmar y Cargar
+                            </button>
                         </div>
                     </div>
                 </div>
