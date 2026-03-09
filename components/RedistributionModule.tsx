@@ -154,8 +154,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     // --- STATE INITIALIZATION ---
     const [isLoaded, setIsLoaded] = useState(false);
     const [records, setRecords] = useState<AvailabilityRecord[]>([]);
-    const [selectedMicrored, setSelectedMicrored] = useState<string>('');
-    const [selectedEstablishment, setSelectedEstablishment] = useState<string>('');
+    const [selectedMicrored, setSelectedMicrored] = useState<string[]>(['ALL']);
+    const [selectedEstablishment, setSelectedEstablishment] = useState<string[]>([]);
     const [selectedProductCode, setSelectedProductCode] = useState<string>('');
     const [selectedProductName, setSelectedProductName] = useState<string>('');
 
@@ -214,7 +214,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const [isEstDropdownOpen, setIsEstDropdownOpen] = useState(false);
     const [mrSearchTerm, setMrSearchTerm] = useState('');
     const [isMrDropdownOpen, setIsMrDropdownOpen] = useState(false);
+    const [isProductListMrDropdownOpen, setIsProductListMrDropdownOpen] = useState(false);
     const [isGlobalSearchModalOpen, setIsGlobalSearchModalOpen] = useState(false);
+    const [isProductListModalOpen, setIsProductListModalOpen] = useState(false);
     const [globalSearchTerm, setGlobalSearchTerm] = useState('');
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -226,7 +228,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             // Modal transicionó a cerrado
             setGlobalSearchTerm('');
 
-            if (selectedProductCode && selectedMicrored !== 'ALL') {
+            if (selectedProductCode && !selectedMicrored.includes('ALL')) {
                 setSimulationData(prev => {
                     const productData = prev[selectedProductCode];
                     if (!productData) return prev;
@@ -237,7 +239,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                     // Limpiar 'Estimar' de establecimientos extra-microred (los de "TODA LA RED")
                     records.forEach(r => {
-                        if (r.medCode === selectedProductCode && r.microred !== selectedMicrored) {
+                        if (r.medCode === selectedProductCode && !selectedMicrored.includes(r.microred)) {
                             if (newProductData[r.codEess]) {
                                 delete newProductData[r.codEess];
                                 hasChanges = true;
@@ -282,11 +284,23 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                 const savedRecords = await localforage.getItem<AvailabilityRecord[]>('aura_records');
                 if (savedRecords && Array.isArray(savedRecords)) setRecords(savedRecords);
 
-                const savedMicrored = await localforage.getItem<string>('aura_selectedMicrored');
-                if (savedMicrored) setSelectedMicrored(savedMicrored);
+                const savedMicrored = await localforage.getItem<any>('aura_selectedMicrored');
+                if (savedMicrored) {
+                    if (typeof savedMicrored === 'string') {
+                        setSelectedMicrored([savedMicrored]);
+                    } else if (Array.isArray(savedMicrored)) {
+                        setSelectedMicrored(savedMicrored);
+                    }
+                }
 
-                const savedEstablishment = await localforage.getItem<string>('aura_selectedEstablishment');
-                if (savedEstablishment) setSelectedEstablishment(savedEstablishment);
+                const savedEstablishment = await localforage.getItem<any>('aura_selectedEstablishment');
+                if (savedEstablishment) {
+                    if (typeof savedEstablishment === 'string') {
+                        setSelectedEstablishment([savedEstablishment]);
+                    } else if (Array.isArray(savedEstablishment)) {
+                        setSelectedEstablishment(savedEstablishment);
+                    }
+                }
 
                 const savedProductCode = await localforage.getItem<string>('aura_selectedProductCode');
                 if (savedProductCode) setSelectedProductCode(savedProductCode);
@@ -457,8 +471,20 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                     // Update state variables directly
                     if (importedData.localforage.aura_records) setRecords(importedData.localforage.aura_records);
-                    if (importedData.localforage.aura_selectedMicrored) setSelectedMicrored(importedData.localforage.aura_selectedMicrored);
-                    if (importedData.localforage.aura_selectedEstablishment) setSelectedEstablishment(importedData.localforage.aura_selectedEstablishment);
+                    if (importedData.localforage.aura_selectedMicrored) {
+                        if (typeof importedData.localforage.aura_selectedMicrored === 'string') {
+                            setSelectedMicrored([importedData.localforage.aura_selectedMicrored]);
+                        } else if (Array.isArray(importedData.localforage.aura_selectedMicrored)) {
+                            setSelectedMicrored(importedData.localforage.aura_selectedMicrored);
+                        }
+                    }
+                    if (importedData.localforage.aura_selectedEstablishment) {
+                        if (typeof importedData.localforage.aura_selectedEstablishment === 'string') {
+                            setSelectedEstablishment([importedData.localforage.aura_selectedEstablishment]);
+                        } else if (Array.isArray(importedData.localforage.aura_selectedEstablishment)) {
+                            setSelectedEstablishment(importedData.localforage.aura_selectedEstablishment);
+                        }
+                    }
                     if (importedData.localforage.aura_selectedProductCode) setSelectedProductCode(importedData.localforage.aura_selectedProductCode);
                     if (importedData.localforage.aura_selectedProductName) setSelectedProductName(importedData.localforage.aura_selectedProductName);
                     if (importedData.localforage.aura_consolidationSelection) setConsolidationSelection(new Set(importedData.localforage.aura_consolidationSelection));
@@ -502,8 +528,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
     const clearRedistributionData = () => {
         setRecords([]);
-        setSelectedMicrored('');
-        setSelectedEstablishment('');
+        setSelectedMicrored([]);
+        setSelectedEstablishment([]);
         setSelectedProductCode('');
         setSelectedProductName('');
         setConsolidationSelection(new Set());
@@ -806,14 +832,14 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     }, [records]);
 
     const productOptions = useMemo(() => {
-        if (!selectedMicrored) return [];
+        if (selectedMicrored.length === 0) return [];
 
         let filtered = records;
-        if (selectedMicrored !== 'ALL') {
-            filtered = filtered.filter(r => r.microred === selectedMicrored);
+        if (!selectedMicrored.includes('ALL')) {
+            filtered = filtered.filter(r => selectedMicrored.includes(r.microred));
         }
-        if (selectedEstablishment) {
-            filtered = filtered.filter(r => r.codEess === selectedEstablishment);
+        if (selectedEstablishment.length > 0) {
+            filtered = filtered.filter(r => selectedEstablishment.includes(r.codEess));
         }
 
         // Aggregate data by product code
@@ -924,8 +950,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     }, [productOptions, productSearch, statusFilter, reviewFilter, reviewedProducts, tipoFilter, petFilter, estFilter]);
 
     const microredStats = useMemo(() => {
-        if (!selectedMicrored) return null;
-        const mrRecords = selectedMicrored === 'ALL' ? records : records.filter(r => r.microred === selectedMicrored);
+        if (selectedMicrored.length === 0) return null;
+        const mrRecords = selectedMicrored.includes('ALL') ? records : records.filter(r => selectedMicrored.includes(r.microred));
         const establishments = new Set(mrRecords.map(r => r.codEess)).size;
         const totalItems = mrRecords.length;
         const uniqueProducts = new Set(mrRecords.map(r => r.medCode)).size;
@@ -933,18 +959,62 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     }, [selectedMicrored, records]);
 
     const establishmentOptions = useMemo(() => {
-        if (!selectedMicrored) return [];
-        const mrRecords = selectedMicrored === 'ALL' ? records : records.filter(r => r.microred === selectedMicrored);
+        if (selectedMicrored.length === 0) return [];
+        const mrRecords = selectedMicrored.includes('ALL') ? records : records.filter(r => selectedMicrored.includes(r.microred));
         const establishments = Array.from(new Map(mrRecords.map(r => [r.codEess, r.establishmentName])).entries())
             .map(([cod, name]) => ({ cod, name }))
             .sort((a, b) => a.name.localeCompare(b.name));
         return establishments;
     }, [records, selectedMicrored]);
 
-    // --- 3. REDISTRIBUTION LOGIC ---
+    const handleEstablishmentChange = (establishmentCod: string) => {
+        if (establishmentCod === 'ALL') {
+            setSelectedEstablishment([]);
+            return;
+        }
+        
+        let newSelection = [...selectedEstablishment];
+        
+        if (newSelection.includes(establishmentCod)) {
+            newSelection = newSelection.filter(e => e !== establishmentCod);
+        } else {
+            newSelection.push(establishmentCod);
+        }
+        
+        setSelectedEstablishment(newSelection);
+        setSelectedProductCode('');
+        setSelectedProductName('');
+        setProductSearch('');
+        setStatusFilter([]);
+        setReviewFilter([]);
+        setTipoFilter([]);
+        setPetFilter([]);
+        setEstFilter([]);
+    };
     const handleMicroredChange = (microred: string) => {
-        setSelectedMicrored(microred);
-        setSelectedEstablishment('');
+        if (microred === 'ALL') {
+            setSelectedMicrored(['ALL']);
+            setSelectedEstablishment([]);
+            return;
+        }
+        
+        let newSelection = [...selectedMicrored];
+        if (newSelection.includes('ALL')) {
+            newSelection = [];
+        }
+        
+        if (newSelection.includes(microred)) {
+            newSelection = newSelection.filter(m => m !== microred);
+        } else {
+            newSelection.push(microred);
+        }
+        
+        if (newSelection.length === 0) {
+            newSelection = ['ALL'];
+        }
+        
+        setSelectedMicrored(newSelection);
+        setSelectedEstablishment([]);
         setSelectedProductCode('');
         setSelectedProductName('');
         setProductSearch('');
@@ -996,11 +1066,11 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     };
 
     const baseRedistributionData = useMemo(() => {
-        if (!selectedProductCode || !selectedMicrored || records.length === 0) return [];
+        if (!selectedProductCode || selectedMicrored.length === 0 || records.length === 0) return [];
 
         const allEstablishments: { cod: string, name: string, microred: string }[] = Array.from(new Set(
             records
-                .filter(r => selectedMicrored === 'ALL' || r.microred === selectedMicrored)
+                .filter(r => selectedMicrored.includes('ALL') || selectedMicrored.includes(r.microred))
                 .map(r => JSON.stringify({ cod: r.codEess, name: r.establishmentName, microred: r.microred }))
         )).map(s => JSON.parse(s));
 
@@ -1017,8 +1087,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
         const productRecords = records.filter(r =>
             r.medCode === selectedProductCode && (
-                selectedMicrored === 'ALL' ||
-                r.microred === selectedMicrored
+                selectedMicrored.includes('ALL') ||
+                selectedMicrored.includes(r.microred)
             )
         );
 
@@ -1103,8 +1173,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             if (a.isWarehouse) return -1;
             if (b.isWarehouse) return 1;
 
-            // If ALL microreds are selected, group by Microred first
-            if (selectedMicrored === 'ALL') {
+            // If multiple microreds are selected, group by Microred first
+            if (selectedMicrored.includes('ALL') || selectedMicrored.length > 1) {
                 const microredA = String(a.microred || '');
                 const microredB = String(b.microred || '');
                 if (microredA !== microredB) {
@@ -1136,7 +1206,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         const productRecords = records.filter(r =>
             r.medCode === selectedProductCode &&
             r.stock > 0 &&
-            (selectedMicrored !== 'ALL' ? r.microred !== selectedMicrored : true)
+            (!selectedMicrored.includes('ALL') ? !selectedMicrored.includes(r.microred) : true)
         );
 
         const transfersForProduct = transferList.filter(t => t.productCode === selectedProductCode);
@@ -1539,7 +1609,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Distribución");
-        XLSX.writeFile(wb, `Lista_Distribucion_${selectedMicrored}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        const mrName = selectedMicrored.includes('ALL') ? 'Todas' : selectedMicrored.length === 1 ? selectedMicrored[0] : 'Varias';
+        XLSX.writeFile(wb, `Lista_Distribucion_${mrName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
     // --- 5. EXPORT FUNCTIONS ---
@@ -1605,7 +1676,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Productos Filtrados");
         
-        const fileName = `Productos_${selectedMicrored || 'Todas'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        const mrName = selectedMicrored.includes('ALL') ? 'Todas' : selectedMicrored.length === 1 ? selectedMicrored[0] : 'Varias';
+        const fileName = `Productos_${mrName}_${new Date().toISOString().split('T')[0]}.xlsx`;
         XLSX.writeFile(wb, fileName);
         toast.success('Listado descargado correctamente');
     };
@@ -1621,6 +1693,342 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             </div>
         );
     }
+
+    const renderProductListTable = (showMicroredFilter: boolean = false) => (
+        <>
+            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center gap-4">
+                <div className="flex items-center gap-2.5 shrink-0">
+                    <div className="p-1.5 bg-indigo-50 rounded-lg">
+                        <Package className="h-4 w-4 text-indigo-600" />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-xs font-bold text-gray-800 leading-tight">Lista de Productos</span>
+                        <span className="text-[10px] text-gray-400 font-medium uppercase tracking-tighter">{filteredProductOptions.length} disponibles</span>
+                    </div>
+                </div>
+
+                {/* Spacer to push filters to the right */}
+                <div className="flex-1" />
+
+                {showMicroredFilter && (
+                    /* Microred Filter (Searchable Dropdown) */
+                    <div className="flex-1 max-w-[240px] flex items-center gap-2">
+                        <div className="relative flex-1 group">
+                            <div
+                                onClick={() => setIsProductListMrDropdownOpen(!isProductListMrDropdownOpen)}
+                                className={`w-full pl-4 pr-10 py-2 text-[11px] bg-white border ${isProductListMrDropdownOpen ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200'} rounded-xl text-gray-900 font-bold transition-all cursor-pointer shadow-sm flex items-center justify-between min-h-[34px]`}
+                            >
+                                <span className="truncate">
+                                    {selectedMicrored.includes('ALL') 
+                                        ? 'TODAS LAS MICROREDES' 
+                                        : selectedMicrored.length > 0 
+                                            ? selectedMicrored.length === 1 ? selectedMicrored[0] : `${selectedMicrored.length} seleccionadas`
+                                            : '-- Seleccione Microred --'}
+                                </span>
+                                <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${isProductListMrDropdownOpen ? 'rotate-180' : ''}`} />
+                            </div>
+
+                            {isProductListMrDropdownOpen && (
+                                <>
+                                    <div
+                                        className="fixed inset-0 z-10"
+                                        onClick={() => setIsProductListMrDropdownOpen(false)}
+                                    />
+                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <div className="p-2 border-b border-gray-100 bg-gray-50">
+                                            <div className="relative">
+                                                <Search className="h-3 w-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                <input
+                                                    type="text"
+                                                    autoFocus
+                                                    placeholder="Buscar microred..."
+                                                    className="w-full pl-8 pr-3 py-1.5 text-[10px] bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                                    value={mrSearchTerm}
+                                                    onChange={(e) => setMrSearchTerm(e.target.value)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="max-h-[200px] overflow-y-auto py-1 custom-scrollbar">
+                                            <button
+                                                onClick={() => {
+                                                    handleMicroredChange('ALL');
+                                                }}
+                                                className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored.includes('ALL') ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
+                                            >
+                                                <Building2 className="h-3 w-3 opacity-50" />
+                                                TODAS LAS MICROREDES
+                                            </button>
+                                            {microredOptions
+                                                .filter(mr => mr.toLowerCase().includes(mrSearchTerm.toLowerCase()))
+                                                .map(mr => (
+                                                    <button
+                                                        key={mr}
+                                                        onClick={() => {
+                                                            handleMicroredChange(mr);
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored.includes(mr) ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
+                                                    >
+                                                        <div className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${selectedMicrored.includes(mr) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'}`}>
+                                                            {selectedMicrored.includes(mr) && <Check className="h-2 w-2 text-white" />}
+                                                        </div>
+                                                        <span className="truncate">{mr}</span>
+                                                    </button>
+                                                ))
+                                            }
+                                            {microredOptions.filter(mr => mr.toLowerCase().includes(mrSearchTerm.toLowerCase())).length === 0 && (
+                                                <div className="px-3 py-4 text-center text-[10px] text-gray-400 italic">
+                                                    No se encontraron resultados
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Establishment Filter (Searchable Dropdown) */}
+                <div className="flex-1 max-w-[320px] flex items-center gap-2">
+                    <div className="relative flex-1 group">
+                        <div
+                            onClick={() => !(selectedMicrored.length === 0) && setIsEstDropdownOpen(!isEstDropdownOpen)}
+                            className={`w-full pl-4 pr-10 py-2 text-[11px] bg-white border ${isEstDropdownOpen ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200'} rounded-xl text-gray-900 font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-between min-h-[34px] ${selectedMicrored.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            <span className="truncate">
+                                {selectedEstablishment.length === 0
+                                    ? '-- Todos los Establecimientos --'
+                                    : selectedEstablishment.length === 1
+                                        ? establishmentOptions.find(e => e.cod === selectedEstablishment[0])?.name
+                                        : `${selectedEstablishment.length} seleccionados`}
+                            </span>
+                            <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${isEstDropdownOpen ? 'rotate-180' : ''}`} />
+                        </div>
+
+                        {isEstDropdownOpen && (
+                            <>
+                                <div
+                                    className="fixed inset-0 z-10"
+                                    onClick={() => setIsEstDropdownOpen(false)}
+                                />
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="p-2 border-b border-gray-100 bg-gray-50">
+                                        <div className="relative">
+                                            <Search className="h-3 w-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                placeholder="Buscar establecimiento..."
+                                                className="w-full pl-8 pr-3 py-1.5 text-[10px] bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                                value={estSearchTerm}
+                                                onChange={(e) => setEstSearchTerm(e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="max-h-[200px] overflow-y-auto py-1 custom-scrollbar">
+                                        <button
+                                            onClick={() => {
+                                                handleEstablishmentChange('ALL');
+                                            }}
+                                            className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedEstablishment.length === 0 ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
+                                        >
+                                            <Building2 className="h-3 w-3 opacity-50" />
+                                            -- Todos los Establecimientos --
+                                        </button>
+                                        {establishmentOptions
+                                            .filter(e => e.name.toLowerCase().includes(estSearchTerm.toLowerCase()))
+                                            .map(est => (
+                                                <button
+                                                    key={est.cod}
+                                                    onClick={() => {
+                                                        handleEstablishmentChange(est.cod);
+                                                    }}
+                                                    className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedEstablishment.includes(est.cod) ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
+                                                >
+                                                    <div className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${selectedEstablishment.includes(est.cod) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'}`}>
+                                                        {selectedEstablishment.includes(est.cod) && <Check className="h-2 w-2 text-white" />}
+                                                    </div>
+                                                    <span className="truncate">{est.name}</span>
+                                                </button>
+                                            ))
+                                        }
+                                        {establishmentOptions.filter(e => e.name.toLowerCase().includes(estSearchTerm.toLowerCase())).length === 0 && (
+                                            <div className="px-3 py-4 text-center text-[10px] text-gray-400 italic">
+                                                No se encontraron resultados
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                    {selectedEstablishment.length > 0 && (
+                        <button
+                            onClick={() => handleEstablishmentChange('ALL')}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shrink-0 border border-transparent hover:border-red-100"
+                            title="Limpiar filtro"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
+
+                {/* Search Input */}
+                <div className="flex-1 max-w-xs relative group">
+                    <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                    <input
+                        type="text"
+                        placeholder="Buscar producto..."
+                        value={productSearch}
+                        onChange={(e) => setProductSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg text-gray-700 font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                    />
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-xs text-gray-500 font-normal">
+                        {reviewedProducts.size} rev.
+                    </div>
+                    <button
+                        onClick={handleDownloadFilteredProducts}
+                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100 flex items-center gap-1"
+                        title="Descargar listado filtrado"
+                    >
+                        <Download className="h-4 w-4" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">Excel</span>
+                    </button>
+                </div>
+            </div>
+            <div className="overflow-y-auto flex-1 p-0 custom-scrollbar">
+                {productOptions.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-gray-400 text-sm italic p-4">
+                        Seleccione una Microred para ver los productos
+                    </div>
+                ) : (
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50/80 text-slate-500 font-bold text-[10px] uppercase tracking-widest sticky top-0 z-10 backdrop-blur-sm border-b border-slate-100">
+                            <tr>
+                                <th className="p-0 align-middle w-16 text-center">
+                                    <MultiSelectFilter
+                                        title="Rev."
+                                        options={[
+                                            { value: 'REVIEWED', label: 'Revisados' },
+                                            { value: 'PENDING', label: 'Pendientes' }
+                                        ]}
+                                        selectedValues={reviewFilter}
+                                        onChange={setReviewFilter}
+                                    />
+                                </th>
+                                <th className="p-2 w-20 text-left align-middle">Código</th>
+                                <th className="p-2 text-left align-middle">Descripción</th>
+                                <th className="p-0 align-middle w-16 text-center">
+                                    <MultiSelectFilter
+                                        title="TIPO"
+                                        options={Array.from(new Set(productOptions.map(p => String(p.type || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
+                                        selectedValues={tipoFilter}
+                                        onChange={setTipoFilter}
+                                    />
+                                </th>
+                                <th className="p-0 align-middle w-14 text-center">
+                                    <MultiSelectFilter
+                                        title="PET"
+                                        options={Array.from(new Set(productOptions.map(p => String(p.pet || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
+                                        selectedValues={petFilter}
+                                        onChange={setPetFilter}
+                                    />
+                                </th>
+                                <th className="p-0 align-middle w-14 text-center">
+                                    <MultiSelectFilter
+                                        title="EST"
+                                        options={Array.from(new Set(productOptions.map(p => String(p.est || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
+                                        selectedValues={estFilter}
+                                        onChange={setEstFilter}
+                                    />
+                                </th>
+                                <th className="p-2 w-16 text-center text-blue-700 bg-blue-50/50 align-middle">STOCK</th>
+                                <th className="p-2 w-16 text-center align-middle">CPA</th>
+                                <th className="p-2 w-16 text-center align-middle">Meses</th>
+                                <th className="p-0 align-middle w-32 text-center">
+                                    <MultiSelectFilter
+                                        title="Situación"
+                                        options={[
+                                            { value: 'NormoStock', label: 'NormoStock' },
+                                            { value: 'SobreStock', label: 'SobreStock' },
+                                            { value: 'SubStock', label: 'SubStock' },
+                                            { value: 'Desabastecido', label: 'Desabastecido' },
+                                            { value: 'Sin Rotación', label: 'Sin Rotación' }
+                                        ]}
+                                        selectedValues={statusFilter}
+                                        onChange={setStatusFilter}
+                                    />
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {filteredProductOptions.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="p-4 text-center text-gray-400 italic text-xs">
+                                        No se encontraron productos
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredProductOptions.map((prod) => {
+                                    const isSelected = selectedProductCode === prod.code;
+                                    const isReviewed = reviewedProducts.has(prod.code);
+
+                                    let statusColor = "bg-slate-100 text-slate-600";
+                                    if (prod.status === "NormoStock") statusColor = "bg-emerald-50 text-emerald-700 border-emerald-100";
+                                    if (prod.status === "SobreStock") statusColor = "bg-indigo-50 text-indigo-700 border-indigo-100";
+                                    if (prod.status === "SubStock") statusColor = "bg-amber-50 text-amber-700 border-amber-100";
+                                    if (prod.status === "Desabastecido") statusColor = "bg-rose-50 text-rose-700 border-rose-100";
+                                    if (prod.status === "Sin Rotación") statusColor = "bg-slate-200 text-slate-700 border-slate-300";
+
+                                    return (
+                                        <tr
+                                            key={prod.code}
+                                            className={`
+                                        cursor-pointer transition-all duration-200 border-b border-slate-50
+                                        ${isSelected ? 'bg-indigo-50/80 text-indigo-900' : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'}
+                                    `}
+                                            onClick={() => {
+                                                handleProductChange(prod.code);
+                                                if (isProductListModalOpen) {
+                                                    setIsProductListModalOpen(false);
+                                                }
+                                            }}
+                                        >
+                                            <td className="p-2 text-center" onClick={(e) => { e.stopPropagation(); toggleProductReview(prod.code); }}>
+                                                {isReviewed ? (
+                                                    <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" />
+                                                ) : (
+                                                    <Circle className="h-4 w-4 text-slate-200 mx-auto hover:text-slate-400 transition-colors" />
+                                                )}
+                                            </td>
+                                            <td className="p-2 font-mono text-[11px] font-bold text-slate-500">{prod.code}</td>
+                                            <td className="p-2 text-[11px] font-medium text-slate-800 truncate max-w-[200px]" title={prod.name}>{prod.name}</td>
+                                            <td className="p-2 text-center text-[10px] text-slate-500 font-mono">{prod.type}</td>
+                                            <td className="p-2 text-center text-[10px] text-slate-500 font-bold">{prod.pet}</td>
+                                            <td className="p-2 text-center text-[10px] text-slate-500 font-bold">{prod.est}</td>
+                                            <td className="p-2 text-center text-[11px] font-mono font-bold text-blue-700 bg-blue-50/30">{prod.totalStock}</td>
+                                            <td className="p-2 text-center text-[11px] font-mono">{prod.cpa.toFixed(1)}</td>
+                                            <td className="p-2 text-center text-[11px] font-mono font-bold">{prod.months === 999 ? '∞' : prod.months.toFixed(1)}</td>
+                                            <td className="p-2 text-center">
+                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter border ${statusColor}`}>
+                                                    {prod.status}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+        </>
+    );
 
     return (
         <div className="p-6 w-full max-w-[98%] mx-auto space-y-6 animate-in fade-in duration-300">
@@ -1808,7 +2216,11 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 className={`w-full pl-3 pr-10 py-2 bg-gray-50 border ${isMrDropdownOpen ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200'} rounded-xl text-sm text-gray-900 font-bold transition-all cursor-pointer flex items-center justify-between min-h-[38px]`}
                             >
                                 <span className="truncate">
-                                    {selectedMicrored === 'ALL' ? 'TODAS LAS MICROREDES' : (selectedMicrored || '-- Seleccione Microred --')}
+                                    {selectedMicrored.includes('ALL') 
+                                        ? 'TODAS LAS MICROREDES' 
+                                        : selectedMicrored.length > 0 
+                                            ? selectedMicrored.length === 1 ? selectedMicrored[0] : `${selectedMicrored.length} seleccionadas`
+                                            : '-- Seleccione Microred --'}
                                 </span>
                                 <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isMrDropdownOpen ? 'rotate-180' : ''}`} />
                             </div>
@@ -1835,10 +2247,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             <button
                                                 onClick={() => {
                                                     handleMicroredChange('ALL');
-                                                    setIsMrDropdownOpen(false);
-                                                    setMrSearchTerm('');
                                                 }}
-                                                className={`w-full text-left px-3 py-2 text-[11px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored === 'ALL' ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
+                                                className={`w-full text-left px-3 py-2 text-[11px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored.includes('ALL') ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
                                             >
                                                 <Building2 className="h-3.5 w-3.5 opacity-50" />
                                                 TODAS LAS MICROREDES
@@ -1850,12 +2260,12 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                         key={mr}
                                                         onClick={() => {
                                                             handleMicroredChange(mr);
-                                                            setIsMrDropdownOpen(false);
-                                                            setMrSearchTerm('');
                                                         }}
-                                                        className={`w-full text-left px-3 py-2 text-[11px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored === mr ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
+                                                        className={`w-full text-left px-3 py-2 text-[11px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored.includes(mr) ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
                                                     >
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+                                                        <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${selectedMicrored.includes(mr) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'}`}>
+                                                            {selectedMicrored.includes(mr) && <Check className="h-2.5 w-2.5 text-white" />}
+                                                        </div>
                                                         <span className="truncate">{mr}</span>
                                                     </button>
                                                 ))
@@ -1868,7 +2278,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                         {/* Stats Summary */}
                         <div className="flex-1 bg-gray-50/50 rounded-xl p-3 border border-gray-100 flex flex-col justify-center gap-2">
-                            {selectedMicrored && microredStats ? (
+                            {selectedMicrored.length > 0 && microredStats ? (
                                 <>
                                     <div className="flex justify-between items-center text-xs">
                                         <span className="text-gray-500 font-medium">Establecimientos:</span>
@@ -1893,250 +2303,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                     {/* PRODUCT REVIEW TABLE (REPLACES DROPDOWN) */}
                     <div className="md:col-span-8 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[220px] relative z-20">
-                        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center gap-4">
-                            <div className="flex items-center gap-2.5 shrink-0">
-                                <div className="p-1.5 bg-indigo-50 rounded-lg">
-                                    <Package className="h-4 w-4 text-indigo-600" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-gray-800 leading-tight">Lista de Productos</span>
-                                    <span className="text-[10px] text-gray-400 font-medium uppercase tracking-tighter">{filteredProductOptions.length} disponibles</span>
-                                </div>
-                            </div>
-
-                            {/* Establishment Filter (Searchable Dropdown) */}
-                            <div className="flex-1 max-w-[320px] flex items-center gap-2">
-                                <div className="relative flex-1 group">
-                                    <div
-                                        onClick={() => !(!selectedMicrored) && setIsEstDropdownOpen(!isEstDropdownOpen)}
-                                        className={`w-full pl-4 pr-10 py-2 text-[11px] bg-white border ${isEstDropdownOpen ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200'} rounded-xl text-gray-900 font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-between min-h-[34px] ${!selectedMicrored ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        <span className="truncate">
-                                            {selectedEstablishment
-                                                ? establishmentOptions.find(e => e.cod === selectedEstablishment)?.name
-                                                : '-- Todos los Establecimientos --'}
-                                        </span>
-                                        <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${isEstDropdownOpen ? 'rotate-180' : ''}`} />
-                                    </div>
-
-                                    {isEstDropdownOpen && (
-                                        <>
-                                            <div
-                                                className="fixed inset-0 z-10"
-                                                onClick={() => setIsEstDropdownOpen(false)}
-                                            />
-                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-                                                <div className="p-2 border-b border-gray-100 bg-gray-50">
-                                                    <div className="relative">
-                                                        <Search className="h-3 w-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                                                        <input
-                                                            type="text"
-                                                            autoFocus
-                                                            placeholder="Buscar establecimiento..."
-                                                            className="w-full pl-8 pr-3 py-1.5 text-[10px] bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                                            value={estSearchTerm}
-                                                            onChange={(e) => setEstSearchTerm(e.target.value)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="max-h-[200px] overflow-y-auto py-1 custom-scrollbar">
-                                                    <button
-                                                        onClick={() => {
-                                                            setSelectedEstablishment('');
-                                                            setIsEstDropdownOpen(false);
-                                                            setEstSearchTerm('');
-                                                        }}
-                                                        className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${!selectedEstablishment ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
-                                                    >
-                                                        <Building2 className="h-3 w-3 opacity-50" />
-                                                        -- Todos los Establecimientos --
-                                                    </button>
-                                                    {establishmentOptions
-                                                        .filter(e => e.name.toLowerCase().includes(estSearchTerm.toLowerCase()))
-                                                        .map(est => (
-                                                            <button
-                                                                key={est.cod}
-                                                                onClick={() => {
-                                                                    setSelectedEstablishment(est.cod);
-                                                                    setIsEstDropdownOpen(false);
-                                                                    setEstSearchTerm('');
-                                                                }}
-                                                                className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedEstablishment === est.cod ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
-                                                            >
-                                                                <div className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
-                                                                <span className="truncate">{est.name}</span>
-                                                            </button>
-                                                        ))
-                                                    }
-                                                    {establishmentOptions.filter(e => e.name.toLowerCase().includes(estSearchTerm.toLowerCase())).length === 0 && (
-                                                        <div className="px-3 py-4 text-center text-[10px] text-gray-400 italic">
-                                                            No se encontraron resultados
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                                {selectedEstablishment && (
-                                    <button
-                                        onClick={() => setSelectedEstablishment('')}
-                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shrink-0 border border-transparent hover:border-red-100"
-                                        title="Limpiar filtro"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Search Input */}
-                            <div className="flex-1 max-w-xs relative group">
-                                <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
-                                <input
-                                    type="text"
-                                    placeholder="Buscar producto..."
-                                    value={productSearch}
-                                    onChange={(e) => setProductSearch(e.target.value)}
-                                    className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg text-gray-700 font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all shadow-sm"
-                                />
-                            </div>
-
-                            <div className="flex items-center gap-3 shrink-0">
-                                <div className="text-xs text-gray-500 font-normal">
-                                    {reviewedProducts.size} rev.
-                                </div>
-                                <button
-                                    onClick={handleDownloadFilteredProducts}
-                                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100 flex items-center gap-1"
-                                    title="Descargar listado filtrado"
-                                >
-                                    <Download className="h-4 w-4" />
-                                    <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">Excel</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div className="overflow-y-auto flex-1 p-0 custom-scrollbar">
-                            {productOptions.length === 0 ? (
-                                <div className="flex items-center justify-center h-full text-gray-400 text-sm italic p-4">
-                                    Seleccione una Microred para ver los productos
-                                </div>
-                            ) : (
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-50/80 text-slate-500 font-bold text-[10px] uppercase tracking-widest sticky top-0 z-10 backdrop-blur-sm border-b border-slate-100">
-                                        <tr>
-                                            <th className="p-0 align-middle w-16 text-center">
-                                                <MultiSelectFilter
-                                                    title="Rev."
-                                                    options={[
-                                                        { value: 'REVIEWED', label: 'Revisados' },
-                                                        { value: 'PENDING', label: 'Pendientes' }
-                                                    ]}
-                                                    selectedValues={reviewFilter}
-                                                    onChange={setReviewFilter}
-                                                />
-                                            </th>
-                                            <th className="p-2 w-20 text-left align-middle">Código</th>
-                                            <th className="p-2 text-left align-middle">Descripción</th>
-                                            <th className="p-0 align-middle w-16 text-center">
-                                                <MultiSelectFilter
-                                                    title="TIPO"
-                                                    options={Array.from(new Set(productOptions.map(p => String(p.type || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
-                                                    selectedValues={tipoFilter}
-                                                    onChange={setTipoFilter}
-                                                />
-                                            </th>
-                                            <th className="p-0 align-middle w-14 text-center">
-                                                <MultiSelectFilter
-                                                    title="PET"
-                                                    options={Array.from(new Set(productOptions.map(p => String(p.pet || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
-                                                    selectedValues={petFilter}
-                                                    onChange={setPetFilter}
-                                                />
-                                            </th>
-                                            <th className="p-0 align-middle w-14 text-center">
-                                                <MultiSelectFilter
-                                                    title="EST"
-                                                    options={Array.from(new Set(productOptions.map(p => String(p.est || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
-                                                    selectedValues={estFilter}
-                                                    onChange={setEstFilter}
-                                                />
-                                            </th>
-                                            <th className="p-2 w-16 text-center text-blue-700 bg-blue-50/50 align-middle">STOCK</th>
-                                            <th className="p-2 w-16 text-center align-middle">CPA</th>
-                                            <th className="p-2 w-16 text-center align-middle">Meses</th>
-                                            <th className="p-0 align-middle w-32 text-center">
-                                                <MultiSelectFilter
-                                                    title="Situación"
-                                                    options={[
-                                                        { value: 'NormoStock', label: 'NormoStock' },
-                                                        { value: 'SobreStock', label: 'SobreStock' },
-                                                        { value: 'SubStock', label: 'SubStock' },
-                                                        { value: 'Desabastecido', label: 'Desabastecido' },
-                                                        { value: 'Sin Rotación', label: 'Sin Rotación' }
-                                                    ]}
-                                                    selectedValues={statusFilter}
-                                                    onChange={setStatusFilter}
-                                                />
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {filteredProductOptions.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={6} className="p-4 text-center text-gray-400 italic text-xs">
-                                                    No se encontraron productos
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            filteredProductOptions.map((prod) => {
-                                                const isSelected = selectedProductCode === prod.code;
-                                                const isReviewed = reviewedProducts.has(prod.code);
-
-                                                let statusColor = "bg-slate-100 text-slate-600";
-                                                if (prod.status === "NormoStock") statusColor = "bg-emerald-50 text-emerald-700 border-emerald-100";
-                                                if (prod.status === "SobreStock") statusColor = "bg-indigo-50 text-indigo-700 border-indigo-100";
-                                                if (prod.status === "SubStock") statusColor = "bg-amber-50 text-amber-700 border-amber-100";
-                                                if (prod.status === "Desabastecido") statusColor = "bg-rose-50 text-rose-700 border-rose-100";
-                                                if (prod.status === "Sin Rotación") statusColor = "bg-slate-200 text-slate-700 border-slate-300";
-
-                                                return (
-                                                    <tr
-                                                        key={prod.code}
-                                                        className={`
-                                                    cursor-pointer transition-all duration-200 border-b border-slate-50
-                                                    ${isSelected ? 'bg-indigo-50/80 text-indigo-900' : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'}
-                                                `}
-                                                        onClick={() => handleProductChange(prod.code)}
-                                                    >
-                                                        <td className="p-2 text-center" onClick={(e) => { e.stopPropagation(); toggleProductReview(prod.code); }}>
-                                                            {isReviewed ? (
-                                                                <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" />
-                                                            ) : (
-                                                                <Circle className="h-4 w-4 text-slate-200 mx-auto hover:text-slate-400 transition-colors" />
-                                                            )}
-                                                        </td>
-                                                        <td className="p-2 font-mono text-[11px] font-bold text-slate-500">{prod.code}</td>
-                                                        <td className="p-2 text-[11px] font-medium text-slate-800 truncate max-w-[200px]" title={prod.name}>{prod.name}</td>
-                                                        <td className="p-2 text-center text-[10px] text-slate-500 font-mono">{prod.type}</td>
-                                                        <td className="p-2 text-center text-[10px] text-slate-500 font-bold">{prod.pet}</td>
-                                                        <td className="p-2 text-center text-[10px] text-slate-500 font-bold">{prod.est}</td>
-                                                        <td className="p-2 text-center text-[11px] font-mono font-bold text-blue-700 bg-blue-50/30">{prod.totalStock}</td>
-                                                        <td className="p-2 text-center text-[11px] font-mono">{prod.cpa.toFixed(1)}</td>
-                                                        <td className="p-2 text-center text-[11px] font-mono font-bold">{prod.months === 999 ? '∞' : prod.months.toFixed(1)}</td>
-                                                        <td className="p-2 text-center">
-                                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter border ${statusColor}`}>
-                                                                {prod.status}
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })
-                                        )}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
+                        {renderProductListTable(false)}
                     </div>
                 </div>
             )}
@@ -2200,7 +2367,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                             )}
 
                             {/* Global Search Button - Only show if source is selected and not in 'ALL' view */}
-                            {quickTransferSource && selectedMicrored !== 'ALL' && (
+                            {quickTransferSource && !selectedMicrored.includes('ALL') && (
                                 <button
                                     onClick={() => setIsGlobalSearchModalOpen(true)}
                                     className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white border border-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm animate-in zoom-in-95 duration-200"
@@ -2224,6 +2391,16 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     </span>
                                 )}
                             </button>
+
+                            {isFullscreen && (
+                                <button
+                                    onClick={() => setIsProductListModalOpen(true)}
+                                    className="flex items-center justify-center p-1.5 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 transition-colors border border-indigo-300"
+                                    title="Buscar producto"
+                                >
+                                    <Search className="h-4 w-4" />
+                                </button>
+                            )}
 
                             <button
                                 onClick={toggleFullscreen}
@@ -2261,7 +2438,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {redistributionData.map((item, index) => {
-                                    const showMicroredHeader = selectedMicrored === 'ALL' &&
+                                    const showMicroredHeader = selectedMicrored.includes('ALL') &&
                                         !item.isWarehouse &&
                                         (index === 0 || redistributionData[index - 1].microred !== item.microred || redistributionData[index - 1].isWarehouse);
 
@@ -2286,7 +2463,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     // Check if code ends with Fxx where xx > 01
                                     const isSecondary = /F\d{2}$/.test(String(item.codEess || '')) && !String(item.codEess || '').endsWith('F01');
 
-                                    const isExternal = selectedMicrored !== 'ALL' && item.microred !== selectedMicrored && !item.isWarehouse;
+                                    const isExternal = !selectedMicrored.includes('ALL') && !selectedMicrored.includes(item.microred || '') && !item.isWarehouse;
                                     const isSelected = quickTransferSource?.codEess === item.codEess;
 
                                     const isPrincipal = String(item.codEess || '').endsWith('F01') && !item.isWarehouse;
@@ -3085,6 +3262,44 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         <div className="p-4 bg-gray-50 border-t border-gray-200 flex justify-end shrink-0">
                             <button
                                 onClick={() => setIsGlobalSearchModalOpen(false)}
+                                className="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PRODUCT LIST MODAL */}
+            {isProductListModalOpen && renderModal(
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[80] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95%] overflow-hidden border border-gray-200 flex flex-col max-h-[85vh]">
+                        <div className="bg-indigo-900 text-white p-5 flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-indigo-800 rounded-lg">
+                                    <Package className="h-5 w-5 text-indigo-300" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg leading-tight">LISTA DE PRODUCTOS</h3>
+                                    <p className="text-xs text-indigo-300 font-medium">Seleccione un producto para ver su redistribución</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsProductListModalOpen(false)}
+                                className="p-2 text-indigo-300 hover:text-white hover:bg-indigo-800 rounded-xl transition-all"
+                            >
+                                <X className="h-6 w-6" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-hidden flex flex-col bg-gray-50/50 relative">
+                            {renderProductListTable(true)}
+                        </div>
+
+                        <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end shrink-0">
+                            <button
+                                onClick={() => setIsProductListModalOpen(false)}
                                 className="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition-colors"
                             >
                                 Cerrar
