@@ -360,6 +360,120 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     }, [simulationData, isLoaded]);
 
     // --- 1. FILE UPLOAD ---
+    const importInputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleExportSession = async () => {
+        try {
+            setLoading(true);
+            const exportData: any = {
+                version: "1.0",
+                timestamp: new Date().toISOString(),
+                localforage: {},
+                localStorage: {}
+            };
+
+            // Get localforage data
+            exportData.localforage.aura_records = await localforage.getItem('aura_records');
+            exportData.localforage.aura_selectedMicrored = await localforage.getItem('aura_selectedMicrored');
+            exportData.localforage.aura_selectedEstablishment = await localforage.getItem('aura_selectedEstablishment');
+            exportData.localforage.aura_selectedProductCode = await localforage.getItem('aura_selectedProductCode');
+            exportData.localforage.aura_selectedProductName = await localforage.getItem('aura_selectedProductName');
+            exportData.localforage.aura_consolidationSelection = await localforage.getItem('aura_consolidationSelection');
+            exportData.localforage.aura_reviewedProducts = await localforage.getItem('aura_reviewedProducts');
+            exportData.localforage.aura_transferList = await localforage.getItem('aura_transferList');
+            exportData.localforage.aura_simulationData = await localforage.getItem('aura_simulationData');
+
+            // Get localStorage data
+            const lsKeys = [
+                'aura_productSearch',
+                'aura_statusFilter',
+                'aura_reviewFilter',
+                'aura_tipoFilter',
+                'aura_petFilter',
+                'aura_estFilter'
+            ];
+            
+            lsKeys.forEach(key => {
+                const val = window.localStorage.getItem(key);
+                if (val) {
+                    exportData.localStorage[key] = JSON.parse(val);
+                }
+            });
+
+            // Create and download file
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `Aura_Respaldo_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            
+            toast.success("Sesión exportada correctamente");
+        } catch (error) {
+            console.error("Error exporting session:", error);
+            toast.error("Error al exportar la sesión");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleImportSession = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setLoading(true);
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const content = e.target?.result as string;
+                    const importedData = JSON.parse(content);
+
+                    if (!importedData.localforage || !importedData.localforage.aura_records) {
+                        throw new Error("Formato de archivo inválido");
+                    }
+
+                    // Restore localforage
+                    for (const [key, value] of Object.entries(importedData.localforage)) {
+                        if (value !== undefined && value !== null) {
+                            await localforage.setItem(key, value);
+                        } else {
+                            await localforage.removeItem(key);
+                        }
+                    }
+
+                    // Restore localStorage
+                    if (importedData.localStorage) {
+                        for (const [key, value] of Object.entries(importedData.localStorage)) {
+                            window.localStorage.setItem(key, JSON.stringify(value));
+                        }
+                    }
+
+                    toast.success("Sesión importada correctamente. Recargando...");
+                    
+                    // Reload the page to apply all changes cleanly
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+
+                } catch (error) {
+                    console.error("Error parsing imported session:", error);
+                    toast.error("Error al leer el archivo de respaldo");
+                    setLoading(false);
+                }
+            };
+            reader.readAsText(file);
+        } catch (error) {
+            console.error("Error importing session:", error);
+            toast.error("Error al importar la sesión");
+            setLoading(false);
+        }
+        
+        // Reset input
+        if (importInputRef.current) importInputRef.current.value = '';
+    };
+
     const clearRedistributionData = () => {
         setRecords([]);
         setSelectedMicrored('');
@@ -1499,8 +1613,36 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             </div>
 
             {/* UPLOAD SECTION */}
-            <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 transition-all hover:shadow-xl">
-                <div className="flex flex-col items-center justify-center text-center">
+            <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 transition-all hover:shadow-xl relative">
+                
+                {/* Export/Import Session Buttons */}
+                <div className="absolute top-4 right-4 flex flex-col sm:flex-row gap-2 z-10">
+                    <button 
+                        onClick={handleExportSession}
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-indigo-600 rounded-lg text-xs font-bold transition-all shadow-sm"
+                        title="Exportar avance actual para continuar en otra PC"
+                    >
+                        <Download className="w-4 h-4" />
+                        Exportar Avance
+                    </button>
+                    <button 
+                        onClick={() => importInputRef.current?.click()}
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-emerald-600 rounded-lg text-xs font-bold transition-all shadow-sm"
+                        title="Importar avance desde un archivo de respaldo"
+                    >
+                        <Upload className="w-4 h-4" />
+                        Importar Avance
+                    </button>
+                    <input 
+                        type="file" 
+                        ref={importInputRef} 
+                        accept=".json" 
+                        onChange={handleImportSession} 
+                        className="hidden" 
+                    />
+                </div>
+
+                <div className="flex flex-col items-center justify-center text-center mt-8 sm:mt-0">
 
                     {loading ? (
                         <div className="py-12 flex flex-col items-center animate-in fade-in zoom-in duration-500">
