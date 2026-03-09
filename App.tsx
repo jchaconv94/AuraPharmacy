@@ -30,7 +30,7 @@ const WELCOME_KEY = 'aura_welcome_shown_session'; // Clave de sesión
 const App: React.FC = () => {
     return (
         <AuthProvider>
-            <Toaster position="top-center" richColors closeButton theme="light" />
+            <Toaster position="top-center" richColors closeButton theme="light" style={{ zIndex: 2147483647 }} toastOptions={{ style: { zIndex: 2147483647 } }} />
             <AuthenticatedApp />
         </AuthProvider>
     );

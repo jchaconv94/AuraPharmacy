@@ -213,7 +213,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
-            tableContainerRef.current?.requestFullscreen().catch(err => {
+            document.documentElement.requestFullscreen().catch(err => {
                 console.error(`Error attempting to enable fullscreen: ${err.message}`);
             });
         } else {
@@ -2092,7 +2092,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     );
 
     return (
-        <div className="p-6 w-full max-w-[98%] mx-auto space-y-6 animate-in fade-in duration-300">
+        <div className={`w-full mx-auto ${isFullscreen ? 'p-0 max-w-none' : 'p-6 max-w-[98%] space-y-6 animate-in fade-in duration-300'}`}>
 
             {/* HEADER */}
             <div className="flex items-center justify-between">
@@ -2371,7 +2371,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* REDISTRIBUTION TABLE */}
             {redistributionData.length > 0 && (
-                <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-50' : 'max-h-[85vh]'}`}>
+                <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-[100]' : 'max-h-[85vh]'}`}>
                     <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center shrink-0">
                         <h3 className="font-bold text-gray-800 flex items-center gap-3">
                             {(() => {
