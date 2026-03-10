@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import localforage from 'localforage';
-import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, Check, Download, Maximize, Minimize } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, Check, Download, Maximize, Minimize, Edit2 } from 'lucide-react';
 
 // Hook para persistir estado en localStorage
 function useLocalStorage<T>(key: string, initialValue: T) {
@@ -315,6 +315,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
     const [simulationData, setSimulationData] = useState<Record<string, Record<string, { qty: number, input: string }>>>({});
     const [isTransferListOpen, setIsTransferListOpen] = useState(false);
+    const [editingTransferId, setEditingTransferId] = useState<string | null>(null);
+    const [editingTransferQty, setEditingTransferQty] = useState<string>('');
     const [quickTransferSource, setQuickTransferSource] = useState<RedistributionItem | null>(null);
     const [quickTransferDestination, setQuickTransferDestination] = useState<RedistributionItem | null>(null);
     const [isQuickTransferConfirmOpen, setIsQuickTransferConfirmOpen] = useState(false);
@@ -1105,6 +1107,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
     const handleProductChange = (productCode: string) => {
         setSelectedProductCode(productCode);
+        setSelectedSituacion([]);
+        setSelectedEstablecimientoFilter([]);
 
         // Find and set product name
         const product = productOptions.find(p => p.code === productCode);
@@ -1662,6 +1666,37 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             toast.info("Transferencia revertida");
         }
         setTransferList(prev => prev.filter(t => t.id !== id));
+    };
+
+    const startEditingTransfer = (id: string, currentQty: number) => {
+        setEditingTransferId(id);
+        setEditingTransferQty(currentQty.toString());
+    };
+
+    const cancelEditingTransfer = () => {
+        setEditingTransferId(null);
+        setEditingTransferQty('');
+    };
+
+    const saveEditedTransfer = () => {
+        if (!editingTransferId) return;
+        
+        const newQty = parseInt(editingTransferQty, 10);
+        if (isNaN(newQty) || newQty <= 0) {
+            toast.error("Ingrese una cantidad válida mayor a 0");
+            return;
+        }
+
+        setTransferList(prev => prev.map(t => {
+            if (t.id === editingTransferId) {
+                return { ...t, quantity: newQty };
+            }
+            return t;
+        }));
+        
+        toast.success("Cantidad actualizada correctamente");
+        setEditingTransferId(null);
+        setEditingTransferQty('');
     };
 
     const exportTransferList = () => {
@@ -2939,7 +2974,24 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                     <div className="font-bold text-gray-800">{t.productName}</div>
                                                     <div className="font-mono text-xs text-gray-500">{t.productCode}</div>
                                                 </td>
-                                                <td className="p-3 text-center font-bold text-lg text-indigo-600">{t.quantity}</td>
+                                                <td className="p-3 text-center font-bold text-lg text-indigo-600">
+                                                    {editingTransferId === t.id ? (
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            value={editingTransferQty}
+                                                            onChange={(e) => setEditingTransferQty(e.target.value)}
+                                                            className="w-20 text-center border border-indigo-300 rounded-md py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            autoFocus
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') saveEditedTransfer();
+                                                                if (e.key === 'Escape') cancelEditingTransfer();
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        t.quantity
+                                                    )}
+                                                </td>
                                                 <td className="p-3">
                                                     <div className="text-gray-800">{t.originName}</div>
                                                     <div className="font-mono text-xs text-gray-500">{t.originCod}</div>
@@ -2949,13 +3001,43 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                     <div className="font-mono text-xs text-gray-500">{t.destinationCod}</div>
                                                 </td>
                                                 <td className="p-3 text-center">
-                                                    <button
-                                                        onClick={() => removeTransferFromList(t.id)}
-                                                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                        title="Eliminar"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </button>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        {editingTransferId === t.id ? (
+                                                            <>
+                                                                <button
+                                                                    onClick={saveEditedTransfer}
+                                                                    className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                                                    title="Guardar"
+                                                                >
+                                                                    <Check className="h-4 w-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={cancelEditingTransfer}
+                                                                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                                                    title="Cancelar"
+                                                                >
+                                                                    <X className="h-4 w-4" />
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => startEditingTransfer(t.id, t.quantity)}
+                                                                    className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                                    title="Editar"
+                                                                >
+                                                                    <Edit2 className="h-4 w-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => removeTransferFromList(t.id)}
+                                                                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                                    title="Eliminar"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
