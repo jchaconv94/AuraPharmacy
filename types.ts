@@ -193,4 +193,5 @@ export interface RedistributionItem {
   simulationInput?: string; // Input raw para manejar estados intermedios (ej: "-")
   isWarehouse?: boolean;
   microred?: string;
+  cpaMode?: 'ADJUSTED' | 'SIMPLE';
 }

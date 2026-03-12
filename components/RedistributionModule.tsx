@@ -1211,33 +1211,41 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             const isWarehouse = eess.cod === systemConfig.warehouseCode;
 
             if (r) {
-                let currentCpa = r.cpa;
-                let currentMonthsProvision = r.monthsProvision;
-                let currentStatus = r.status;
-                
+                const history = Array.isArray(r.monthlyConsumption) ? r.monthlyConsumption : Array(12).fill(0);
+                const analysis = calculateAdjustedCPM(history);
+                const noSpikes = (analysis.spikes || 0) === 0;
+                const isEqual = analysis.adjusted.toFixed(1) === analysis.raw.toFixed(1);
+                const defaultMode = (noSpikes || isEqual) ? 'SIMPLE' : 'ADJUSTED';
+
+                let currentCpa = defaultMode === 'SIMPLE' ? analysis.raw : analysis.adjusted;
+                let currentMode: 'ADJUSTED' | 'SIMPLE' = defaultMode;
+                let currentMonthsProvision = 0;
+                let currentStatus = '';
+
                 const adjustment = cpaAdjForProduct[eess.cod];
                 if (adjustment) {
                     currentCpa = adjustment.cpa;
-                    
-                    if (currentCpa > 0.01) {
-                        currentMonthsProvision = r.stock / currentCpa;
-                    } else if (r.stock > 0) {
-                        currentMonthsProvision = 999;
-                    } else {
-                        currentMonthsProvision = 0;
-                    }
-                    
-                    if (r.stock === 0) {
-                        currentStatus = 'Desabastecido';
-                    } else if (currentCpa <= 0.01) {
-                        currentStatus = 'Sin Rotación';
-                    } else if (currentMonthsProvision < 2) {
-                        currentStatus = 'SubStock';
-                    } else if (currentMonthsProvision > 6) {
-                        currentStatus = 'SobreStock';
-                    } else {
-                        currentStatus = 'NormoStock';
-                    }
+                    currentMode = adjustment.mode;
+                }
+
+                if (currentCpa > 0.01) {
+                    currentMonthsProvision = r.stock / currentCpa;
+                } else if (r.stock > 0) {
+                    currentMonthsProvision = 999;
+                } else {
+                    currentMonthsProvision = 0;
+                }
+
+                if (r.stock === 0) {
+                    currentStatus = 'Desabastecido';
+                } else if (currentCpa <= 0.01) {
+                    currentStatus = 'Sin Rotación';
+                } else if (currentMonthsProvision < 2) {
+                    currentStatus = 'SubStock';
+                } else if (currentMonthsProvision > 6) {
+                    currentStatus = 'SobreStock';
+                } else {
+                    currentStatus = 'NormoStock';
                 }
 
                 const need = calculateNeed(r.stock, currentCpa, currentStatus, Number(r.consumptionMonths || 0));
@@ -1258,7 +1266,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     monthlyConsumption: Array.isArray(r.monthlyConsumption) ? r.monthlyConsumption : Array(12).fill(0),
                     simulationQty: simQty,
                     simulationInput: simInput,
-                    isWarehouse
+                    isWarehouse,
+                    cpaMode: currentMode
                 };
             } else {
                 return {
@@ -1277,7 +1286,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     monthlyConsumption: Array(12).fill(0),
                     simulationQty: simQty,
                     simulationInput: simInput,
-                    isWarehouse
+                    isWarehouse,
+                    cpaMode: 'SIMPLE'
                 };
             }
         });
@@ -1353,33 +1363,41 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             const simQty = simDataForProduct[r.codEess]?.qty || 0;
             const simInput = simDataForProduct[r.codEess]?.input || '';
 
-            let currentCpa = r.cpa;
-            let currentMonthsProvision = r.monthsProvision;
-            let currentStatus = r.status;
-            
+            const history = Array.isArray(r.monthlyConsumption) ? r.monthlyConsumption : Array(12).fill(0);
+            const analysis = calculateAdjustedCPM(history);
+            const noSpikes = (analysis.spikes || 0) === 0;
+            const isEqual = analysis.adjusted.toFixed(1) === analysis.raw.toFixed(1);
+            const defaultMode = (noSpikes || isEqual) ? 'SIMPLE' : 'ADJUSTED';
+
+            let currentCpa = defaultMode === 'SIMPLE' ? analysis.raw : analysis.adjusted;
+            let currentMode: 'ADJUSTED' | 'SIMPLE' = defaultMode;
+            let currentMonthsProvision = 0;
+            let currentStatus = '';
+
             const adjustment = cpaAdjForProduct[r.codEess];
             if (adjustment) {
                 currentCpa = adjustment.cpa;
-                
-                if (currentCpa > 0.01) {
-                    currentMonthsProvision = r.stock / currentCpa;
-                } else if (r.stock > 0) {
-                    currentMonthsProvision = 999;
-                } else {
-                    currentMonthsProvision = 0;
-                }
-                
-                if (r.stock === 0) {
-                    currentStatus = 'Desabastecido';
-                } else if (currentCpa <= 0.01) {
-                    currentStatus = 'Sin Rotación';
-                } else if (currentMonthsProvision < 2) {
-                    currentStatus = 'SubStock';
-                } else if (currentMonthsProvision > 6) {
-                    currentStatus = 'SobreStock';
-                } else {
-                    currentStatus = 'NormoStock';
-                }
+                currentMode = adjustment.mode;
+            }
+
+            if (currentCpa > 0.01) {
+                currentMonthsProvision = r.stock / currentCpa;
+            } else if (r.stock > 0) {
+                currentMonthsProvision = 999;
+            } else {
+                currentMonthsProvision = 0;
+            }
+
+            if (r.stock === 0) {
+                currentStatus = 'Desabastecido';
+            } else if (currentCpa <= 0.01) {
+                currentStatus = 'Sin Rotación';
+            } else if (currentMonthsProvision < 2) {
+                currentStatus = 'SubStock';
+            } else if (currentMonthsProvision > 6) {
+                currentStatus = 'SobreStock';
+            } else {
+                currentStatus = 'NormoStock';
             }
 
             return {
@@ -1398,8 +1416,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                 monthlyConsumption: Array.isArray(r.monthlyConsumption) ? r.monthlyConsumption : Array(12).fill(0),
                 simulationQty: simQty,
                 simulationInput: simInput,
+                cpaMode: currentMode,
                 isWarehouse: false
-            } as RedistributionItem;
+            };
         }).sort((a, b) => b.stock - a.stock);
     }, [selectedProductCode, records, transferList, simulationData, cpaAdjustments]);
 
@@ -2238,8 +2257,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         Seleccione una Microred para ver los productos
                     </div>
                 ) : (
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50/80 text-slate-500 font-bold text-[10px] uppercase tracking-widest sticky top-0 z-10 backdrop-blur-sm border-b border-slate-100">
+                    <table className="w-full text-base text-left">
+                        <thead className="bg-slate-50/80 text-slate-500 font-bold text-sm uppercase tracking-widest sticky top-0 z-10 backdrop-blur-sm border-b border-slate-100">
                             <tr>
                                 <th className="p-0 align-middle w-16 text-center">
                                     <MultiSelectFilter
@@ -2342,16 +2361,16 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                     <Circle className="h-4 w-4 text-slate-200 mx-auto hover:text-slate-400 transition-colors" />
                                                 )}
                                             </td>
-                                            <td className="p-2 font-mono text-[11px] font-bold text-slate-500">{prod.code}</td>
-                                            <td className="p-2 text-[11px] font-medium text-slate-800 truncate max-w-[200px]" title={prod.name}>{prod.name}</td>
-                                            <td className="p-2 text-center text-[10px] text-slate-500 font-mono">{prod.type}</td>
-                                            <td className="p-2 text-center text-[10px] text-slate-500 font-bold">{prod.pet}</td>
-                                            <td className="p-2 text-center text-[10px] text-slate-500 font-bold">{prod.est}</td>
-                                            <td className="p-2 text-center text-[11px] font-mono font-bold text-blue-700 bg-blue-50/30">{prod.totalStock}</td>
-                                            <td className="p-2 text-center text-[11px] font-mono">{prod.cpa.toFixed(1)}</td>
-                                            <td className="p-2 text-center text-[11px] font-mono font-bold">{prod.months === 999 ? '∞' : prod.months.toFixed(1)}</td>
+                                            <td className="p-2 font-mono text-base font-bold text-slate-500">{prod.code}</td>
+                                            <td className="p-2 text-base font-medium text-slate-800 truncate" title={prod.name}>{prod.name}</td>
+                                            <td className="p-2 text-center text-sm text-slate-500 font-mono">{prod.type}</td>
+                                            <td className="p-2 text-center text-sm text-slate-500 font-bold">{prod.pet}</td>
+                                            <td className="p-2 text-center text-sm text-slate-500 font-bold">{prod.est}</td>
+                                            <td className="p-2 text-center text-base font-mono font-bold text-blue-700 bg-blue-50/30">{prod.totalStock}</td>
+                                            <td className="p-2 text-center text-base font-mono">{prod.cpa.toFixed(1)}</td>
+                                            <td className="p-2 text-center text-base font-mono font-bold">{prod.months === 999 ? '∞' : prod.months.toFixed(1)}</td>
                                             <td className="p-2 text-center">
-                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter border ${statusColor}`}>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-tighter border ${statusColor}`}>
                                                     {prod.status}
                                                 </span>
                                             </td>
@@ -2540,7 +2559,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             {records.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                     {/* MICRORED SELECTOR */}
-                    <div className="md:col-span-4 bg-white p-5 rounded-xl shadow-sm border border-gray-200 min-h-[220px] flex flex-col relative z-30">
+                    <div className="md:col-span-3 bg-white p-5 rounded-xl shadow-sm border border-gray-200 min-h-[220px] flex flex-col relative z-30">
                         <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
                             <Building2 className="h-3.5 w-3.5 text-indigo-500" />
                             Seleccionar Microred
@@ -2638,7 +2657,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     </div>
 
                     {/* PRODUCT REVIEW TABLE (REPLACES DROPDOWN) */}
-                    <div className="md:col-span-8 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[220px] relative z-20">
+                    <div className="md:col-span-9 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[220px] relative z-20">
                         {renderProductListTable(false)}
                     </div>
                 </div>
@@ -2752,10 +2771,10 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         </div>
                     </div>
                     <div className="overflow-auto flex-1 custom-scrollbar">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-xs sticky top-0 z-10 shadow-sm">
+                        <table className="w-full text-lg text-left">
+                            <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-base sticky top-0 z-10 shadow-sm">
                                 <tr>
-                                    <th className="p-3 border-b text-left w-px whitespace-nowrap pr-2">COD</th>
+
                                     <th className="p-3 border-b text-left">
                                         <div className="flex items-center gap-1">
                                             Establecimiento
@@ -2769,8 +2788,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         </div>
                                     </th>
                                     <th className="p-3 border-b text-center">Stock</th>
-                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-[10px] uppercase tracking-wider">Suma Cons.</th>
-                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-[10px] uppercase tracking-wider">Meses Cons.</th>
+                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-sm uppercase tracking-wider">Suma Cons.</th>
+                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-sm uppercase tracking-wider">Meses Cons.</th>
                                     <th className="p-3 border-b text-center">CPA</th>
                                     <th className="p-3 border-b text-center">Meses</th>
                                     <th className="p-3 border-b text-center">
@@ -2825,7 +2844,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     const isExternal = !selectedMicrored.includes('ALL') && !selectedMicrored.includes(item.microred || '') && !item.isWarehouse;
                                     const isSelected = quickTransferSource?.codEess === item.codEess;
 
-                                    const isPrincipal = String(item.codEess || '').endsWith('F01') && !item.isWarehouse;
+                                    const isPrincipal = !isSecondary && !item.isWarehouse;
                                     const hasSecondaries = isPrincipal && baseRedistributionData.some(s =>
                                         String(s.codEess || '').startsWith(String(item.codEess).substring(0, 5)) && s.codEess !== item.codEess
                                     );
@@ -2883,12 +2902,11 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     `}
                                             onClick={() => !item.isWarehouse && handleOpenDetailModal(item)}
                                         >
-                                            <td className="p-3 font-mono text-xs text-gray-500 font-bold w-px whitespace-nowrap pr-2">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span>{item.codEess}</span>
+                                            <td className={`p-3 pr-4 font-medium relative ${isPrincipal ? 'font-black text-gray-900 pl-11' : 'text-gray-700'} ${isSecondary ? 'pl-20 text-gray-600 italic' : ''}`} title={`${item.codEess} - ${item.establishmentName}`}>
+                                                <div className="flex items-center">
                                                     {hasSecondaries && (
                                                         <div
-                                                            className={`shrink-0 p-1 rounded border cursor-pointer transition-colors shadow-sm ${item.isConsolidated
+                                                            className={`absolute left-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200 scale-90 group-hover:scale-100 z-10 p-1 rounded border cursor-pointer shadow-sm ${item.isConsolidated
                                                                 ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-600 hover:text-white'
                                                                 : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-600 hover:text-white'
                                                                 }`}
@@ -2898,11 +2916,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                             {item.isConsolidated ? <Split className="h-3.5 w-3.5" /> : <Merge className="h-3.5 w-3.5" />}
                                                         </div>
                                                     )}
-                                                </div>
-                                            </td>
-                                            <td className={`p-3 font-medium text-gray-900 max-w-[200px] truncate ${isSecondary ? 'pl-8 text-gray-600 italic' : ''}`} title={item.establishmentName}>
-                                                <div className="flex items-center">
-                                                    <span className="truncate">{item.establishmentName}</span>
+                                                    <span>{item.establishmentName}</span>
                                                     {isExternal && (
                                                         <span className="shrink-0 ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded uppercase tracking-wider border border-purple-200">
                                                             EXT
@@ -2914,10 +2928,10 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             <td className="p-3 text-center font-mono">{isGhost ? '' : item.stock}</td>
 
                                             {/* CONSUMPTION DATA */}
-                                            <td className={`p-3 text-center font-mono text-xs ${isSelected ? 'text-indigo-700 font-bold' : 'text-gray-500 bg-gray-50 group-hover:bg-transparent'}`}>
+                                            <td className={`p-3 text-center font-mono text-base ${isSelected ? 'text-indigo-700 font-bold' : 'text-gray-500 bg-gray-50 group-hover:bg-transparent'}`}>
                                                 {isGhost ? '' : (item.consumptionSum || 0)}
                                             </td>
-                                            <td className={`p-3 text-center font-mono text-xs ${isSelected ? 'text-indigo-700 font-bold' : 'text-gray-500 bg-gray-50 group-hover:bg-transparent'}`}>
+                                            <td className={`p-3 text-center font-mono text-base ${isSelected ? 'text-indigo-700 font-bold' : 'text-gray-500 bg-gray-50 group-hover:bg-transparent'}`}>
                                                 {isGhost ? '' : (item.consumptionMonths || 0)}
                                             </td>
 
@@ -2925,7 +2939,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                 {isGhost ? '' : (
                                                     <div className="flex items-center justify-center gap-1">
                                                         {item.cpa.toFixed(1)}
-                                                        {(cpaAdjustments[selectedProductCode]?.[item.codEess]?.mode || 'ADJUSTED') === 'SIMPLE' ? (
+                                                        {item.cpaMode === 'SIMPLE' ? (
                                                             <span className="text-[8px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded uppercase tracking-tighter" title="CPA Simple">SIM</span>
                                                         ) : (
                                                             <span className="text-[8px] font-bold text-teal-500 bg-teal-50 px-1 py-0.5 rounded uppercase tracking-tighter" title="CPA Ajustado">AJU</span>
@@ -2938,7 +2952,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             </td>
                                             <td className="p-3 text-center">
                                                 {!isGhost && (
-                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${statusColor}`}>
+                                                    <span className={`px-2 py-1 rounded-full text-sm font-bold uppercase ${statusColor}`}>
                                                         {item.status}
                                                     </span>
                                                 )}
@@ -4164,3 +4178,4 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         </div >
     );
 };
+
