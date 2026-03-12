@@ -145,16 +145,42 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
   const isLockedTimer = lockTimer > 0 && needsReview && !isReviewed;
 
+  const isAdjustedEqualSimple = useMemo(() => {
+    if (!medication) return false;
+    const cpmStr = (medication.cpm || 0).toFixed(1);
+    const rawCpmStr = (medication.rawCpm || 0).toFixed(1);
+    return cpmStr === rawCpmStr || !medication.hasSpikes;
+  }, [medication?.cpm, medication?.rawCpm, medication?.hasSpikes]);
+
   // EFFECT 1: INITIALIZATION (Only on ID change)
   useEffect(() => {
     if (medication) {
-        setCpaMode(medication.selectedCpaMode || 'ADJUSTED');
+        // FORCE SIMPLE if they are effectively equal in the UI or no spikes exist
+        if (isAdjustedEqualSimple) {
+            setCpaMode('SIMPLE');
+        } else {
+            // Migration/Correction: If saved as SIMPLE but it HAS spikes and no manual exclusions, 
+            // it's likely a bug-induced state from a previous version. Reset to ADJUSTED.
+            if (medication.selectedCpaMode === 'SIMPLE' && (medication.excludedIndices || []).length === 0) {
+                setCpaMode('ADJUSTED');
+            } else {
+                setCpaMode(medication.selectedCpaMode || 'ADJUSTED');
+            }
+        }
+        
         setReqQuantity(medication.quantityToOrder || 0);
-        setExcludedIndices(medication.excludedIndices || []); // Load saved exclusions
-        setShowUnlockConfirm(false); // Reset confirmation state on item change
-        setShowSaveMenu(false); // Close menu on change
+        setExcludedIndices(medication.excludedIndices || []); 
+        setShowUnlockConfirm(false); 
+        setShowSaveMenu(false); 
     }
-  }, [medication?.id]); 
+  }, [medication?.id, medication?.selectedCpaMode, isAdjustedEqualSimple]); 
+
+  // FORCE SIMPLE if equal (Extra safety to catch any state drift)
+  useEffect(() => {
+    if (medication && isAdjustedEqualSimple && cpaMode !== 'SIMPLE') {
+        setCpaMode('SIMPLE');
+    }
+  }, [medication?.id, isAdjustedEqualSimple, cpaMode]);
 
   // EFFECT 2: TIMER LOGIC
   useEffect(() => {
@@ -486,21 +512,28 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
                 {/* CPA AJUSTADO CARD */}
                 <button 
-                    onClick={() => !isReviewed && setCpaMode('ADJUSTED')}
-                    disabled={isReviewed}
+                    onClick={() => !isReviewed && !isAdjustedEqualSimple && setCpaMode('ADJUSTED')}
+                    disabled={isReviewed || isAdjustedEqualSimple}
                     className={`px-3 py-2 rounded-lg border flex flex-col justify-center transition-all relative overflow-hidden group ${
                         cpaMode === 'ADJUSTED' 
                         ? 'bg-teal-50 border-teal-500 shadow-md ring-1 ring-teal-500' 
                         : 'bg-white border-gray-200 hover:bg-gray-50'
-                    } ${isReviewed ? 'opacity-70 cursor-not-allowed grayscale-[0.5]' : ''}`}
+                    } ${isReviewed ? 'opacity-70 cursor-not-allowed grayscale-[0.5]' : ''} ${
+                        isAdjustedEqualSimple ? 'opacity-40 cursor-not-allowed bg-gray-50 border-gray-200' : ''
+                    }`}
+                    title={isAdjustedEqualSimple ? "No se detectaron consumos atípicos para ajustar" : ""}
                 >
                     <div className="flex justify-between items-center w-full">
                         <span className={`${cpaMode === 'ADJUSTED' ? 'text-teal-700' : 'text-gray-500'} block text-[10px] uppercase font-bold`}>CPA Ajust.</span>
                         {cpaMode === 'ADJUSTED' && <CheckCircle className="h-3 w-3 text-teal-600" />}
+                        {isAdjustedEqualSimple && !isReviewed && <Lock className="h-3 w-3 text-gray-400" />}
                     </div>
                     <span className={`font-bold text-lg sm:text-2xl ${cpaMode === 'ADJUSTED' ? 'text-teal-800' : 'text-gray-400'}`}>
                         {(medication.cpm || 0).toFixed(1)}
                     </span>
+                    {isAdjustedEqualSimple && (
+                        <span className="text-[8px] text-gray-400 uppercase font-bold mt-1">Sin atípicos</span>
+                    )}
                 </button>
 
                 {/* CPA SIMPLE CARD */}
@@ -583,13 +616,13 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
              </div>
           </div>
 
-          <div className="border rounded-lg overflow-hidden overflow-x-auto">
+          <div className="border rounded-lg overflow-hidden overflow-x-auto max-h-[200px] overflow-y-auto">
              <table className="w-full text-sm border-collapse min-w-[600px]">
-                <thead>
+                <thead className="sticky top-0 z-20">
                     <tr className="bg-black text-white">
-                        <th className="p-3 text-left border-r border-gray-700 w-32 sticky left-0 bg-black z-10">CONCEPTO</th>
+                        <th className="p-3 text-left border-r border-gray-700 w-32 sticky left-0 bg-black z-30">CONCEPTO</th>
                         {medication.originalHistory.map((_, idx) => (
-                            <th key={idx} className="p-3 text-center w-20 border-r border-gray-700 last:border-0 whitespace-nowrap">
+                            <th key={idx} className="p-3 text-center w-20 border-r border-gray-700 last:border-0 whitespace-nowrap bg-black">
                                 {monthsLabels[idx] || `M${idx + 1}`}
                             </th>
                         ))}
@@ -658,23 +691,43 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 <li>
                     Se calculó la mediana histórica de los meses con movimiento.
                 </li>
-                <li>
-                    El umbral de tolerancia se fijó en <strong>{(medication.spikeThreshold || 0).toFixed(1)}</strong> unidades.
-                </li>
-                {medication.hasLows && (
+                
+                {/* DYNAMIC: Threshold only relevant in ADJUSTED mode */}
+                {cpaMode === 'ADJUSTED' && (
                     <li>
-                        Se detectaron consumos muy bajos (menores a <strong>{(medication.lowThreshold || 0).toFixed(1)}</strong>). Se resaltan en <span className="bg-orange-200 px-1 rounded text-orange-900 font-bold">NARANJA</span>.
+                        El umbral de tolerancia se fijó en <strong>{(medication.spikeThreshold || 0).toFixed(1)}</strong> unidades.
                     </li>
                 )}
-                <li>
-                    {cpaMode === 'ADJUSTED' 
-                        ? <>Los meses pintados en <span className="bg-yellow-300 px-1 rounded text-black font-bold">AMARILLO</span> se excluyen del cálculo.</>
-                        : <>MODO MANUAL ACTIVO: Se están considerando todos los meses (incluso atípicos) para el cálculo.</>
-                    }
-                </li>
+
+                {/* DYNAMIC: Low consumption only if relevant */}
+                {medication.originalHistory.some(val => val < (medication.lowThreshold || 0) && val > 0) && (
+                    <li>
+                        {cpaMode === 'ADJUSTED' ? (
+                            <>Los meses pintados en <span className="bg-yellow-300 px-1 rounded text-black font-bold">AMARILLO</span> se resaltan por ser consumos muy bajos (menores a <strong>{(medication.lowThreshold || 0).toFixed(1)}</strong>).</>
+                        ) : (
+                            <>Se detectaron consumos muy bajos (menores a <strong>{(medication.lowThreshold || 0).toFixed(1)}</strong>).</>
+                        )}
+                    </li>
+                )}
+
+                {/* DYNAMIC: Manual mode text */}
+                {cpaMode === 'SIMPLE' && (
+                    <li>
+                        <span className="font-bold text-gray-800">MODO MANUAL ACTIVO:</span> Se están considerando todos los meses (incluso atípicos) para el cálculo.
+                    </li>
+                )}
+
+                {/* DYNAMIC: Manual exclusion text */}
                 {excludedIndices.length > 0 && (
                     <li>
                         <span className="font-bold text-gray-800">EXCLUSIÓN MANUAL:</span> Se han excluido {excludedIndices.length} mes(es) del cálculo por decisión del usuario (tachados).
+                    </li>
+                )}
+
+                {/* DYNAMIC: Red spike exclusion text (only in ADJUSTED mode) */}
+                {cpaMode === 'ADJUSTED' && medication.hasSpikes && (
+                    <li>
+                        Los meses pintados de <span className="bg-red-200 px-1 rounded text-red-900 font-bold">ROJO</span> se excluyen del cálculo.
                     </li>
                 )}
              </ul>

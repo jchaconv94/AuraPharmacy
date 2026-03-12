@@ -182,6 +182,7 @@ const MultiSelectFilter = ({
     );
 };
 import * as XLSX from 'xlsx';
+import { calculateAdjustedCPM, calculateMedian } from '../services/auraService';
 import { AvailabilityRecord, RedistributionItem } from '../types';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
@@ -249,6 +250,39 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     // --- DETAIL MODAL STATE ---
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedDetailItem, setSelectedDetailItem] = useState<RedistributionItem | null>(null);
+    const [modalCpaMode, setModalCpaMode] = useState<'ADJUSTED' | 'SIMPLE'>('ADJUSTED');
+    const [modalExcludedIndices, setModalExcludedIndices] = useState<number[]>([]);
+    const [modalEstimation, setModalEstimation] = useState<number>(0);
+    const [cpaAdjustments, setCpaAdjustments] = useState<Record<string, Record<string, { mode: 'ADJUSTED' | 'SIMPLE', excludedIndices: number[], cpa: number }>>>({});
+
+    useEffect(() => {
+        if (selectedDetailItem && selectedProductCode) {
+            setModalEstimation(0); // Reset estimation when item changes
+            const adj = cpaAdjustments[selectedProductCode]?.[selectedDetailItem.codEess];
+            
+            // Determine default mode based on spikes
+            const history = selectedDetailItem.monthlyConsumption || Array(12).fill(0);
+            const analysis = calculateAdjustedCPM(history);
+            const isEqual = analysis.adjusted.toFixed(1) === analysis.raw.toFixed(1);
+            const noSpikes = (analysis.spikes || 0) === 0;
+            const autoMode = (isEqual || noSpikes) ? 'SIMPLE' : 'ADJUSTED';
+
+            if (adj) {
+                // Migration/Correction: If it was saved as SIMPLE but it has spikes and no manual exclusions,
+                // it's likely a bug-induced state from a previous version. Reset to ADJUSTED.
+                if (adj.mode === 'SIMPLE' && !isEqual && !noSpikes && adj.excludedIndices.length === 0) {
+                    setModalCpaMode('ADJUSTED');
+                } else {
+                    setModalCpaMode(adj.mode);
+                }
+                setModalExcludedIndices(adj.excludedIndices);
+            } else {
+                setModalCpaMode(autoMode);
+                setModalExcludedIndices([]);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDetailItem?.codEess, selectedProductCode]);
 
     // --- UPLOAD CONFIRMATION MODAL ---
     const [isConfirmUploadModalOpen, setIsConfirmUploadModalOpen] = useState(false);
@@ -364,6 +398,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                 const savedSimulation = await localforage.getItem<any>('aura_simulationData');
                 if (savedSimulation && typeof savedSimulation === 'object' && !Array.isArray(savedSimulation)) setSimulationData(savedSimulation);
+
+                const savedCpaAdjustments = await localforage.getItem<any>('aura_cpaAdjustments');
+                if (savedCpaAdjustments && typeof savedCpaAdjustments === 'object' && !Array.isArray(savedCpaAdjustments)) setCpaAdjustments(savedCpaAdjustments);
             } catch (e) {
                 console.error("Error loading data from localforage", e);
             } finally {
@@ -419,6 +456,11 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         localforage.setItem('aura_simulationData', simulationData).catch(() => { });
     }, [simulationData, isLoaded]);
 
+    useEffect(() => {
+        if (!isLoaded) return;
+        localforage.setItem('aura_cpaAdjustments', cpaAdjustments).catch(() => { });
+    }, [cpaAdjustments, isLoaded]);
+
     // --- 1. FILE UPLOAD ---
     const importInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -442,6 +484,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             exportData.localforage.aura_reviewedProducts = await localforage.getItem('aura_reviewedProducts');
             exportData.localforage.aura_transferList = await localforage.getItem('aura_transferList');
             exportData.localforage.aura_simulationData = await localforage.getItem('aura_simulationData');
+            exportData.localforage.aura_cpaAdjustments = await localforage.getItem('aura_cpaAdjustments');
 
             // Get localStorage data
             const lsKeys = [
@@ -536,6 +579,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     if (importedData.localforage.aura_reviewedProducts) setReviewedProducts(new Set(importedData.localforage.aura_reviewedProducts));
                     if (importedData.localforage.aura_transferList) setTransferList(importedData.localforage.aura_transferList);
                     if (importedData.localforage.aura_simulationData) setSimulationData(importedData.localforage.aura_simulationData);
+                    if (importedData.localforage.aura_cpaAdjustments) setCpaAdjustments(importedData.localforage.aura_cpaAdjustments);
 
                     if (importedData.localStorage) {
                         if (importedData.localStorage.aura_productSearch !== undefined) setProductSearch(importedData.localStorage.aura_productSearch);
@@ -587,6 +631,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setTipoFilter([]);
         setPetFilter([]);
         setEstFilter([]);
+        setSelectedSituacion([]);
+        setSelectedEstablecimientoFilter([]);
+        setCpaAdjustments({});
         
         localforage.removeItem('aura_records');
         localforage.removeItem('aura_selectedMicrored');
@@ -597,6 +644,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         localforage.removeItem('aura_reviewedProducts');
         localforage.removeItem('aura_transferList');
         localforage.removeItem('aura_simulationData');
+        localforage.removeItem('aura_cpaAdjustments');
         window.localStorage.removeItem('aura_productSearch');
         window.localStorage.removeItem('aura_statusFilter');
         window.localStorage.removeItem('aura_reviewFilter');
@@ -1149,6 +1197,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
         const transfersForProduct = transferList.filter(t => t.productCode === selectedProductCode);
         const simDataForProduct = simulationData[selectedProductCode] || {};
+        const cpaAdjForProduct = cpaAdjustments[selectedProductCode] || {};
 
         const initialData: RedistributionItem[] = allEstablishments.map(eess => {
             const r = productRecords.find(pr => pr.codEess === eess.cod);
@@ -1162,16 +1211,45 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             const isWarehouse = eess.cod === systemConfig.warehouseCode;
 
             if (r) {
-                const need = calculateNeed(r.stock, r.cpa, r.status, Number(r.consumptionMonths || 0));
+                let currentCpa = r.cpa;
+                let currentMonthsProvision = r.monthsProvision;
+                let currentStatus = r.status;
+                
+                const adjustment = cpaAdjForProduct[eess.cod];
+                if (adjustment) {
+                    currentCpa = adjustment.cpa;
+                    
+                    if (currentCpa > 0.01) {
+                        currentMonthsProvision = r.stock / currentCpa;
+                    } else if (r.stock > 0) {
+                        currentMonthsProvision = 999;
+                    } else {
+                        currentMonthsProvision = 0;
+                    }
+                    
+                    if (r.stock === 0) {
+                        currentStatus = 'Desabastecido';
+                    } else if (currentCpa <= 0.01) {
+                        currentStatus = 'Sin Rotación';
+                    } else if (currentMonthsProvision < 2) {
+                        currentStatus = 'SubStock';
+                    } else if (currentMonthsProvision > 6) {
+                        currentStatus = 'SobreStock';
+                    } else {
+                        currentStatus = 'NormoStock';
+                    }
+                }
+
+                const need = calculateNeed(r.stock, currentCpa, currentStatus, Number(r.consumptionMonths || 0));
 
                 return {
                     codEess: r.codEess,
                     establishmentName: r.establishmentName,
                     microred: r.microred,
                     stock: r.stock,
-                    cpa: r.cpa,
-                    monthsProvision: r.monthsProvision,
-                    status: r.status,
+                    cpa: currentCpa,
+                    monthsProvision: currentMonthsProvision,
+                    status: currentStatus,
                     transferQty,
                     receivedQty,
                     need: need,
@@ -1251,7 +1329,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         });
 
         return initialData;
-    }, [records, selectedMicrored, selectedProductCode, transferList, simulationData, systemConfig]);
+    }, [records, selectedMicrored, selectedProductCode, transferList, simulationData, cpaAdjustments, systemConfig]);
 
     // Memoized data for Global Search Modal
     const globalNetworkData = useMemo(() => {
@@ -1266,6 +1344,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
         const transfersForProduct = transferList.filter(t => t.productCode === selectedProductCode);
         const simDataForProduct = simulationData[selectedProductCode] || {};
+        const cpaAdjForProduct = cpaAdjustments[selectedProductCode] || {};
 
         return productRecords.map(r => {
             const transferQty = transfersForProduct.filter(t => t.originCod === r.codEess).reduce((sum, t) => sum + t.quantity, 0);
@@ -1274,17 +1353,46 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             const simQty = simDataForProduct[r.codEess]?.qty || 0;
             const simInput = simDataForProduct[r.codEess]?.input || '';
 
+            let currentCpa = r.cpa;
+            let currentMonthsProvision = r.monthsProvision;
+            let currentStatus = r.status;
+            
+            const adjustment = cpaAdjForProduct[r.codEess];
+            if (adjustment) {
+                currentCpa = adjustment.cpa;
+                
+                if (currentCpa > 0.01) {
+                    currentMonthsProvision = r.stock / currentCpa;
+                } else if (r.stock > 0) {
+                    currentMonthsProvision = 999;
+                } else {
+                    currentMonthsProvision = 0;
+                }
+                
+                if (r.stock === 0) {
+                    currentStatus = 'Desabastecido';
+                } else if (currentCpa <= 0.01) {
+                    currentStatus = 'Sin Rotación';
+                } else if (currentMonthsProvision < 2) {
+                    currentStatus = 'SubStock';
+                } else if (currentMonthsProvision > 6) {
+                    currentStatus = 'SobreStock';
+                } else {
+                    currentStatus = 'NormoStock';
+                }
+            }
+
             return {
                 codEess: r.codEess,
                 establishmentName: r.establishmentName,
                 microred: r.microred,
                 stock: r.stock,
-                cpa: r.cpa,
-                monthsProvision: r.monthsProvision,
-                status: r.status,
+                cpa: currentCpa,
+                monthsProvision: currentMonthsProvision,
+                status: currentStatus,
                 transferQty,
                 receivedQty,
-                need: calculateNeed(r.stock, r.cpa, r.status, Number(r.consumptionMonths || 0)),
+                need: calculateNeed(r.stock, currentCpa, currentStatus, Number(r.consumptionMonths || 0)),
                 consumptionSum: r.consumptionSum || 0,
                 consumptionMonths: r.consumptionMonths || 0,
                 monthlyConsumption: Array.isArray(r.monthlyConsumption) ? r.monthlyConsumption : Array(12).fill(0),
@@ -1293,7 +1401,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                 isWarehouse: false
             } as RedistributionItem;
         }).sort((a, b) => b.stock - a.stock);
-    }, [selectedProductCode, records, transferList, simulationData]);
+    }, [selectedProductCode, records, transferList, simulationData, cpaAdjustments]);
 
     const redistributionData = useMemo(() => {
         let result = baseRedistributionData;
@@ -1787,6 +1895,123 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         XLSX.writeFile(wb, fileName);
         toast.success('Listado descargado correctamente');
     };
+
+    const modalDynamicData = useMemo(() => {
+        if (!selectedDetailItem) return null;
+
+        const history = selectedDetailItem.monthlyConsumption || Array(12).fill(0);
+        const analysis = calculateAdjustedCPM(history);
+        
+        let activeCpm = 0;
+
+        if (modalExcludedIndices.length === 0) {
+            activeCpm = modalCpaMode === 'SIMPLE' ? analysis.raw : analysis.adjusted;
+        } else {
+            const valuesToAverage: number[] = [];
+            history.forEach((val, idx) => {
+                if (val === 0) return;
+                if (modalExcludedIndices.includes(idx)) return;
+
+                if (modalCpaMode === 'SIMPLE') {
+                    valuesToAverage.push(val);
+                } else {
+                    if (analysis.isSporadic) {
+                        valuesToAverage.push(val);
+                    } else {
+                        if (val <= analysis.threshold) {
+                            valuesToAverage.push(val);
+                        }
+                    }
+                }
+            });
+
+            activeCpm = valuesToAverage.length > 0
+                ? valuesToAverage.reduce((a, b) => a + b, 0) / valuesToAverage.length
+                : 0;
+        }
+
+        const activeMonths = activeCpm > 0 
+            ? selectedDetailItem.stock / activeCpm 
+            : (selectedDetailItem.stock > 0 ? 999 : 0);
+
+        let activeStatus = '';
+        if (selectedDetailItem.stock === 0) {
+            activeStatus = 'Desabastecido';
+        } else if (activeCpm <= 0.01) {
+            activeStatus = 'Sin Rotación';
+        } else if (activeMonths < 2) {
+            activeStatus = 'SubStock';
+        } else if (activeMonths > 6) {
+            activeStatus = 'SobreStock';
+        } else {
+            activeStatus = 'NormoStock';
+        }
+
+        return {
+            cpm: activeCpm,
+            months: activeMonths,
+            status: activeStatus,
+            analysis
+        };
+    }, [selectedDetailItem, modalCpaMode, modalExcludedIndices]);
+
+    // Logic to determine if Adjusted and Simple CPA are effectively equal
+    const isModalAdjustedEqualSimple = useMemo(() => {
+        if (!modalDynamicData) return false;
+        
+        const isEqual = modalDynamicData.analysis.adjusted.toFixed(1) === modalDynamicData.analysis.raw.toFixed(1);
+        const noSpikes = (modalDynamicData.analysis.spikes || 0) === 0;
+        
+        return isEqual || noSpikes;
+    }, [modalDynamicData]);
+
+    // Force SIMPLE mode if they are equal or no spikes
+    useEffect(() => {
+        if (isModalAdjustedEqualSimple && modalCpaMode !== 'SIMPLE') {
+            setModalCpaMode('SIMPLE');
+        }
+    }, [isModalAdjustedEqualSimple, modalCpaMode]);
+
+    useEffect(() => {
+        if (selectedDetailItem && selectedProductCode && modalDynamicData) {
+            setCpaAdjustments(curr => {
+                const currentAdj = curr[selectedProductCode]?.[selectedDetailItem.codEess];
+                if (currentAdj?.mode === modalCpaMode && 
+                    currentAdj?.excludedIndices.join(',') === modalExcludedIndices.join(',') &&
+                    currentAdj?.cpa === modalDynamicData.cpm) {
+                    return curr;
+                }
+                return {
+                    ...curr,
+                    [selectedProductCode]: {
+                        ...curr[selectedProductCode],
+                        [selectedDetailItem.codEess]: {
+                            mode: modalCpaMode,
+                            excludedIndices: modalExcludedIndices,
+                            cpa: modalDynamicData.cpm
+                        }
+                    }
+                };
+            });
+        }
+    }, [selectedDetailItem, selectedProductCode, modalCpaMode, modalExcludedIndices, modalDynamicData]);
+
+    // --- KEYBOARD NAVIGATION ---
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isDetailModalOpen) return;
+            if (e.key === 'ArrowLeft') {
+                handleNavigateDetailItem('prev');
+            } else if (e.key === 'ArrowRight') {
+                handleNavigateDetailItem('next');
+            } else if (e.key === 'Escape') {
+                setIsDetailModalOpen(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isDetailModalOpen, handleNavigateDetailItem]);
 
     // --- RENDER ---
     if (!isLoaded) {
@@ -2696,7 +2921,18 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                 {isGhost ? '' : (item.consumptionMonths || 0)}
                                             </td>
 
-                                            <td className="p-3 text-center font-mono">{isGhost ? '' : item.cpa.toFixed(1)}</td>
+                                            <td className="p-3 text-center font-mono">
+                                                {isGhost ? '' : (
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        {item.cpa.toFixed(1)}
+                                                        {(cpaAdjustments[selectedProductCode]?.[item.codEess]?.mode || 'ADJUSTED') === 'SIMPLE' ? (
+                                                            <span className="text-[8px] font-bold text-blue-500 bg-blue-50 px-1 py-0.5 rounded uppercase tracking-tighter" title="CPA Simple">SIM</span>
+                                                        ) : (
+                                                            <span className="text-[8px] font-bold text-teal-500 bg-teal-50 px-1 py-0.5 rounded uppercase tracking-tighter" title="CPA Ajustado">AJU</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="p-3 text-center font-mono font-bold">
                                                 {isGhost ? '' : (item.monthsProvision === 999 ? '∞' : item.monthsProvision.toFixed(1))}
                                             </td>
@@ -3515,9 +3751,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             {
                 isDetailModalOpen && selectedDetailItem && renderModal(
                     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
-                        <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl overflow-hidden border border-gray-800 flex flex-col max-h-[90vh]">
+                        <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-7xl overflow-hidden border border-gray-800 flex flex-col max-h-[95vh]">
                             {/* Header */}
-                            <div className="p-6 border-b border-gray-800 flex justify-between items-center">
+                            <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-gray-900 z-10">
                                 <div className="flex-1 min-w-0 mr-4">
                                     {/* Product Line */}
                                     <div className="flex items-center gap-3 mb-2">
@@ -3586,99 +3822,307 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 </div>
                             </div>
 
-                            {/* KPI Cards */}
-                            <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-900/50">
-                                <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
-                                    <div className="text-gray-400 text-xs font-bold uppercase mb-1">Stock Actual</div>
-                                    <div className="text-3xl font-bold text-white">{selectedDetailItem.stock}</div>
-                                </div>
-                                <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
-                                    <div className="text-gray-400 text-xs font-bold uppercase mb-1">CPA (Promedio)</div>
-                                    <div className="text-3xl font-bold text-teal-400">{selectedDetailItem.cpa.toFixed(1)}</div>
-                                </div>
-                                <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
-                                    <div className="text-gray-400 text-xs font-bold uppercase mb-1">Meses Disp.</div>
-                                    <div className="text-3xl font-bold text-blue-400">
-                                        {selectedDetailItem.monthsProvision === 999 ? '∞' : selectedDetailItem.monthsProvision.toFixed(1)}
+                            {/* Scrollable Body */}
+                            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                {/* KPI Cards */}
+                                <div className="p-5 grid grid-cols-2 md:grid-cols-5 gap-3 bg-gray-900/50 border-b border-gray-800">
+                                    <div className="bg-gray-800/50 p-3 rounded-xl border border-gray-700">
+                                        <div className="text-gray-400 text-xs font-bold uppercase mb-1">Stock Actual</div>
+                                        <div className="text-2xl font-bold text-white">{selectedDetailItem.stock}</div>
                                     </div>
-                                </div>
-                                <div className={`p-4 rounded-xl border ${selectedDetailItem.status === 'NormoStock' ? 'bg-green-900/20 border-green-800' :
-                                    selectedDetailItem.status === 'SobreStock' ? 'bg-indigo-900/20 border-indigo-800' :
-                                        selectedDetailItem.status === 'SubStock' ? 'bg-orange-900/20 border-orange-800' :
-                                            'bg-red-900/20 border-red-800'
-                                    }`}>
-                                    <div className="text-gray-400 text-xs font-bold uppercase mb-1">Situación</div>
-                                    <div className={`text-2xl font-bold ${selectedDetailItem.status === 'NormoStock' ? 'text-green-400' :
-                                        selectedDetailItem.status === 'SobreStock' ? 'text-indigo-400' :
-                                            selectedDetailItem.status === 'SubStock' ? 'text-orange-400' :
-                                                'text-red-400'
-                                        }`}>
-                                        {selectedDetailItem.status}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Consumption Table */}
-                            <div className="p-6 overflow-x-auto">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-4">
-                                    <h3 className="text-white font-bold flex items-center gap-2">
-                                        <FileSpreadsheet className="h-4 w-4 text-teal-500" />
-                                        Histórico de Consumo (Últimos 12 Meses)
-                                    </h3>
-                                    <div className="flex gap-3">
-                                        <div className="bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700 flex items-center gap-2">
-                                            <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Suma Total</span>
-                                            <span className="text-white font-mono font-bold text-lg leading-none">{selectedDetailItem.consumptionSum}</span>
-                                        </div>
-                                        <div className="bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700 flex items-center gap-2">
-                                            <span className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Meses con Consumo</span>
-                                            <span className="text-white font-mono font-bold text-lg leading-none">{selectedDetailItem.consumptionMonths}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="border border-gray-700 rounded-lg overflow-hidden">
-                                    <div className="grid grid-cols-12 divide-x divide-gray-700 bg-gray-950 text-gray-400 text-xs font-bold uppercase text-center">
-                                        {Array.from({ length: 12 }).map((_, i) => {
-                                            // Extract month and year from lastMonthYear (YYYY-MM)
-                                            const [selectedYear, selectedMonth] = lastMonthYear.split('-').map(Number);
-                                            
-                                            // Calculate the month index (0-11) and the corresponding year
-                                            // We are looking at the 12 months ending in selectedMonth/selectedYear
-                                            // The sequence starts 11 months before selectedMonth
-                                            let monthIndex = (selectedMonth - 12 + i) % 12;
-                                            if (monthIndex < 0) monthIndex += 12;
-                                            
-                                            // Calculate year for this specific month
-                                            // If monthIndex is greater than selectedMonth-1, it belongs to the previous year
-                                            let year = selectedYear;
-                                            if (monthIndex > (selectedMonth - 1)) {
-                                                year -= 1;
-                                            }
-                                            
-                                            const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-                                            const yearShort = String(year).slice(-2);
-                                            
-                                            return <div key={i} className="p-3">{`${monthNames[monthIndex]} ${yearShort}`}</div>;
-                                        })}
-                                    </div>
-                                    <div className="grid grid-cols-12 divide-x divide-gray-700 bg-gray-900 text-white font-mono text-sm font-bold text-center">
-                                        {selectedDetailItem.monthlyConsumption && selectedDetailItem.monthlyConsumption.length === 12 ? (
-                                            selectedDetailItem.monthlyConsumption.map((val, i) => (
-                                                <div key={i} className={`p-4 ${val === 0 ? 'text-gray-600' : ''}`}>
-                                                    {val}
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="col-span-12 p-4 text-gray-500 italic">
-                                                No hay datos de consumo mensual disponibles.
+                                    
+                                    {/* CPA ADJUSTED CARD */}
+                                    <button 
+                                        onClick={() => !isModalAdjustedEqualSimple && setModalCpaMode('ADJUSTED')}
+                                        disabled={isModalAdjustedEqualSimple}
+                                        className={`p-3 rounded-xl border flex flex-col justify-center transition-all relative overflow-hidden group text-left ${
+                                            modalCpaMode === 'ADJUSTED' 
+                                            ? 'bg-teal-900/20 border-teal-500 shadow-md ring-1 ring-teal-500/50' 
+                                            : 'bg-gray-800/50 border-gray-700 hover:bg-gray-800'
+                                        } ${isModalAdjustedEqualSimple ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                                    >
+                                        <div className="flex justify-between items-center w-full mb-1">
+                                            <div className="flex flex-col">
+                                                <span className={`${modalCpaMode === 'ADJUSTED' ? 'text-teal-400' : 'text-gray-400'} text-xs font-bold uppercase`}>CPA Ajustado</span>
+                                                {isModalAdjustedEqualSimple && (
+                                                    <span className="text-[9px] text-gray-500 font-medium">Sin atípicos</span>
+                                                )}
                                             </div>
-                                        )}
+                                            {modalCpaMode === 'ADJUSTED' && <CheckCircle2 className="h-3.5 w-3.5 text-teal-500" />}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-2xl font-bold ${modalCpaMode === 'ADJUSTED' ? 'text-teal-400' : 'text-gray-500'}`}>
+                                                {modalDynamicData?.analysis.adjusted.toFixed(1)}
+                                            </span>
+                                        </div>
+                                    </button>
+
+                                    {/* CPA SIMPLE CARD */}
+                                    <button 
+                                        onClick={() => setModalCpaMode('SIMPLE')}
+                                        className={`p-3 rounded-xl border flex flex-col justify-center transition-all relative overflow-hidden group text-left ${
+                                            modalCpaMode === 'SIMPLE' 
+                                            ? 'bg-blue-900/20 border-blue-500 shadow-md ring-1 ring-blue-500/50' 
+                                            : 'bg-gray-800/50 border-gray-700 hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        <div className="flex justify-between items-center w-full mb-1">
+                                            <span className={`${modalCpaMode === 'SIMPLE' ? 'text-blue-400' : 'text-gray-400'} text-xs font-bold uppercase`}>CPA Simple</span>
+                                            {modalCpaMode === 'SIMPLE' && <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-2xl font-bold ${modalCpaMode === 'SIMPLE' ? 'text-blue-400' : 'text-gray-500'} ${(modalDynamicData?.analysis.spikes || 0) > 0 && modalCpaMode !== 'SIMPLE' ? 'line-through decoration-red-500/50' : ''}`}>
+                                                {modalDynamicData?.analysis.raw.toFixed(1)}
+                                            </span>
+                                            {(modalDynamicData?.analysis.spikes || 0) > 0 && modalCpaMode !== 'SIMPLE' && (
+                                                <MousePointerClick className="h-3.5 w-3.5 text-gray-500 opacity-50" />
+                                            )}
+                                        </div>
+                                    </button>
+
+                                    <div className="bg-gray-800/50 p-3 rounded-xl border border-gray-700">
+                                        <div className="text-gray-400 text-xs font-bold uppercase mb-1">Meses Disp.</div>
+                                        <div className="text-2xl font-bold text-blue-400">
+                                            {modalDynamicData?.months === 999 ? '∞' : modalDynamicData?.months.toFixed(1)}
+                                        </div>
+                                    </div>
+                                    <div className={`p-3 rounded-xl border ${modalDynamicData?.status === 'NormoStock' ? 'bg-green-900/20 border-green-800' :
+                                        modalDynamicData?.status === 'SobreStock' ? 'bg-indigo-900/20 border-indigo-800' :
+                                            modalDynamicData?.status === 'SubStock' ? 'bg-orange-900/20 border-orange-800' :
+                                                'bg-red-900/20 border-red-800'
+                                        }`}>
+                                        <div className="text-gray-400 text-xs font-bold uppercase mb-1">Situación</div>
+                                        <div className={`text-xl font-bold truncate ${modalDynamicData?.status === 'NormoStock' ? 'text-green-400' :
+                                            modalDynamicData?.status === 'SobreStock' ? 'text-indigo-400' :
+                                                modalDynamicData?.status === 'SubStock' ? 'text-orange-400' :
+                                                    'text-red-400'
+                                            }`}>
+                                            {modalDynamicData?.status}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Consumption Table */}
+                                <div className="p-5 overflow-x-auto">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-3 gap-4">
+                                        <h3 className="text-white text-sm font-bold flex items-center gap-2">
+                                            <FileSpreadsheet className="h-4 w-4 text-teal-500" />
+                                            Histórico de Consumo (Últimos 12 Meses)
+                                        </h3>
+                                        <div className="flex gap-3">
+                                            <div className="bg-gray-800 px-2.5 py-1 rounded-lg border border-gray-700 flex items-center gap-2">
+                                                <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Suma Total</span>
+                                                <span className="text-white font-mono font-bold text-lg leading-none">{selectedDetailItem.consumptionSum}</span>
+                                            </div>
+                                            <div className="bg-gray-800 px-2.5 py-1 rounded-lg border border-gray-700 flex items-center gap-2">
+                                                <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Meses con Consumo</span>
+                                                <span className="text-white font-mono font-bold text-lg leading-none">{selectedDetailItem.consumptionMonths}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="border border-gray-700 rounded-lg overflow-hidden">
+                                        <div className="grid grid-cols-12 divide-x divide-gray-700 bg-gray-950 text-gray-400 text-sm font-bold uppercase text-center">
+                                            {Array.from({ length: 12 }).map((_, i) => {
+                                                // Extract month and year from lastMonthYear (YYYY-MM)
+                                                const [selectedYear, selectedMonth] = lastMonthYear.split('-').map(Number);
+                                                
+                                                // Calculate the month index (0-11) and the corresponding year
+                                                // We are looking at the 12 months ending in selectedMonth/selectedYear
+                                                // The sequence starts 11 months before selectedMonth
+                                                let monthIndex = (selectedMonth - 12 + i) % 12;
+                                                if (monthIndex < 0) monthIndex += 12;
+                                                
+                                                // Calculate year for this specific month
+                                                // If monthIndex is greater than selectedMonth-1, it belongs to the previous year
+                                                let year = selectedYear;
+                                                if (monthIndex > (selectedMonth - 1)) {
+                                                    year -= 1;
+                                                }
+                                                
+                                                const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+                                                const yearShort = String(year).slice(-2);
+                                                
+                                                return <div key={i} className="py-2 px-1">{`${monthNames[monthIndex]} ${yearShort}`}</div>;
+                                            })}
+                                        </div>
+                                        <div className="grid grid-cols-12 divide-x divide-gray-700 bg-gray-900 text-white font-mono text-base font-bold text-center">
+                                            {selectedDetailItem.monthlyConsumption && selectedDetailItem.monthlyConsumption.length === 12 ? (
+                                                selectedDetailItem.monthlyConsumption.map((val, i) => {
+                                                    const isExcluded = modalExcludedIndices.includes(i);
+                                                    const isSpike = modalDynamicData?.analysis.isSporadic ? false : val > (modalDynamicData?.analysis.threshold || 0);
+                                                    const isLow = val > 0 && val < (modalDynamicData?.analysis.lowThreshold || 0);
+                                                    
+                                                    let bgColor = '';
+                                                    let textColor = val === 0 ? 'text-gray-600' : 'text-white';
+                                                    
+                                                    if (isExcluded) {
+                                                        bgColor = 'bg-gray-800/50';
+                                                        textColor = 'text-gray-500 line-through';
+                                                    } else if (modalCpaMode === 'ADJUSTED') {
+                                                        if (isSpike) {
+                                                            bgColor = 'bg-rose-900/30';
+                                                            textColor = 'text-rose-400';
+                                                        } else if (isLow) {
+                                                            bgColor = 'bg-amber-900/30';
+                                                            textColor = 'text-amber-400';
+                                                        }
+                                                    }
+
+                                                    return (
+                                                        <div 
+                                                            key={i} 
+                                                            className={`py-3 px-1 cursor-pointer hover:bg-gray-800 transition-colors relative group ${bgColor} ${textColor}`}
+                                                            onClick={() => {
+                                                                if (val === 0) return;
+                                                                setModalExcludedIndices(prev => 
+                                                                    prev.includes(i) ? prev.filter(idx => idx !== i) : [...prev, i]
+                                                                );
+                                                            }}
+                                                            title={val === 0 ? 'Sin consumo' : isExcluded ? 'Click para incluir' : 'Click para excluir'}
+                                                        >
+                                                            {val}
+                                                            {val > 0 && (
+                                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/50 transition-opacity">
+                                                                    {isExcluded ? <Check className="h-4 w-4 text-green-400" /> : <X className="h-4 w-4 text-red-400" />}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="col-span-12 p-4 text-gray-500 italic">
+                                                    No hay datos de consumo mensual disponibles.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Audit Criteria & Estimation */}
+                                <div className="p-5 grid grid-cols-1 md:grid-cols-[1fr_400px] gap-5">
+                                    <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-4 text-xs text-gray-300">
+                                        <div className="flex items-center gap-2 text-amber-400 font-bold mb-2">
+                                            <AlertTriangle className="h-3.5 w-3.5" />
+                                            <span>Criterio de Auditoría (Ficha 30)</span>
+                                        </div>
+                                        <ul className="space-y-1 list-disc list-inside text-gray-400">
+                                            <li>Se calculó la mediana histórica de los meses con movimiento.</li>
+                                            <li>El umbral de tolerancia se fijó en <span className="font-bold text-white">{modalDynamicData?.analysis.threshold.toFixed(1)}</span> unidades.</li>
+                                            
+                                            {/* DYNAMIC: Low consumption only if relevant */}
+                                            {(modalDynamicData?.analysis.lowThreshold || 0) > 0 && (modalDynamicData?.analysis.lows || 0) > 0 && (
+                                                <li>
+                                                    {modalCpaMode === 'ADJUSTED' ? (
+                                                        <>Los meses pintados en <span className="bg-yellow-600/50 text-yellow-300 px-1 rounded font-bold">AMARILLO</span> se resaltan por ser consumos muy bajos (menores a <span className="font-bold text-white">{modalDynamicData?.analysis.lowThreshold.toFixed(1)}</span>).</>
+                                                    ) : (
+                                                        <>Se detectaron consumos muy bajos (menores a <span className="font-bold text-white">{modalDynamicData?.analysis.lowThreshold.toFixed(1)}</span>).</>
+                                                    )}
+                                                </li>
+                                            )}
+                                            
+                                            {/* DYNAMIC: Manual mode text */}
+                                            {modalCpaMode === 'SIMPLE' && (
+                                                <li><span className="font-bold text-white">MODO MANUAL ACTIVO:</span> Se están considerando todos los meses (incluso atípicos) para el cálculo.</li>
+                                            )}
+                                            
+                                            {/* DYNAMIC: Manual exclusion text */}
+                                            {modalExcludedIndices.length > 0 && (
+                                                <li>EXCLUSIÓN MANUAL: Se han excluido <span className="font-bold text-white">{modalExcludedIndices.length}</span> mes(es) del cálculo por decisión del usuario (tachados).</li>
+                                            )}
+
+                                            {/* DYNAMIC: Red spike exclusion text (only in ADJUSTED mode) */}
+                                            {modalCpaMode === 'ADJUSTED' && (modalDynamicData?.analysis.spikes || 0) > 0 && (
+                                                <li>Los meses pintados de <span className="bg-red-900/50 text-red-300 px-1 rounded font-bold">ROJO</span> se excluyen del cálculo.</li>
+                                            )}
+                                        </ul>
+                                    </div>
+
+                                    {/* NEW: ESTIMATION SECTION */}
+                                    <div className="bg-indigo-900/10 border border-indigo-500/30 rounded-xl p-4 text-xs">
+                                        <div className="flex items-center gap-2 text-indigo-400 font-bold mb-3">
+                                            <Sparkles className="h-3.5 w-3.5" />
+                                            <span>Simulador de Abastecimiento</span>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="text-gray-400 text-xs font-bold uppercase block mb-1">Balance Actual</label>
+                                                    <div className={`text-xl font-bold ${
+                                                        (() => {
+                                                            const balance = calculateNeed(
+                                                                selectedDetailItem.stock, 
+                                                                modalDynamicData?.cpm || 0, 
+                                                                modalDynamicData?.status || '', 
+                                                                Number(selectedDetailItem.consumptionMonths || 0)
+                                                            );
+                                                            if (balance > 0) return 'text-blue-400';
+                                                            if (balance < 0) return 'text-red-400';
+                                                            return 'text-white';
+                                                        })()
+                                                    }`}>
+                                                        {(() => {
+                                                            const balance = calculateNeed(
+                                                                selectedDetailItem.stock, 
+                                                                modalDynamicData?.cpm || 0, 
+                                                                modalDynamicData?.status || '', 
+                                                                Number(selectedDetailItem.consumptionMonths || 0)
+                                                            );
+                                                            return balance === 0 ? '-' : balance;
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="text-indigo-300 text-xs font-bold uppercase block mb-1">Cantidad a Estimar</label>
+                                                    <input 
+                                                        type="number"
+                                                        value={modalEstimation || ''}
+                                                        onChange={(e) => setModalEstimation(Number(e.target.value))}
+                                                        placeholder="Ej: 50"
+                                                        className="w-full bg-gray-800 border border-indigo-500/50 rounded-lg px-2 py-1.5 text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-indigo-500/5 rounded-lg p-2.5 border border-indigo-500/20 flex flex-col justify-between">
+                                                <div className="space-y-2">
+                                                    <div>
+                                                        <label className="text-gray-400 text-xs font-bold uppercase block mb-0.5">Nuevo Stock</label>
+                                                        <div className="text-xl font-bold text-white">
+                                                            {selectedDetailItem.stock + (modalEstimation || 0)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2 pt-2 border-t border-indigo-500/10">
+                                                    <label className="text-gray-400 text-xs font-bold uppercase block mb-0.5">Nuevos Meses</label>
+                                                    <div className={`text-xl font-bold ${
+                                                        (() => {
+                                                            const newStock = selectedDetailItem.stock + (modalEstimation || 0);
+                                                            const cpm = modalDynamicData?.cpm || 0;
+                                                            const newMonths = cpm > 0 ? newStock / cpm : (newStock > 0 ? 999 : 0);
+                                                            
+                                                            if (newMonths === 0) return 'text-red-400';
+                                                            if (newMonths < 2) return 'text-orange-400';
+                                                            if (newMonths <= 6) return 'text-green-400';
+                                                            return 'text-indigo-400';
+                                                        })()
+                                                    }`}>
+                                                        {(() => {
+                                                            const newStock = selectedDetailItem.stock + (modalEstimation || 0);
+                                                            const cpm = modalDynamicData?.cpm || 0;
+                                                            const newMonths = cpm > 0 ? newStock / cpm : (newStock > 0 ? 999 : 0);
+                                                            return newMonths === 999 ? '∞' : newMonths.toFixed(1);
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Footer */}
-                            <div className="p-6 border-t border-gray-800 bg-gray-900/50 flex justify-between items-center">
+                            <div className="p-5 border-t border-gray-800 bg-gray-900 z-10 flex justify-between items-center">
                                 <div className="flex gap-3">
                                     {!selectedDetailItem.isWarehouse && (
                                         <button

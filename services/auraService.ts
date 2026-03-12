@@ -2,7 +2,7 @@
 import { MedicationInput, AuraAnalysisResult, StockStatus, AnalyzedMedication } from "../types";
 
 // Helper: Calculate Median
-const calculateMedian = (values: number[]): number => {
+export const calculateMedian = (values: number[]): number => {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -10,7 +10,7 @@ const calculateMedian = (values: number[]): number => {
 };
 
 // 1. Math Helpers (SISMED + Spike Detection)
-const calculateAdjustedCPM = (history: number[]): { adjusted: number; adjustedNoLows: number; raw: number; spikes: number; details: string; threshold: number; lowThreshold: number; lows: number; isSporadic: boolean } => {
+export const calculateAdjustedCPM = (history: number[]): { adjusted: number; adjustedNoLows: number; raw: number; spikes: number; details: string; threshold: number; lowThreshold: number; lows: number; isSporadic: boolean } => {
   const nonZeroMonths = history.filter(val => val > 0);
   const frequency = nonZeroMonths.length;
   

@@ -68,7 +68,19 @@ type FilterKey = 'ff' | 'medtip' | 'medpet' | 'medest' | 'status' | 'currentStoc
 const calculateDynamicMetrics = (item: AnalyzedMedication) => {
     let activeCpm = 0;
     const excludedIndices = item.excludedIndices || [];
-    const mode = item.selectedCpaMode || 'ADJUSTED';
+    let mode = item.selectedCpaMode || 'ADJUSTED';
+
+    // Migration/Correction for display: If saved as SIMPLE but it has spikes and no manual exclusions,
+    // it's likely a bug-induced state from a previous version. Default to ADJUSTED for display.
+    const cpmStr = (item.cpm || 0).toFixed(1);
+    const rawCpmStr = (item.rawCpm || 0).toFixed(1);
+    const isEqual = cpmStr === rawCpmStr;
+    const noSpikes = !item.hasSpikes;
+    const shouldBeSimple = isEqual || noSpikes;
+
+    if (mode === 'SIMPLE' && !shouldBeSimple && excludedIndices.length === 0) {
+        mode = 'ADJUSTED';
+    }
 
     if (excludedIndices.length === 0) {
         activeCpm = mode === 'SIMPLE' ? item.rawCpm : item.cpm;
