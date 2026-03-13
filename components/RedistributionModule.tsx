@@ -133,7 +133,7 @@ const MultiSelectFilter = ({
             {isOpen && createPortal(
                 <div
                     ref={dropdownRef}
-                    className="fixed min-w-[200px] bg-white border border-slate-200 shadow-xl rounded-xl z-[40] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
+                    className="fixed min-w-[200px] bg-white border border-slate-200 shadow-xl rounded-xl z-[9999] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
                     style={{ ...menuStyles }}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -200,6 +200,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const [selectedEstablishment, setSelectedEstablishment] = useState<string[]>([]);
     const [selectedSituacion, setSelectedSituacion] = useState<string[]>([]);
     const [selectedEstablecimientoFilter, setSelectedEstablecimientoFilter] = useState<string[]>([]);
+    const [selectedMesesFilter, setSelectedMesesFilter] = useState<string[]>([]);
     const [selectedProductCode, setSelectedProductCode] = useState<string>('');
     const [selectedProductName, setSelectedProductName] = useState<string>('');
 
@@ -633,6 +634,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setEstFilter([]);
         setSelectedSituacion([]);
         setSelectedEstablecimientoFilter([]);
+        setSelectedMesesFilter([]);
         setCpaAdjustments({});
         
         localforage.removeItem('aura_records');
@@ -1064,6 +1066,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         if (establishmentCod === 'ALL') {
             setSelectedEstablishment([]);
             setSelectedEstablecimientoFilter([]);
+            setSelectedMesesFilter([]);
             setSelectedSituacion([]);
             return;
         }
@@ -1078,6 +1081,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         
         setSelectedEstablishment(newSelection);
         setSelectedEstablecimientoFilter([]);
+        setSelectedMesesFilter([]);
         setSelectedSituacion([]);
         setSelectedProductCode('');
         setSelectedProductName('');
@@ -1093,6 +1097,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             setSelectedMicrored(['ALL']);
             setSelectedEstablishment([]);
             setSelectedEstablecimientoFilter([]);
+            setSelectedMesesFilter([]);
             setSelectedSituacion([]);
             return;
         }
@@ -1115,6 +1120,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setSelectedMicrored(newSelection);
         setSelectedEstablishment([]);
         setSelectedEstablecimientoFilter([]);
+        setSelectedMesesFilter([]);
         setSelectedSituacion([]);
         setSelectedProductCode('');
         setSelectedProductName('');
@@ -1157,6 +1163,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setSelectedProductCode(productCode);
         setSelectedSituacion([]);
         setSelectedEstablecimientoFilter([]);
+        setSelectedMesesFilter([]);
 
         // Find and set product name
         const product = productOptions.find(p => p.code === productCode);
@@ -1502,12 +1509,22 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         return redistributionData.filter(item => {
             if (selectedSituacion.length > 0 && !selectedSituacion.includes(item.status || 'N/A')) return false;
             if (selectedEstablecimientoFilter.length > 0 && !selectedEstablecimientoFilter.includes(item.establishmentName || 'N/A')) return false;
+            const itemMesesStr = item.monthsProvision === 999 ? '∞' : item.monthsProvision.toFixed(1);
+            if (selectedMesesFilter.length > 0 && !selectedMesesFilter.includes(itemMesesStr)) return false;
             return true;
         });
-    }, [redistributionData, selectedSituacion, selectedEstablecimientoFilter]);
+    }, [redistributionData, selectedSituacion, selectedEstablecimientoFilter, selectedMesesFilter]);
 
     const situacionOptions = useMemo(() => Array.from(new Set(redistributionData.map(item => item.status || 'N/A'))).map(s => ({ value: s, label: s })), [redistributionData]);
     const establecimientoOptions = useMemo(() => Array.from(new Set(redistributionData.map(item => item.establishmentName || 'N/A'))).map(e => ({ value: e, label: e })), [redistributionData]);
+    const mesesOptions = useMemo(() => {
+        const uniqueValues = Array.from(new Set(redistributionData.map(item => item.monthsProvision === 999 ? '∞' : item.monthsProvision.toFixed(1))));
+        return uniqueValues.sort((a, b) => {
+            if (a === '∞') return 1;
+            if (b === '∞') return -1;
+            return parseFloat(a) - parseFloat(b);
+        }).map(s => ({ value: s, label: s }));
+    }, [redistributionData]);
 
     useEffect(() => {
         if (situacionOptions.length > 0 && selectedSituacion.length === 0) {
@@ -1516,7 +1533,10 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         if (establecimientoOptions.length > 0 && selectedEstablecimientoFilter.length === 0) {
             setSelectedEstablecimientoFilter(establecimientoOptions.map(o => o.value));
         }
-    }, [situacionOptions, establecimientoOptions]);
+        if (mesesOptions.length > 0 && selectedMesesFilter.length === 0) {
+            setSelectedMesesFilter(mesesOptions.map(o => o.value));
+        }
+    }, [situacionOptions, establecimientoOptions, mesesOptions]);
 
     const handleSimulationChange = (codEess: string, value: string) => {
         let numValue = 0;
@@ -2044,7 +2064,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         );
     }
 
-    const renderProductListTable = (showMicroredFilter: boolean = false) => (
+    const renderProductListTable = (showMicroredFilter: boolean = false) => {
+        const portalTarget = isFullscreen && tableContainerRef.current ? tableContainerRef.current : document.body;
+        return (
         <>
             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center gap-4">
                 <div className="flex items-center gap-2.5 shrink-0">
@@ -2257,8 +2279,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         Seleccione una Microred para ver los productos
                     </div>
                 ) : (
-                    <table className="w-full text-base text-left">
-                        <thead className="bg-slate-50/80 text-slate-500 font-bold text-sm uppercase tracking-widest sticky top-0 z-10 backdrop-blur-sm border-b border-slate-100">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50/80 text-slate-500 font-bold text-xs uppercase tracking-widest sticky top-0 z-10 backdrop-blur-sm border-b border-slate-100">
                             <tr>
                                 <th className="p-0 align-middle w-16 text-center">
                                     <MultiSelectFilter
@@ -2269,18 +2291,18 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         ]}
                                         selectedValues={reviewFilter}
                                         onChange={setReviewFilter}
-                                        portalTarget={tableContainerRef.current}
+                                        portalTarget={portalTarget}
                                     />
                                 </th>
                                 <th className="p-2 w-20 text-left align-middle">Código</th>
-                                <th className="p-2 text-left align-middle">Descripción</th>
+                                <th className="p-2 text-left align-middle max-w-[350px]">Descripción</th>
                                 <th className="p-0 align-middle w-16 text-center">
                                     <MultiSelectFilter
                                         title="TIPO"
                                         options={Array.from(new Set(productOptions.map(p => String(p.type || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
                                         selectedValues={tipoFilter}
                                         onChange={setTipoFilter}
-                                        portalTarget={tableContainerRef.current}
+                                        portalTarget={portalTarget}
                                     />
                                 </th>
                                 <th className="p-0 align-middle w-14 text-center">
@@ -2289,7 +2311,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         options={Array.from(new Set(productOptions.map(p => String(p.pet || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
                                         selectedValues={petFilter}
                                         onChange={setPetFilter}
-                                        portalTarget={tableContainerRef.current}
+                                        portalTarget={portalTarget}
                                     />
                                 </th>
                                 <th className="p-0 align-middle w-14 text-center">
@@ -2298,7 +2320,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         options={Array.from(new Set(productOptions.map(p => String(p.est || '').toUpperCase()).filter(Boolean))).sort().map(val => ({ value: val, label: val }))}
                                         selectedValues={estFilter}
                                         onChange={setEstFilter}
-                                        portalTarget={tableContainerRef.current}
+                                        portalTarget={portalTarget}
                                     />
                                 </th>
                                 <th className="p-2 w-16 text-center text-blue-700 bg-blue-50/50 align-middle">STOCK</th>
@@ -2316,7 +2338,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         ]}
                                         selectedValues={statusFilter}
                                         onChange={setStatusFilter}
-                                        portalTarget={tableContainerRef.current}
+                                        portalTarget={portalTarget}
                                     />
                                 </th>
                             </tr>
@@ -2361,16 +2383,16 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                     <Circle className="h-4 w-4 text-slate-200 mx-auto hover:text-slate-400 transition-colors" />
                                                 )}
                                             </td>
-                                            <td className="p-2 font-mono text-base font-bold text-slate-500">{prod.code}</td>
-                                            <td className="p-2 text-base font-medium text-slate-800 truncate" title={prod.name}>{prod.name}</td>
-                                            <td className="p-2 text-center text-sm text-slate-500 font-mono">{prod.type}</td>
-                                            <td className="p-2 text-center text-sm text-slate-500 font-bold">{prod.pet}</td>
-                                            <td className="p-2 text-center text-sm text-slate-500 font-bold">{prod.est}</td>
-                                            <td className="p-2 text-center text-base font-mono font-bold text-blue-700 bg-blue-50/30">{prod.totalStock}</td>
-                                            <td className="p-2 text-center text-base font-mono">{prod.cpa.toFixed(1)}</td>
-                                            <td className="p-2 text-center text-base font-mono font-bold">{prod.months === 999 ? '∞' : prod.months.toFixed(1)}</td>
+                                            <td className="p-2 font-mono text-sm font-bold text-slate-500">{prod.code}</td>
+                                            <td className="p-2 text-xs font-medium text-slate-800 truncate max-w-[350px]" title={prod.name}>{prod.name}</td>
+                                            <td className="p-2 text-center text-xs text-slate-500 font-mono">{prod.type}</td>
+                                            <td className="p-2 text-center text-xs text-slate-500 font-bold">{prod.pet}</td>
+                                            <td className="p-2 text-center text-xs text-slate-500 font-bold">{prod.est}</td>
+                                            <td className="p-2 text-center text-sm font-mono font-bold text-blue-700 bg-blue-50/30">{prod.totalStock}</td>
+                                            <td className="p-2 text-center text-sm font-mono">{prod.cpa.toFixed(1)}</td>
+                                            <td className="p-2 text-center text-sm font-mono font-bold">{prod.months === 999 ? '∞' : prod.months.toFixed(1)}</td>
                                             <td className="p-2 text-center">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-tighter border ${statusColor}`}>
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tighter border ${statusColor}`}>
                                                     {prod.status}
                                                 </span>
                                             </td>
@@ -2383,7 +2405,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                 )}
             </div>
         </>
-    );
+        );
+    };
 
     return (
         <div className={`w-full mx-auto ${isFullscreen ? 'p-0 max-w-none' : 'p-6 max-w-[98%] space-y-6 animate-in fade-in duration-300'}`}>
@@ -2666,6 +2689,10 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             {/* REDISTRIBUTION TABLE */}
             {selectedMicrored.length > 0 && records.length > 0 && (
                 <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-[100]' : 'max-h-[85vh]'}`}>
+                    {(() => {
+                        const dropdownPortalTarget = isFullscreen && tableContainerRef.current ? tableContainerRef.current : document.body;
+                        return (
+                            <>
                     <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center shrink-0">
                         <h3 className="font-bold text-gray-800 flex items-center gap-3">
                             {(() => {
@@ -2771,8 +2798,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         </div>
                     </div>
                     <div className="overflow-auto flex-1 custom-scrollbar">
-                        <table className="w-full text-lg text-left">
-                            <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-base sticky top-0 z-10 shadow-sm">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-xs sticky top-0 z-10 shadow-sm">
                                 <tr>
 
                                     <th className="p-3 border-b text-left">
@@ -2783,15 +2810,26 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                 options={establecimientoOptions}
                                                 selectedValues={selectedEstablecimientoFilter}
                                                 onChange={setSelectedEstablecimientoFilter}
-                                                portalTarget={tableContainerRef.current}
+                                                portalTarget={dropdownPortalTarget}
                                             />
                                         </div>
                                     </th>
-                                    <th className="p-3 border-b text-center">Stock</th>
-                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-sm uppercase tracking-wider">Suma Cons.</th>
-                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-sm uppercase tracking-wider">Meses Cons.</th>
+                                    <th className="p-3 border-b text-center text-blue-700 bg-blue-50/50">Stock</th>
+                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-[10px] uppercase tracking-wider">Suma Cons.</th>
+                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-[10px] uppercase tracking-wider">Meses Cons.</th>
                                     <th className="p-3 border-b text-center">CPA</th>
-                                    <th className="p-3 border-b text-center">Meses</th>
+                                    <th className="p-3 border-b text-center">
+                                        <div className="flex items-center justify-center gap-1">
+                                            Meses
+                                            <MultiSelectFilter
+                                                title=""
+                                                options={mesesOptions}
+                                                selectedValues={selectedMesesFilter}
+                                                onChange={setSelectedMesesFilter}
+                                                portalTarget={dropdownPortalTarget}
+                                            />
+                                        </div>
+                                    </th>
                                     <th className="p-3 border-b text-center">
                                         <div className="flex items-center justify-center gap-1">
                                             Situación
@@ -2800,7 +2838,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                 options={situacionOptions}
                                                 selectedValues={selectedSituacion}
                                                 onChange={setSelectedSituacion}
-                                                portalTarget={tableContainerRef.current}
+                                                portalTarget={dropdownPortalTarget}
                                             />
                                         </div>
                                     </th>
@@ -2902,7 +2940,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     `}
                                             onClick={() => !item.isWarehouse && handleOpenDetailModal(item)}
                                         >
-                                            <td className={`p-3 pr-4 font-medium relative ${isPrincipal ? 'font-black text-gray-900 pl-11' : 'text-gray-700'} ${isSecondary ? 'pl-20 text-gray-600 italic' : ''}`} title={`${item.codEess} - ${item.establishmentName}`}>
+                                            <td className={`p-3 pr-4 font-medium relative whitespace-nowrap text-xs ${isPrincipal ? 'font-black text-gray-900 pl-11' : 'text-gray-700'} ${isSecondary ? 'pl-20 text-gray-600 italic' : ''}`} title={`${item.codEess} - ${item.establishmentName}`}>
                                                 <div className="flex items-center">
                                                     {hasSecondaries && (
                                                         <div
@@ -2925,17 +2963,17 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                     {analysisBadge}
                                                 </div>
                                             </td>
-                                            <td className="p-3 text-center font-mono">{isGhost ? '' : item.stock}</td>
+                                            <td className="p-3 text-center font-mono text-sm font-bold text-blue-700 bg-blue-50/30 group-hover:bg-transparent">{isGhost ? '' : item.stock}</td>
 
                                             {/* CONSUMPTION DATA */}
-                                            <td className={`p-3 text-center font-mono text-base ${isSelected ? 'text-indigo-700 font-bold' : 'text-gray-500 bg-gray-50 group-hover:bg-transparent'}`}>
+                                            <td className={`p-3 text-center font-mono text-sm ${isSelected ? 'text-indigo-700 font-bold' : 'text-gray-500 bg-gray-50 group-hover:bg-transparent'}`}>
                                                 {isGhost ? '' : (item.consumptionSum || 0)}
                                             </td>
-                                            <td className={`p-3 text-center font-mono text-base ${isSelected ? 'text-indigo-700 font-bold' : 'text-gray-500 bg-gray-50 group-hover:bg-transparent'}`}>
+                                            <td className={`p-3 text-center font-mono text-sm ${isSelected ? 'text-indigo-700 font-bold' : 'text-gray-500 bg-gray-50 group-hover:bg-transparent'}`}>
                                                 {isGhost ? '' : (item.consumptionMonths || 0)}
                                             </td>
 
-                                            <td className="p-3 text-center font-mono">
+                                            <td className="p-3 text-center font-mono text-sm">
                                                 {isGhost ? '' : (
                                                     <div className="flex items-center justify-center gap-1">
                                                         {item.cpa.toFixed(1)}
@@ -2947,19 +2985,19 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="p-3 text-center font-mono font-bold">
+                                            <td className="p-3 text-center font-mono font-bold text-sm">
                                                 {isGhost ? '' : (item.monthsProvision === 999 ? '∞' : item.monthsProvision.toFixed(1))}
                                             </td>
                                             <td className="p-3 text-center">
                                                 {!isGhost && (
-                                                    <span className={`px-2 py-1 rounded-full text-sm font-bold uppercase ${statusColor}`}>
+                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${statusColor}`}>
                                                         {item.status}
                                                     </span>
                                                 )}
                                             </td>
 
                                             {/* NECESIDAD / EXCEDENTE / BALANCE */}
-                                            <td className={`p-3 text-center font-mono font-bold ${isSelected ? 'text-indigo-700' :
+                                            <td className={`p-3 text-center font-mono font-bold text-sm ${isSelected ? 'text-indigo-700' :
                                                 (currentNeed || 0) > 0 ? 'text-blue-600 bg-blue-50 group-hover:bg-transparent' :
                                                     (currentNeed || 0) < 0 ? 'text-red-600 bg-red-50 group-hover:bg-transparent' : 'text-gray-400 bg-gray-50 group-hover:bg-transparent'
                                                 }`} title={`Stock: ${newStock}, CPA: ${item.cpa}, MesesCons: ${item.consumptionMonths}, Status: ${item.status}, NeedCalc: ${currentNeed}`}>
@@ -2973,7 +3011,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                     value={item.simulationInput !== undefined ? item.simulationInput : (item.simulationQty === 0 ? '' : item.simulationQty)}
                                                     onChange={(e) => handleSimulationChange(item.codEess, e.target.value)}
                                                     placeholder="+/-"
-                                                    className={`w-16 p-1 text-center border rounded focus:ring-2 focus:ring-purple-500 outline-none text-xs font-bold ${(item.simulationQty || 0) < 0 ? 'text-red-600 border-red-300 bg-red-50' :
+                                                    className={`w-16 p-1 text-center border rounded focus:ring-2 focus:ring-purple-500 outline-none text-sm font-bold ${(item.simulationQty || 0) < 0 ? 'text-red-600 border-red-300 bg-red-50' :
                                                         (item.simulationQty || 0) > 0 ? 'text-blue-600 border-blue-300 bg-blue-50' : 'border-gray-300 text-gray-600'
                                                         }`}
                                                     disabled={isGhost}
@@ -2981,7 +3019,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             </td>
 
                                             {/* SALE (Read Only) */}
-                                            <td className={`p-3 text-center border-l border-yellow-100 ${isSelected ? '' : 'bg-yellow-50 group-hover:bg-transparent'}`}>
+                                            <td className={`p-3 text-center border-l border-yellow-100 text-sm ${isSelected ? '' : 'bg-yellow-50 group-hover:bg-transparent'}`}>
                                                 {(item.transferQty || 0) > 0 ? (
                                                     <span className="font-bold text-yellow-700">-{item.transferQty}</span>
                                                 ) : (
@@ -2990,7 +3028,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             </td>
 
                                             {/* ENTRA (Read Only) */}
-                                            <td className={`p-3 text-center border-l border-green-100 ${isSelected ? '' : 'bg-green-50 group-hover:bg-transparent'}`}>
+                                            <td className={`p-3 text-center border-l border-green-100 text-sm ${isSelected ? '' : 'bg-green-50 group-hover:bg-transparent'}`}>
                                                 {(item.receivedQty || 0) > 0 ? (
                                                     <span className="font-bold text-green-700">+{item.receivedQty}</span>
                                                 ) : (
@@ -2999,12 +3037,12 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             </td>
 
                                             {/* CALCULATED */}
-                                            <td className={`p-3 text-center font-mono font-bold border-l border-blue-100 ${isSelected ? 'text-indigo-900' :
+                                            <td className={`p-3 text-center font-mono font-bold text-sm border-l border-blue-100 ${isSelected ? 'text-indigo-900' :
                                                 newStock < 0 ? 'text-red-600 bg-red-50 group-hover:bg-transparent' : 'text-blue-900 bg-blue-50/30 group-hover:bg-transparent'
                                                 }`}>
                                                 {newStock === 0 ? '' : newStock}
                                             </td>
-                                            <td className={`p-3 text-center font-mono font-bold border-l border-blue-100 ${isSelected ? 'text-indigo-900' :
+                                            <td className={`p-3 text-center font-mono font-bold text-sm border-l border-blue-100 ${isSelected ? 'text-indigo-900' :
                                                 'text-blue-900 bg-blue-50/30 group-hover:bg-transparent'
                                                 }`}>
                                                 <div className="flex items-center justify-center gap-2">
@@ -3073,6 +3111,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                             </tbody>
                         </table>
                     </div>
+                            </>
+                        );
+                    })()}
                 </div>
             )}
 
