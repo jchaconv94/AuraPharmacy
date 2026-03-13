@@ -1526,16 +1526,49 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         }).map(s => ({ value: s, label: s }));
     }, [redistributionData]);
 
+    const prevSituacionOptions = React.useRef<string[]>([]);
+    const prevEstablecimientoOptions = React.useRef<string[]>([]);
+    const prevMesesOptions = React.useRef<string[]>([]);
+
     useEffect(() => {
-        if (situacionOptions.length > 0 && selectedSituacion.length === 0) {
-            setSelectedSituacion(situacionOptions.map(o => o.value));
+        const currentSituacion = situacionOptions.map(o => o.value);
+        if (currentSituacion.length > 0) {
+            setSelectedSituacion(prev => {
+                if (prev.length === 0) return currentSituacion;
+                const newOptions = currentSituacion.filter(o => !prevSituacionOptions.current.includes(o));
+                if (newOptions.length > 0) {
+                    return Array.from(new Set([...prev, ...newOptions]));
+                }
+                return prev;
+            });
         }
-        if (establecimientoOptions.length > 0 && selectedEstablecimientoFilter.length === 0) {
-            setSelectedEstablecimientoFilter(establecimientoOptions.map(o => o.value));
+        prevSituacionOptions.current = currentSituacion;
+
+        const currentEstablecimiento = establecimientoOptions.map(o => o.value);
+        if (currentEstablecimiento.length > 0) {
+            setSelectedEstablecimientoFilter(prev => {
+                if (prev.length === 0) return currentEstablecimiento;
+                const newOptions = currentEstablecimiento.filter(o => !prevEstablecimientoOptions.current.includes(o));
+                if (newOptions.length > 0) {
+                    return Array.from(new Set([...prev, ...newOptions]));
+                }
+                return prev;
+            });
         }
-        if (mesesOptions.length > 0 && selectedMesesFilter.length === 0) {
-            setSelectedMesesFilter(mesesOptions.map(o => o.value));
+        prevEstablecimientoOptions.current = currentEstablecimiento;
+
+        const currentMeses = mesesOptions.map(o => o.value);
+        if (currentMeses.length > 0) {
+            setSelectedMesesFilter(prev => {
+                if (prev.length === 0) return currentMeses;
+                const newOptions = currentMeses.filter(o => !prevMesesOptions.current.includes(o));
+                if (newOptions.length > 0) {
+                    return Array.from(new Set([...prev, ...newOptions]));
+                }
+                return prev;
+            });
         }
+        prevMesesOptions.current = currentMeses;
     }, [situacionOptions, establecimientoOptions, mesesOptions]);
 
     const handleSimulationChange = (codEess: string, value: string) => {
