@@ -230,6 +230,24 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const handleToggleIndex = (idx: number) => {
       if (isReviewed || !medication) return;
       
+      const val = medication.originalHistory[idx];
+      const isSpike = val > (medication.spikeThreshold || 0) && val > 0;
+      
+      console.log('DEBUG: handleToggleIndex', { 
+          idx, 
+          cpaMode, 
+          type: typeof cpaMode,
+          isSpike, 
+          val, 
+          threshold: medication.spikeThreshold
+      });
+
+      // PROTECCIÓN DE SEGURIDAD: En modo ADJUSTED, los picos están bloqueados funcionalmente.
+      if (cpaMode === 'ADJUSTED') {
+          console.warn('Bloqueo total en modo ADJUSTED.');
+          return;
+      }
+      
       const prevIndices = excludedIndices;
       let newIndices: number[];
       
@@ -241,9 +259,6 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       
       setExcludedIndices(newIndices);
       
-      // Update parent immediately to persist state
-      // Note: The quantity will be auto-updated by the useEffect that watches dynamicData
-      // But we need to save the indices.
       onUpdate(medication.id, reqQuantity, cpaMode, newIndices);
   };
 
@@ -645,9 +660,10 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                                 cellBg = 'bg-gray-200 text-gray-400';
                                 cellStyle = 'line-through decoration-gray-500 decoration-2 opacity-60';
                             } else if (isSpike) {
-                                cellBg = cpaMode === 'SIMPLE' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-yellow-300 font-bold text-black';
-                                // MODIFIED: Add strikethrough to yellow spikes in ADJUSTED mode to indicate exclusion
-                                if (cpaMode === 'ADJUSTED' && !medication.isSporadic) {
+                                // MODIFIED: Use red background for spikes in ADJUSTED mode to match user expectation of "pintado de rojo"
+                                cellBg = cpaMode === 'SIMPLE' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-red-200 font-bold text-red-900';
+                                // MODIFIED: Always add strikethrough to spikes in ADJUSTED mode to indicate exclusion
+                                if (cpaMode === 'ADJUSTED') {
                                     cellStyle = 'line-through decoration-red-500 decoration-2';
                                 }
                             } else if (isLow) {
@@ -655,23 +671,29 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                             }
 
                             // Allow clicking on any non-zero value to toggle exclusion.
-                            // EXCEPTION (User Request): In ADJUSTED mode, Spikes (Yellow) are ALREADY excluded by default.
-                            // So we should NOT allow clicking them to "exclude" them again (redundant).
-                            // Only allow interaction if it's NOT a spike, OR if we are in SIMPLE mode (where spikes are included).
-                            // Note: Sporadic items don't auto-exclude spikes, so we allow interaction there too.
+                            // EXCEPTION (User Request): In ADJUSTED mode, Spikes (Yellow/Red) are ALREADY excluded by default.
                             
                             let canInteract = !isReviewed && val > 0;
                             
-                            if (cpaMode === 'ADJUSTED' && isSpike && !medication.isSporadic) {
+                            // Block interaction if it's a spike (anomalous) in ADJUSTED mode.
+                            if (cpaMode === 'ADJUSTED' && isSpike) {
+                                canInteract = false;
+                            }
+                            
+                            // Also block if it's manually excluded
+                            if (isExcluded) {
                                 canInteract = false;
                             }
 
                             return (
                                 <td 
                                     key={idx} 
-                                    onClick={() => canInteract && handleToggleIndex(idx)}
+                                    onClick={() => {
+                                        console.log('DEBUG: td onClick', { idx, canInteract });
+                                        canInteract && handleToggleIndex(idx);
+                                    }}
                                     className={`p-3 text-center font-mono text-base border-r border-gray-200 last:border-0 transition-all ${cellBg} ${cellStyle} ${canInteract ? 'cursor-pointer hover:opacity-80 hover:shadow-inner' : 'cursor-default'}`}
-                                    title={canInteract ? (isExcluded ? "Clic para incluir" : "Clic para excluir del promedio") : (isSpike && cpaMode === 'ADJUSTED' ? "Excluido automáticamente por el sistema" : "")}
+                                    title={canInteract ? (isExcluded ? "Clic para incluir" : "Clic para excluir del promedio") : (isSpike && cpaMode === 'ADJUSTED' ? "Excluido automáticamente por el sistema (Consumo Anómalo)" : "")}
                                 >
                                     {val}
                                 </td>

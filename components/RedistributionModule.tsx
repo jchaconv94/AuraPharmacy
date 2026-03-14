@@ -1533,9 +1533,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     useEffect(() => {
         const currentSituacion = situacionOptions.map(o => o.value);
         if (currentSituacion.length > 0) {
+            const newOptions = currentSituacion.filter(o => !prevSituacionOptions.current.includes(o));
             setSelectedSituacion(prev => {
                 if (prev.length === 0) return currentSituacion;
-                const newOptions = currentSituacion.filter(o => !prevSituacionOptions.current.includes(o));
                 if (newOptions.length > 0) {
                     return Array.from(new Set([...prev, ...newOptions]));
                 }
@@ -1546,9 +1546,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
         const currentEstablecimiento = establecimientoOptions.map(o => o.value);
         if (currentEstablecimiento.length > 0) {
+            const newOptions = currentEstablecimiento.filter(o => !prevEstablecimientoOptions.current.includes(o));
             setSelectedEstablecimientoFilter(prev => {
                 if (prev.length === 0) return currentEstablecimiento;
-                const newOptions = currentEstablecimiento.filter(o => !prevEstablecimientoOptions.current.includes(o));
                 if (newOptions.length > 0) {
                     return Array.from(new Set([...prev, ...newOptions]));
                 }
@@ -1559,9 +1559,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
         const currentMeses = mesesOptions.map(o => o.value);
         if (currentMeses.length > 0) {
+            const newOptions = currentMeses.filter(o => !prevMesesOptions.current.includes(o));
             setSelectedMesesFilter(prev => {
                 if (prev.length === 0) return currentMeses;
-                const newOptions = currentMeses.filter(o => !prevMesesOptions.current.includes(o));
                 if (newOptions.length > 0) {
                     return Array.from(new Set([...prev, ...newOptions]));
                 }
@@ -1652,16 +1652,20 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                     }
                 });
 
-                // Si fueron añadidos, mostramos éxito. Si ya estaban todos y se le hace clic de nuevo, los removemos.
                 if (!added) {
                     secondaries.forEach(s => next.delete(s.codEess));
-                    toast.info("Consolidación rápida removida", { duration: 2000 });
-                } else {
-                    toast.success("Farmacias consolidadas rápidamente", { duration: 2000 });
                 }
 
                 return next;
             });
+
+            // To avoid stale closures and React strict mode issues with toasts inside updaters
+            const isAdding = secondaries.some(s => !consolidationSelection.has(s.codEess));
+            if (!isAdding) {
+                toast.info("Consolidación rápida removida", { duration: 2000 });
+            } else {
+                toast.success("Farmacias consolidadas rápidamente", { duration: 2000 });
+            }
         } else {
             toast.info("No hay farmacias secundarias en este establecimiento", { duration: 2000 });
         }
