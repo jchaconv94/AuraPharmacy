@@ -202,6 +202,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const [selectedSituacion, setSelectedSituacion] = useState<string[]>([]);
     const [selectedEstablecimientoFilter, setSelectedEstablecimientoFilter] = useState<string[]>([]);
     const [selectedStockFilter, setSelectedStockFilter] = useState<NumberFilterState | null>(null);
+    const [selectedSumaConsFilter, setSelectedSumaConsFilter] = useState<NumberFilterState | null>(null);
+    const [selectedMesesConsFilter, setSelectedMesesConsFilter] = useState<NumberFilterState | null>(null);
     const [selectedCpaFilter, setSelectedCpaFilter] = useState<NumberFilterState | null>(null);
     const [selectedMesesFilter, setSelectedMesesFilter] = useState<NumberFilterState | null>(null);
     const [selectedProductCode, setSelectedProductCode] = useState<string>('');
@@ -650,6 +652,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setSelectedSituacion([]);
         setSelectedEstablecimientoFilter([]);
         setSelectedStockFilter(null);
+        setSelectedSumaConsFilter(null);
+        setSelectedMesesConsFilter(null);
         setSelectedCpaFilter(null);
         setSelectedMesesFilter(null);
         setCpaAdjustments({});
@@ -1120,6 +1124,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             setSelectedEstablishment([]);
             setSelectedEstablecimientoFilter([]);
             setSelectedStockFilter(null);
+            setSelectedSumaConsFilter(null);
+            setSelectedMesesConsFilter(null);
             setSelectedCpaFilter(null);
             setSelectedMesesFilter(null);
             setSelectedSituacion([]);
@@ -1137,6 +1143,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setSelectedEstablishment(newSelection);
         setSelectedEstablecimientoFilter([]);
         setSelectedStockFilter(null);
+        setSelectedSumaConsFilter(null);
+        setSelectedMesesConsFilter(null);
         setSelectedCpaFilter(null);
         setSelectedMesesFilter(null);
         setSelectedSituacion([]);
@@ -1158,6 +1166,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             setSelectedEstablishment([]);
             setSelectedEstablecimientoFilter([]);
             setSelectedStockFilter(null);
+            setSelectedSumaConsFilter(null);
+            setSelectedMesesConsFilter(null);
             setSelectedCpaFilter(null);
             setSelectedMesesFilter(null);
             setSelectedSituacion([]);
@@ -1192,6 +1202,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setSelectedEstablishment([]);
         setSelectedEstablecimientoFilter([]);
         setSelectedStockFilter(null);
+        setSelectedSumaConsFilter(null);
+        setSelectedMesesConsFilter(null);
         setSelectedCpaFilter(null);
         setSelectedMesesFilter(null);
         setSelectedSituacion([]);
@@ -1240,6 +1252,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setSelectedSituacion([]);
         setSelectedEstablecimientoFilter([]);
         setSelectedStockFilter(null);
+        setSelectedSumaConsFilter(null);
+        setSelectedMesesConsFilter(null);
         setSelectedCpaFilter(null);
         setSelectedMesesFilter(null);
 
@@ -1610,6 +1624,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             };
 
             if (!applyNumberFilter(item.stock, selectedStockFilter, String(item.stock))) return false;
+            if (!applyNumberFilter(item.consumptionSum || 0, selectedSumaConsFilter, String(item.consumptionSum || 0))) return false;
+            if (!applyNumberFilter(item.consumptionMonths || 0, selectedMesesConsFilter, String(item.consumptionMonths || 0))) return false;
             if (!applyNumberFilter(item.cpa, selectedCpaFilter, item.cpa.toFixed(1))) return false;
             
             const itemMesesStr = item.monthsProvision === 999 ? '∞' : item.monthsProvision.toFixed(1);
@@ -1617,7 +1633,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             return true;
         });
-    }, [redistributionData, selectedSituacion, selectedEstablecimientoFilter, selectedStockFilter, selectedCpaFilter, selectedMesesFilter]);
+    }, [redistributionData, selectedSituacion, selectedEstablecimientoFilter, selectedStockFilter, selectedSumaConsFilter, selectedMesesConsFilter, selectedCpaFilter, selectedMesesFilter]);
 
     const situacionOptions = useMemo(() => Array.from(new Set(redistributionData.map(item => item.status || 'N/A'))).map(s => ({ value: s, label: s })), [redistributionData]);
     const establecimientoOptions = useMemo(() => Array.from(new Set(redistributionData.map(item => item.establishmentName || 'N/A'))).map(e => ({ value: e, label: e })), [redistributionData]);
@@ -2977,8 +2993,30 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             />
                                         </div>
                                     </th>
-                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-[10px] uppercase tracking-wider">Suma Cons.</th>
-                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-[10px] uppercase tracking-wider">Meses Cons.</th>
+                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-[10px] uppercase tracking-wider">
+                                        <div className="flex items-center justify-center gap-1">
+                                            Suma Cons.
+                                            <NumberFilter
+                                                title=""
+                                                options={Array.from(new Set(redistributionData.map(item => String(item.consumptionSum || 0)))).sort((a, b) => Number(a) - Number(b)).map(val => ({ value: val, label: val }))}
+                                                filterState={selectedSumaConsFilter}
+                                                onChange={setSelectedSumaConsFilter}
+                                                portalTarget={dropdownPortalTarget}
+                                            />
+                                        </div>
+                                    </th>
+                                    <th className="p-3 border-b text-center bg-gray-50 text-gray-600 font-semibold text-[10px] uppercase tracking-wider">
+                                        <div className="flex items-center justify-center gap-1">
+                                            Meses Cons.
+                                            <NumberFilter
+                                                title=""
+                                                options={Array.from(new Set(redistributionData.map(item => String(item.consumptionMonths || 0)))).sort((a, b) => Number(a) - Number(b)).map(val => ({ value: val, label: val }))}
+                                                filterState={selectedMesesConsFilter}
+                                                onChange={setSelectedMesesConsFilter}
+                                                portalTarget={dropdownPortalTarget}
+                                            />
+                                        </div>
+                                    </th>
                                     <th className="p-3 border-b text-center">
                                         <div className="flex items-center justify-center gap-1">
                                             CPA
