@@ -242,6 +242,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const [tipoFilter, setTipoFilter] = useLocalStorage<string[]>('aura_tipoFilter', []);
     const [petFilter, setPetFilter] = useLocalStorage<string[]>('aura_petFilter', []);
     const [estFilter, setEstFilter] = useLocalStorage<string[]>('aura_estFilter', []);
+    const [stockFilter, setStockFilter] = useLocalStorage<string[]>('aura_stockFilter', []);
+    const [cpaFilter, setCpaFilter] = useLocalStorage<string[]>('aura_cpaFilter', []);
+    const [monthsFilter, setMonthsFilter] = useLocalStorage<string[]>('aura_monthsFilter', []);
 
     // --- CONFIRMATION MODAL STATE ---
     const [isReviewConfirmOpen, setIsReviewConfirmOpen] = useState(false);
@@ -494,7 +497,10 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                 'aura_reviewFilter',
                 'aura_tipoFilter',
                 'aura_petFilter',
-                'aura_estFilter'
+                'aura_estFilter',
+                'aura_stockFilter',
+                'aura_cpaFilter',
+                'aura_monthsFilter'
             ];
             
             lsKeys.forEach(key => {
@@ -589,6 +595,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         if (importedData.localStorage.aura_tipoFilter !== undefined) setTipoFilter(importedData.localStorage.aura_tipoFilter);
                         if (importedData.localStorage.aura_petFilter !== undefined) setPetFilter(importedData.localStorage.aura_petFilter);
                         if (importedData.localStorage.aura_estFilter !== undefined) setEstFilter(importedData.localStorage.aura_estFilter);
+                        if (importedData.localStorage.aura_stockFilter !== undefined) setStockFilter(importedData.localStorage.aura_stockFilter);
+                        if (importedData.localStorage.aura_cpaFilter !== undefined) setCpaFilter(importedData.localStorage.aura_cpaFilter);
+                        if (importedData.localStorage.aura_monthsFilter !== undefined) setMonthsFilter(importedData.localStorage.aura_monthsFilter);
                     }
 
                     toast.success("Sesión importada correctamente.");
@@ -632,6 +641,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setTipoFilter([]);
         setPetFilter([]);
         setEstFilter([]);
+        setStockFilter([]);
+        setCpaFilter([]);
+        setMonthsFilter([]);
         setSelectedSituacion([]);
         setSelectedEstablecimientoFilter([]);
         setSelectedMesesFilter([]);
@@ -653,6 +665,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         window.localStorage.removeItem('aura_tipoFilter');
         window.localStorage.removeItem('aura_petFilter');
         window.localStorage.removeItem('aura_estFilter');
+        window.localStorage.removeItem('aura_stockFilter');
+        window.localStorage.removeItem('aura_cpaFilter');
+        window.localStorage.removeItem('aura_monthsFilter');
     };
 
     const renderModal = (modalContent: React.ReactNode) => {
@@ -1041,8 +1056,20 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             result = result.filter(p => estFilter.includes(String(p.est || '').toUpperCase()));
         }
 
+        if (stockFilter.length > 0) {
+            result = result.filter(p => stockFilter.includes(String(p.totalStock)));
+        }
+
+        if (cpaFilter.length > 0) {
+            result = result.filter(p => cpaFilter.includes(p.cpa.toFixed(1)));
+        }
+
+        if (monthsFilter.length > 0) {
+            result = result.filter(p => monthsFilter.includes(p.months === 999 ? '∞' : p.months.toFixed(1)));
+        }
+
         return result;
-    }, [productOptions, productSearch, statusFilter, reviewFilter, reviewedProducts, tipoFilter, petFilter, estFilter]);
+    }, [productOptions, productSearch, statusFilter, reviewFilter, reviewedProducts, tipoFilter, petFilter, estFilter, stockFilter, cpaFilter, monthsFilter]);
 
     const microredStats = useMemo(() => {
         if (selectedMicrored.length === 0) return null;
@@ -1091,6 +1118,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setTipoFilter([]);
         setPetFilter([]);
         setEstFilter([]);
+        setStockFilter([]);
+        setCpaFilter([]);
+        setMonthsFilter([]);
     };
     const handleMicroredChange = (microred: string) => {
         if (microred === 'ALL') {
@@ -1099,6 +1129,15 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             setSelectedEstablecimientoFilter([]);
             setSelectedMesesFilter([]);
             setSelectedSituacion([]);
+            setProductSearch('');
+            setStatusFilter([]);
+            setReviewFilter([]);
+            setTipoFilter([]);
+            setPetFilter([]);
+            setEstFilter([]);
+            setStockFilter([]);
+            setCpaFilter([]);
+            setMonthsFilter([]);
             return;
         }
         
@@ -1130,6 +1169,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
         setTipoFilter([]);
         setPetFilter([]);
         setEstFilter([]);
+        setStockFilter([]);
+        setCpaFilter([]);
+        setMonthsFilter([]);
     };
 
     const calculateNeed = (stock: number, cpa: number, status: string, consumptionMonths: number): number => {
@@ -2360,9 +2402,33 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         portalTarget={portalTarget}
                                     />
                                 </th>
-                                <th className="p-2 w-16 text-center text-blue-700 bg-blue-50/50 align-middle">STOCK</th>
-                                <th className="p-2 w-16 text-center align-middle">CPA</th>
-                                <th className="p-2 w-16 text-center align-middle">Meses</th>
+                                <th className="p-0 align-middle w-16 text-center text-blue-700 bg-blue-50/50">
+                                    <MultiSelectFilter
+                                        title="STOCK"
+                                        options={Array.from(new Set(productOptions.map(p => String(p.totalStock)))).sort((a, b) => Number(a) - Number(b)).map(val => ({ value: val, label: val }))}
+                                        selectedValues={stockFilter}
+                                        onChange={setStockFilter}
+                                        portalTarget={portalTarget}
+                                    />
+                                </th>
+                                <th className="p-0 align-middle w-16 text-center">
+                                    <MultiSelectFilter
+                                        title="CPA"
+                                        options={Array.from(new Set(productOptions.map(p => p.cpa.toFixed(1)))).sort((a, b) => Number(a) - Number(b)).map(val => ({ value: val, label: val }))}
+                                        selectedValues={cpaFilter}
+                                        onChange={setCpaFilter}
+                                        portalTarget={portalTarget}
+                                    />
+                                </th>
+                                <th className="p-0 align-middle w-16 text-center">
+                                    <MultiSelectFilter
+                                        title="MESES"
+                                        options={Array.from(new Set(productOptions.map(p => p.months === 999 ? '∞' : p.months.toFixed(1)))).sort((a, b) => a === '∞' ? 1 : b === '∞' ? -1 : Number(a) - Number(b)).map(val => ({ value: val, label: val }))}
+                                        selectedValues={monthsFilter}
+                                        onChange={setMonthsFilter}
+                                        portalTarget={portalTarget}
+                                    />
+                                </th>
                                 <th className="p-0 align-middle w-32 text-center">
                                     <MultiSelectFilter
                                         title="Situación"
