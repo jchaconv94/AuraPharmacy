@@ -424,7 +424,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   };
 
   const containerClasses = isFullScreen 
-    ? "fixed inset-0 z-[100] bg-white flex flex-col h-screen w-screen animate-in fade-in duration-200"
+    ? "fixed inset-0 z-[200] bg-white flex flex-col h-screen w-screen animate-in fade-in duration-200"
     : "bg-white shadow-lg rounded-xl border border-gray-200 overflow-visible flex flex-col transition-colors duration-300";
 
   return (

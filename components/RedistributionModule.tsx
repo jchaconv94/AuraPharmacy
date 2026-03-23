@@ -2691,7 +2691,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                             {/* Last Month Selection Modal */}
                             {isLastMonthModalOpen && (
-                                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
                                     <div className="bg-white p-6 rounded-2xl shadow-xl w-96">
                                         <h3 className="text-lg font-bold text-gray-900 mb-4">Confirme la Fecha del Reporte</h3>
                                         <p className="text-sm text-gray-500 mb-6">Para realizar un cálculo preciso, Aura necesita saber a qué mes corresponde la última columna de datos.</p>
@@ -2855,7 +2855,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* REDISTRIBUTION TABLE */}
             {selectedMicrored.length > 0 && records.length > 0 && (
-                <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-[100]' : 'max-h-[85vh]'}`}>
+                <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-[200]' : 'max-h-[85vh]'}`}>
                     {(() => {
                         const dropdownPortalTarget = isFullscreen && tableContainerRef.current ? tableContainerRef.current : document.body;
                         return (
@@ -3330,7 +3330,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* QUICK TRANSFER CONFIRMATION MODAL */}
             {isQuickTransferConfirmOpen && quickTransferSource && quickTransferDestination && renderModal(
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[90] p-4 backdrop-blur-md animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4 backdrop-blur-md animate-in fade-in duration-200">
                     <div className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-800 transform transition-all scale-100">
                         {/* Premium Header */}
                         <div className="relative p-6 pb-0 flex justify-between items-center">
@@ -3441,7 +3441,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* TRANSFER LIST MODAL */}
             {isTransferListOpen && renderModal(
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden border border-gray-200 flex flex-col max-h-[85vh]">
                         <div className="bg-gray-900 text-white p-4 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-2">
@@ -3570,7 +3570,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* CONSOLIDATION MODAL */}
             {isConsolidateModalOpen && renderModal(
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 flex flex-col max-h-[80vh]">
                         <div className="bg-gray-900 text-white p-4 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-2">
@@ -3665,7 +3665,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* REVIEW CONFIRMATION MODAL */}
             {isReviewConfirmOpen && renderModal(
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-200">
                         <div className="p-6 text-center">
                             <div className="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -3714,7 +3714,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* CONFIRMATION MODAL FOR IMPORT */}
             {isConfirmImportModalOpen && renderModal(
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
                     <div className="bg-gray-900 p-6 rounded-lg shadow-xl max-w-md w-full">
                         <h2 className="text-xl font-bold text-white mb-4">Confirmar nueva carga</h2>
                         <p className="text-gray-300 mb-6">
@@ -3748,7 +3748,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* CONFIRMATION MODAL */}
             {isConfirmUploadModalOpen && renderModal(
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
                     <div className="bg-gray-900 p-6 rounded-lg shadow-xl max-w-md w-full">
                         <h2 className="text-xl font-bold text-white mb-4">Confirmar nueva carga</h2>
                         <p className="text-gray-300 mb-6">
@@ -3782,7 +3782,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* GLOBAL SEARCH MODAL */}
             {isGlobalSearchModalOpen && renderModal(
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[80] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95%] overflow-hidden border border-gray-200 flex flex-col max-h-[85vh]">
                         <div className="bg-indigo-900 text-white p-5 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-3">
@@ -3977,7 +3977,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* PRODUCT LIST MODAL */}
             {isProductListModalOpen && renderModal(
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[80] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95%] overflow-hidden border border-gray-200 flex flex-col max-h-[85vh]">
                         <div className="bg-indigo-900 text-white p-5 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-3">
