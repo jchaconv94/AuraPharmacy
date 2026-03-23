@@ -42,10 +42,8 @@ export const calculateAdjustedCPM = (history: number[]): { adjusted: number; adj
   const median = calculateMedian(nonZeroMonths);
   
   // Threshold logic: 
-  let calculatedThreshold = median < 5 ? median * 3 : median * 1.5;
-  if (calculatedThreshold < 3.5) calculatedThreshold = 3.5; 
-  
-  const threshold = calculatedThreshold;
+  // Ficha Técnica N° 30: "Si un mes específico supera en más del 50% a la mediana histórica"
+  const threshold = median * 1.5;
 
   // Low Threshold Logic (New Feature)
   // Detect "very low" consumption (e.g., < 30% of median)

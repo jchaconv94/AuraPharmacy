@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AnalyzedMedication, StockStatus, QuickFilterOption } from '../types';
 import { 
   Zap, 
@@ -167,8 +168,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   const [isMainFilterOpen, setIsMainFilterOpen] = useState(false); // State for the main header filter dropdown
   
   const itemsPerPage = isFullScreen ? 15 : 10; // Show more items in full screen
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const mainFilterRef = useRef<HTMLDivElement>(null); // Ref for main header filter
+  const mainFilterDropdownRef = useRef<HTMLDivElement>(null); // Ref for main header filter dropdown
 
   // 'medications' prop is already filtered. We just handle pagination here.
   const filteredItems = medications;
@@ -178,21 +179,45 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentItems = filteredItems.slice(startIndex, startIndex + itemsPerPage);
 
-  // Close dropdowns when clicking outside
+  // Close dropdowns when clicking outside and update position
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // Column filters
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setOpenFilterDropdown(null);
-      }
       // Main header filter
-      if (mainFilterRef.current && !mainFilterRef.current.contains(event.target as Node)) {
+      if (
+          mainFilterRef.current && !mainFilterRef.current.contains(event.target as Node) &&
+          (!mainFilterDropdownRef.current || !mainFilterDropdownRef.current.contains(event.target as Node))
+      ) {
           setIsMainFilterOpen(false);
       }
     };
+
+    const updatePosition = () => {
+        if (isMainFilterOpen && mainFilterRef.current && mainFilterDropdownRef.current) {
+            const rect = mainFilterRef.current.getBoundingClientRect();
+            const dropdownWidth = 224; // w-56
+            const left = rect.left + dropdownWidth > window.innerWidth 
+                ? window.innerWidth - dropdownWidth - 16 
+                : rect.left;
+            
+            mainFilterDropdownRef.current.style.top = `${rect.bottom + 4}px`;
+            mainFilterDropdownRef.current.style.left = `${left}px`;
+        }
+    };
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    if (isMainFilterOpen) {
+        window.addEventListener('scroll', updatePosition, true);
+        window.addEventListener('resize', updatePosition);
+        // Initial position update
+        updatePosition();
+    }
+
+    return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+    };
+  }, [isMainFilterOpen]);
 
   // NOTE: Manual Escape listener removed. 
   // We now rely on the 'fullscreenchange' event in the parent component to handle exit.
@@ -363,9 +388,60 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   }) => {
     const isActive = field && activeFilters[field]?.length > 0;
     const isOpen = openFilterDropdown === field;
+    const triggerRef = useRef<HTMLTableHeaderCellElement>(null);
+    const localDropdownRef = useRef<HTMLDivElement>(null);
+    const [menuStyles, setMenuStyles] = useState<React.CSSProperties>({});
+    const [searchTerm, setSearchTerm] = useState('');
+
+    useEffect(() => {
+        if (!isOpen) {
+            setSearchTerm('');
+        }
+    }, [isOpen]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (isOpen && 
+                localDropdownRef.current && !localDropdownRef.current.contains(event.target as Node) &&
+                triggerRef.current && !triggerRef.current.contains(event.target as Node)) {
+                setOpenFilterDropdown(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    useEffect(() => {
+        const updatePosition = () => {
+            if (isOpen && triggerRef.current) {
+                const rect = triggerRef.current.getBoundingClientRect();
+                const dropdownWidth = 224; // w-56 is 14rem = 224px
+                const left = rect.left + dropdownWidth > window.innerWidth 
+                    ? window.innerWidth - dropdownWidth - 16 
+                    : rect.left;
+                
+                setMenuStyles({
+                    top: rect.bottom + 4,
+                    left: left,
+                    maxHeight: window.innerHeight - rect.bottom - 20
+                });
+            }
+        };
+
+        if (isOpen) {
+            updatePosition();
+            window.addEventListener('scroll', updatePosition, true);
+            window.addEventListener('resize', updatePosition);
+        }
+
+        return () => {
+            window.removeEventListener('scroll', updatePosition, true);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [isOpen]);
     
     return (
-        <th scope="col" className={`px-2 py-2 2xl:px-3 2xl:py-3 text-${align} text-xs font-bold ${textColor} uppercase tracking-wider relative ${className}`}>
+        <th ref={triggerRef} scope="col" className={`px-2 py-2 2xl:px-3 2xl:py-3 text-${align} text-xs font-bold ${textColor} uppercase tracking-wider relative ${className}`}>
             <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
                 <span className="whitespace-nowrap">{label}</span>
                 {field && (
@@ -382,9 +458,9 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
             </div>
 
             {/* Dropdown Menu */}
-            {isOpen && field && (
-                <div ref={dropdownRef} className="absolute top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-xl w-56 p-2 left-0 text-left font-normal normal-case">
-                    <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-100">
+            {isOpen && field && createPortal(
+                <div ref={localDropdownRef} className="fixed z-[140] bg-white border border-gray-200 rounded-lg shadow-xl w-56 p-2 text-left font-normal normal-case flex flex-col" style={menuStyles}>
+                    <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-100 shrink-0">
                         <span className="text-xs font-bold text-gray-700">Filtrar por {label}</span>
                         {isActive && (
                             <button onClick={() => clearFilter(field)} className="text-[10px] text-red-500 hover:text-red-700 flex items-center gap-1">
@@ -392,8 +468,21 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                             </button>
                         )}
                     </div>
-                    <div className="max-h-48 overflow-y-auto space-y-1">
-                        {getUniqueValues(field).map((opt) => (
+                    <div className="relative mb-2 shrink-0">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar..."
+                            className="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-teal-500 focus:border-teal-500 outline-none"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    </div>
+                    <div className="overflow-y-auto space-y-1 flex-1 min-h-0 custom-scrollbar">
+                        {getUniqueValues(field)
+                            .filter(opt => opt.value.toLowerCase().includes(searchTerm.toLowerCase()))
+                            .map((opt) => (
                             <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer text-xs text-gray-600">
                                 <input 
                                     type="checkbox" 
@@ -406,8 +495,14 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                                 <span className="text-gray-400 text-[10px]">({opt.count})</span>
                             </label>
                         ))}
+                        {getUniqueValues(field).filter(opt => opt.value.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+                            <div className="text-center py-2 text-gray-400 text-xs italic">
+                                No hay resultados
+                            </div>
+                        )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </th>
     );
@@ -483,8 +578,15 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                          <ChevronDown className={`h-3 w-3 transition-transform ${isMainFilterOpen ? 'rotate-180' : ''}`} />
                       </button>
 
-                      {isMainFilterOpen && (
-                          <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[100] text-gray-900 animate-in fade-in zoom-in-95 duration-100">
+                      {isMainFilterOpen && createPortal(
+                          <div ref={mainFilterDropdownRef} className="fixed z-[9999] bg-white rounded-lg shadow-xl border border-gray-200 py-1 text-gray-900 animate-in fade-in zoom-in-95 duration-100 w-56" style={{
+                              top: mainFilterRef.current ? mainFilterRef.current.getBoundingClientRect().bottom + 4 : 0,
+                              left: mainFilterRef.current 
+                                ? (mainFilterRef.current.getBoundingClientRect().left + 224 > window.innerWidth 
+                                    ? window.innerWidth - 224 - 16 
+                                    : mainFilterRef.current.getBoundingClientRect().left) 
+                                : 0,
+                          }}>
                               <div className="px-3 py-2 border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
                                   Vistas Disponibles
                               </div>
@@ -517,7 +619,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                                   Sin Requerimiento (0)
                                   {quickFilter === 'REQ_ZERO' && <CheckCircle className="h-3.5 w-3.5" />}
                               </button>
-                          </div>
+                          </div>,
+                          document.body
                       )}
                   </div>
                   {/* ... (Additional Items Button) ... */}

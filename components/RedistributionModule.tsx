@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import localforage from 'localforage';
 import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, Check, Download, Maximize, Minimize, Edit2 } from 'lucide-react';
@@ -66,10 +66,19 @@ const MultiSelectFilter = ({
         const updatePosition = () => {
             if (isOpen && triggerRef.current) {
                 const rect = triggerRef.current.getBoundingClientRect();
+                const dropdownWidth = 200; // min-w-[200px]
+                let left = rect.left + rect.width / 2 - dropdownWidth / 2;
+                
+                // Prevent left overflow
+                if (left < 16) left = 16;
+                // Prevent right overflow
+                if (left + dropdownWidth > window.innerWidth - 16) {
+                    left = window.innerWidth - dropdownWidth - 16;
+                }
+
                 setMenuStyles({
                     top: rect.bottom + 4,
-                    left: rect.left + rect.width / 2,
-                    transform: 'translateX(-50%)',
+                    left: left,
                     maxHeight: window.innerHeight - rect.bottom - 20
                 });
             }
@@ -133,8 +142,8 @@ const MultiSelectFilter = ({
             {isOpen && createPortal(
                 <div
                     ref={dropdownRef}
-                    className="fixed min-w-[200px] bg-white border border-slate-200 shadow-xl rounded-xl z-[9999] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
-                    style={{ ...menuStyles }}
+                    className="fixed min-w-[200px] bg-white border border-slate-200 shadow-xl rounded-xl z-[100000] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
+                    style={{ ...menuStyles, visibility: Object.keys(menuStyles).length === 0 ? 'hidden' : 'visible' }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <input
@@ -300,7 +309,10 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const [isEstDropdownOpen, setIsEstDropdownOpen] = useState(false);
     const [mrSearchTerm, setMrSearchTerm] = useState('');
     const [isMrDropdownOpen, setIsMrDropdownOpen] = useState(false);
+    const mrTriggerRef = useRef<HTMLDivElement>(null);
     const [isProductListMrDropdownOpen, setIsProductListMrDropdownOpen] = useState(false);
+    const productListMrTriggerRef = useRef<HTMLDivElement>(null);
+    const productListEstTriggerRef = useRef<HTMLDivElement>(null);
     const [isGlobalSearchModalOpen, setIsGlobalSearchModalOpen] = useState(false);
     const [isProductListModalOpen, setIsProductListModalOpen] = useState(false);
     const [globalSearchTerm, setGlobalSearchTerm] = useState('');
@@ -2243,13 +2255,21 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${isProductListMrDropdownOpen ? 'rotate-180' : ''}`} />
                             </div>
 
-                            {isProductListMrDropdownOpen && (
+                            {isProductListMrDropdownOpen && createPortal(
                                 <>
                                     <div
-                                        className="fixed inset-0 z-10"
+                                        className="fixed inset-0 z-[9998]"
                                         onClick={() => setIsProductListMrDropdownOpen(false)}
                                     />
-                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div 
+                                        className="fixed mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200"
+                                        style={{
+                                            top: productListMrTriggerRef.current ? productListMrTriggerRef.current.getBoundingClientRect().bottom : 0,
+                                            left: productListMrTriggerRef.current ? productListMrTriggerRef.current.getBoundingClientRect().left : 0,
+                                            width: productListMrTriggerRef.current ? productListMrTriggerRef.current.getBoundingClientRect().width : 'auto',
+                                            visibility: productListMrTriggerRef.current ? 'visible' : 'hidden'
+                                        }}
+                                    >
                                         <div className="p-2 border-b border-gray-100 bg-gray-50">
                                             <div className="relative">
                                                 <Search className="h-3 w-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -2268,6 +2288,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             <button
                                                 onClick={() => {
                                                     handleMicroredChange('ALL');
+                                                    setIsProductListMrDropdownOpen(false);
                                                 }}
                                                 className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored.includes('ALL') ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
                                             >
@@ -2281,6 +2302,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                         key={mr}
                                                         onClick={() => {
                                                             handleMicroredChange(mr);
+                                                            setIsProductListMrDropdownOpen(false);
                                                         }}
                                                         className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored.includes(mr) ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
                                                     >
@@ -2298,7 +2320,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             )}
                                         </div>
                                     </div>
-                                </>
+                                </>,
+                                document.body
                             )}
                         </div>
                     </div>
@@ -2306,7 +2329,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                 {/* Establishment Filter (Searchable Dropdown) */}
                 <div className="flex-1 max-w-[320px] flex items-center gap-2">
-                    <div className="relative flex-1 group">
+                    <div className="relative flex-1 group" ref={productListEstTriggerRef}>
                         <div
                             onClick={() => !(selectedMicrored.length === 0) && setIsEstDropdownOpen(!isEstDropdownOpen)}
                             className={`w-full pl-4 pr-10 py-2 text-[11px] bg-white border ${isEstDropdownOpen ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200'} rounded-xl text-gray-900 font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-between min-h-[34px] ${selectedMicrored.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -2321,13 +2344,21 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                             <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${isEstDropdownOpen ? 'rotate-180' : ''}`} />
                         </div>
 
-                        {isEstDropdownOpen && (
+                        {isEstDropdownOpen && createPortal(
                             <>
                                 <div
-                                    className="fixed inset-0 z-10"
+                                    className="fixed inset-0 z-[9998]"
                                     onClick={() => setIsEstDropdownOpen(false)}
                                 />
-                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div 
+                                    className="fixed mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200"
+                                    style={{
+                                        top: productListEstTriggerRef.current ? productListEstTriggerRef.current.getBoundingClientRect().bottom : 0,
+                                        left: productListEstTriggerRef.current ? productListEstTriggerRef.current.getBoundingClientRect().left : 0,
+                                        width: productListEstTriggerRef.current ? productListEstTriggerRef.current.getBoundingClientRect().width : 'auto',
+                                        visibility: productListEstTriggerRef.current ? 'visible' : 'hidden'
+                                    }}
+                                >
                                     <div className="p-2 border-b border-gray-100 bg-gray-50">
                                         <div className="relative">
                                             <Search className="h-3 w-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -2346,6 +2377,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         <button
                                             onClick={() => {
                                                 handleEstablishmentChange('ALL');
+                                                setIsEstDropdownOpen(false);
                                             }}
                                             className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedEstablishment.length === 0 ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
                                         >
@@ -2359,6 +2391,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                     key={est.cod}
                                                     onClick={() => {
                                                         handleEstablishmentChange(est.cod);
+                                                        setIsEstDropdownOpen(false);
                                                     }}
                                                     className={`w-full text-left px-3 py-2 text-[10px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedEstablishment.includes(est.cod) ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
                                                 >
@@ -2376,7 +2409,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                         )}
                                     </div>
                                 </div>
-                            </>
+                            </>,
+                            document.body
                         )}
                     </div>
                     {selectedEstablishment.length > 0 && (
@@ -2755,7 +2789,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                             Seleccionar Microred
                         </label>
 
-                        <div className="relative mb-3">
+                        <div className="relative mb-3" ref={mrTriggerRef}>
                             <div
                                 onClick={() => setIsMrDropdownOpen(!isMrDropdownOpen)}
                                 className={`w-full pl-3 pr-10 py-2 bg-gray-50 border ${isMrDropdownOpen ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-200'} rounded-xl text-sm text-gray-900 font-bold transition-all cursor-pointer flex items-center justify-between min-h-[38px]`}
@@ -2770,10 +2804,18 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                 <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isMrDropdownOpen ? 'rotate-180' : ''}`} />
                             </div>
 
-                            {isMrDropdownOpen && (
+                            {isMrDropdownOpen && createPortal(
                                 <>
-                                    <div className="fixed inset-0 z-10" onClick={() => setIsMrDropdownOpen(false)} />
-                                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="fixed inset-0 z-[9998]" onClick={() => setIsMrDropdownOpen(false)} />
+                                    <div 
+                                        className="fixed mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200"
+                                        style={{
+                                            top: mrTriggerRef.current ? mrTriggerRef.current.getBoundingClientRect().bottom : 0,
+                                            left: mrTriggerRef.current ? mrTriggerRef.current.getBoundingClientRect().left : 0,
+                                            width: mrTriggerRef.current ? mrTriggerRef.current.getBoundingClientRect().width : 'auto',
+                                            visibility: mrTriggerRef.current ? 'visible' : 'hidden'
+                                        }}
+                                    >
                                         <div className="p-2 border-b border-gray-100 bg-gray-50">
                                             <div className="relative">
                                                 <Search className="h-3 w-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -2792,6 +2834,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             <button
                                                 onClick={() => {
                                                     handleMicroredChange('ALL');
+                                                    setIsMrDropdownOpen(false);
                                                 }}
                                                 className={`w-full text-left px-3 py-2 text-[11px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored.includes('ALL') ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
                                             >
@@ -2805,6 +2848,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                                         key={mr}
                                                         onClick={() => {
                                                             handleMicroredChange(mr);
+                                                            setIsMrDropdownOpen(false);
                                                         }}
                                                         className={`w-full text-left px-3 py-2 text-[11px] hover:bg-indigo-50 transition-colors flex items-center gap-2 ${selectedMicrored.includes(mr) ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-gray-700'}`}
                                                     >
@@ -2817,7 +2861,8 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                             }
                                         </div>
                                     </div>
-                                </>
+                                </>,
+                                document.body
                             )}
                         </div>
 
@@ -3977,7 +4022,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* PRODUCT LIST MODAL */}
             {isProductListModalOpen && renderModal(
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[5000] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95%] overflow-hidden border border-gray-200 flex flex-col max-h-[85vh]">
                         <div className="bg-indigo-900 text-white p-5 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-3">

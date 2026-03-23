@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Filter, ChevronRight } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useDropdownPosition } from '../hooks/useDropdownPosition';
 
 export type NumberFilterCondition = 'EQUALS' | 'NOT_EQUALS' | 'GREATER_THAN' | 'GREATER_THAN_OR_EQUAL' | 'LESS_THAN' | 'LESS_THAN_OR_EQUAL' | 'BETWEEN' | 'NONE';
 
@@ -38,8 +39,9 @@ export const NumberFilter = ({
     const [tempState, setTempState] = useState<NumberFilterState>(filterState || defaultNumberFilterState);
     const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = React.useRef<HTMLDivElement>(null);
-    const triggerRef = React.useRef<HTMLDivElement>(null);
-    const [menuStyles, setMenuStyles] = useState<React.CSSProperties>({});
+    
+    // Using the new hook
+    const { triggerRef, menuStyles } = useDropdownPosition(isOpen);
 
     useEffect(() => {
         if (isOpen) {
@@ -57,31 +59,14 @@ export const NumberFilter = ({
             }
         };
 
-        const updatePosition = () => {
-            if (isOpen && triggerRef.current) {
-                const rect = triggerRef.current.getBoundingClientRect();
-                setMenuStyles({
-                    top: rect.bottom + 4,
-                    left: rect.left + rect.width / 2,
-                    transform: 'translateX(-50%)',
-                    maxHeight: window.innerHeight - rect.bottom - 20
-                });
-            }
-        };
-
         if (isOpen) {
-            updatePosition();
-            window.addEventListener('scroll', updatePosition, true);
-            window.addEventListener('resize', updatePosition);
             document.addEventListener('mousedown', handleClickOutside);
         }
 
         return () => {
-            window.removeEventListener('scroll', updatePosition, true);
-            window.removeEventListener('resize', updatePosition);
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [isOpen, portalTarget]);
+    }, [isOpen]);
 
     const filteredOptions = options.filter(o => o.label.toLowerCase().includes(searchTerm.toLowerCase()));
     const allSelected = filteredOptions.length > 0 && filteredOptions.every(o => tempState.listValues.includes(o.value));
@@ -155,8 +140,8 @@ export const NumberFilter = ({
             {isOpen && createPortal(
                 <div
                     ref={dropdownRef}
-                    className="fixed min-w-[240px] bg-white border border-slate-200 shadow-xl rounded-xl z-[9999] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
-                    style={{ ...menuStyles }}
+                    className="fixed min-w-[240px] bg-white border border-slate-200 shadow-xl rounded-xl z-[100000] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
+                    style={{ ...menuStyles, visibility: Object.keys(menuStyles).length === 0 ? 'hidden' : 'visible' }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header actions */}
