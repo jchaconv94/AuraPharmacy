@@ -31,7 +31,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
   if (!user || !user.personnelData) return null;
 
   return (
-    <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 transition-all duration-700 ${show ? 'bg-gray-950/80 backdrop-blur-md' : 'bg-transparent pointer-events-none'}`}>
+    <div className={`fixed inset-0 z-[110000] flex items-center justify-center p-4 transition-all duration-700 ${show ? 'bg-gray-950/80 backdrop-blur-md' : 'bg-transparent pointer-events-none'}`}>
         
         <div className={`w-full max-w-[500px] rounded-3xl overflow-hidden relative transition-all duration-700 transform shadow-2xl ${show ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 translate-y-8'}`}>
             

@@ -441,7 +441,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
     {/* VACCINE CONFIG MODAL */}
     {isVaccineModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-t-4 border-blue-500">
                 <div className="p-6 sm:p-8 flex flex-col items-center text-center">
                     
@@ -538,7 +538,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
     {/* MANDATORY DATE MODAL */}
     {isDateModalOpen && (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-t-4 border-teal-600">
           <div className="p-6 sm:p-8 flex flex-col items-center text-center">
             
@@ -586,7 +586,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
     {/* OVERWRITE WARNING MODAL */}
     {showOverwriteWarning && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
                 <div className="bg-amber-500 p-4 flex justify-between items-center text-white">
                     <div className="flex items-center gap-2">
@@ -629,7 +629,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
     {/* REANALYSIS WARNING MODAL */}
     {showReanalysisWarning && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
                 <div className="bg-amber-500 p-4 flex justify-between items-center text-white">
                     <div className="flex items-center gap-2">
@@ -676,7 +676,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
     {/* CLEAR ALL WARNING MODAL */}
     {showClearWarning && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
                 <div className="bg-red-600 p-4 flex justify-between items-center text-white">
                     <div className="flex items-center gap-2">

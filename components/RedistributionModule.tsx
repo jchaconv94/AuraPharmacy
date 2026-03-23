@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import localforage from 'localforage';
-import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, Check, Download, Maximize, Minimize, Edit2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, ChevronUp, Check, Download, Maximize, Minimize, Edit2, RefreshCw } from 'lucide-react';
 
 // Hook para persistir estado en localStorage
 function useLocalStorage<T>(key: string, initialValue: T) {
@@ -317,6 +317,13 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const [isProductListModalOpen, setIsProductListModalOpen] = useState(false);
     const [globalSearchTerm, setGlobalSearchTerm] = useState('');
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
+
+    useEffect(() => {
+        if (records.length > 0) {
+            setIsUploadSectionCollapsed(true);
+        }
+    }, [records.length]);
 
     // --- CLEAR SEARCH ON CLOSE ---
     const prevGlobalModalOpen = React.useRef(isGlobalSearchModalOpen);
@@ -2258,11 +2265,11 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                             {isProductListMrDropdownOpen && createPortal(
                                 <>
                                     <div
-                                        className="fixed inset-0 z-[9998]"
+                                        className="fixed inset-0 z-[99999]"
                                         onClick={() => setIsProductListMrDropdownOpen(false)}
                                     />
                                     <div 
-                                        className="fixed mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200"
+                                        className="fixed mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[100000] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200"
                                         style={{
                                             top: productListMrTriggerRef.current ? productListMrTriggerRef.current.getBoundingClientRect().bottom : 0,
                                             left: productListMrTriggerRef.current ? productListMrTriggerRef.current.getBoundingClientRect().left : 0,
@@ -2347,11 +2354,11 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                         {isEstDropdownOpen && createPortal(
                             <>
                                 <div
-                                    className="fixed inset-0 z-[9998]"
+                                    className="fixed inset-0 z-[99999]"
                                     onClick={() => setIsEstDropdownOpen(false)}
                                 />
                                 <div 
-                                    className="fixed mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200"
+                                    className="fixed mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[100000] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200"
                                     style={{
                                         top: productListEstTriggerRef.current ? productListEstTriggerRef.current.getBoundingClientRect().bottom : 0,
                                         left: productListEstTriggerRef.current ? productListEstTriggerRef.current.getBoundingClientRect().left : 0,
@@ -2626,158 +2633,212 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             </div>
 
             {/* UPLOAD SECTION */}
-            <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 transition-all hover:shadow-xl relative">
-                <div className="flex flex-col items-center justify-center text-center mt-8 sm:mt-0">
+            <div className={`bg-white rounded-2xl shadow-lg border border-gray-100 transition-all hover:shadow-xl relative ${isUploadSectionCollapsed && records.length > 0 ? 'p-4' : 'p-8'}`}>
+                {records.length > 0 && !loading && (
+                    <button
+                        onClick={() => setIsUploadSectionCollapsed(!isUploadSectionCollapsed)}
+                        className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors z-20"
+                        title={isUploadSectionCollapsed ? "Expandir" : "Contraer"}
+                    >
+                        {isUploadSectionCollapsed ? <ChevronDown className="h-5 w-5 text-gray-500" /> : <ChevronUp className="h-5 w-5 text-gray-500" />}
+                    </button>
+                )}
 
-                    {loading ? (
-                        <div className="py-12 flex flex-col items-center animate-in fade-in zoom-in duration-500">
-                            <div className="relative">
-                                <div className="w-20 h-20 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <FileSpreadsheet className="h-8 w-8 text-indigo-600 animate-pulse" />
+                {isUploadSectionCollapsed && records.length > 0 && !loading ? (
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-indigo-50 p-2 rounded-lg">
+                                <FileSpreadsheet className="h-5 w-5 text-indigo-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-900">Archivo de Disponibilidad</h3>
+                                <div className="flex items-center gap-3 mt-0.5">
+                                    <span className="text-xs font-bold text-green-600">{records.length.toLocaleString()} registros</span>
+                                    <span className="text-[10px] text-gray-400">•</span>
+                                    <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                                        <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                        Validados correctamente
+                                    </span>
                                 </div>
                             </div>
-                            <h3 className="mt-6 text-xl font-bold text-gray-900">Procesando Archivo Excel</h3>
-                            <p className="text-gray-500 mt-2 text-sm">Validando estructura y cargando registros...</p>
                         </div>
-                    ) : (
-                        <>
-                            <div
-                                className="w-full max-w-2xl mx-auto border-2 border-dashed border-indigo-200 rounded-xl p-10 bg-indigo-50/30 hover:bg-indigo-50 transition-all group cursor-pointer relative"
-                                onClick={() => {
-                                    if (records.length > 0) {
-                                        setIsConfirmUploadModalOpen(true);
-                                    } else {
-                                        fileInputRef.current?.click();
-                                    }
-                                }}
+                        <div className="flex items-center gap-2 mr-10">
+                            <button 
+                                onClick={handleExportSession}
+                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                title="Exportar Avance"
                             >
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    accept=".xlsx, .xls"
-                                    onChange={handleFileUpload}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="hidden"
-                                />
-                                <div className="flex flex-col items-center gap-4 group-hover:scale-105 transition-transform duration-300">
-                                    <div className="bg-white p-4 rounded-full shadow-md group-hover:shadow-lg transition-shadow">
-                                        <FileSpreadsheet className="h-10 w-10 text-indigo-600" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-gray-900">Cargar Archivo de Disponibilidad</h3>
-                                        <p className="text-sm text-gray-500 mt-1">Arrastre su archivo Excel aquí o haga clic para buscar</p>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs text-indigo-600 font-medium bg-indigo-100 px-3 py-1 rounded-full">
-                                        <Sparkles className="h-3 w-3" />
-                                        <span>Formato .xlsx o .xls requerido</span>
-                                    </div>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); downloadTemplate(); }}
-                                        className="text-xs text-slate-500 hover:text-indigo-600 underline mt-2"
-                                    >
-                                        Descargar Plantilla Estándar
-                                    </button>
+                                <Download className="w-4 h-4" />
+                            </button>
+                            <button 
+                                onClick={() => setIsConfirmImportModalOpen(true)}
+                                className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                title="Importar Avance"
+                            >
+                                <Upload className="w-4 h-4" />
+                            </button>
+                            <button 
+                                onClick={() => setIsConfirmUploadModalOpen(true)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Cargar nuevo archivo"
+                            >
+                                <RefreshCw className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center text-center mt-8 sm:mt-0">
 
-                                    {/* Export/Import Session Buttons */}
-                                    <div className="flex flex-row gap-4 mt-6 z-10">
-                                        {records.length > 0 && (
+                        {loading ? (
+                            <div className="py-12 flex flex-col items-center animate-in fade-in zoom-in duration-500">
+                                <div className="relative">
+                                    <div className="w-20 h-20 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <FileSpreadsheet className="h-8 w-8 text-indigo-600 animate-pulse" />
+                                    </div>
+                                </div>
+                                <h3 className="mt-6 text-xl font-bold text-gray-900">Procesando Archivo Excel</h3>
+                                <p className="text-gray-500 mt-2 text-sm">Validando estructura y cargando registros...</p>
+                            </div>
+                        ) : (
+                            <>
+                                <div
+                                    className="w-full max-w-2xl mx-auto border-2 border-dashed border-indigo-200 rounded-xl p-10 bg-indigo-50/30 hover:bg-indigo-50 transition-all group cursor-pointer relative"
+                                    onClick={() => {
+                                        if (records.length > 0) {
+                                            setIsConfirmUploadModalOpen(true);
+                                        } else {
+                                            fileInputRef.current?.click();
+                                        }
+                                    }}
+                                >
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        accept=".xlsx, .xls"
+                                        onChange={handleFileUpload}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="hidden"
+                                    />
+                                    <div className="flex flex-col items-center gap-4 group-hover:scale-105 transition-transform duration-300">
+                                        <div className="bg-white p-4 rounded-full shadow-md group-hover:shadow-lg transition-shadow">
+                                            <FileSpreadsheet className="h-10 w-10 text-indigo-600" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-900">Cargar Archivo de Disponibilidad</h3>
+                                            <p className="text-sm text-gray-500 mt-1">Arrastre su archivo Excel aquí o haga clic para buscar</p>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-indigo-600 font-medium bg-indigo-100 px-3 py-1 rounded-full">
+                                            <Sparkles className="h-3 w-3" />
+                                            <span>Formato .xlsx o .xls requerido</span>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); downloadTemplate(); }}
+                                            className="text-xs text-slate-500 hover:text-indigo-600 underline mt-2"
+                                        >
+                                            Descargar Plantilla Estándar
+                                        </button>
+
+                                        {/* Export/Import Session Buttons */}
+                                        <div className="flex flex-row gap-4 mt-6 z-10">
+                                            {records.length > 0 && (
+                                                <button 
+                                                    onClick={(e) => { 
+                                                        e.stopPropagation(); 
+                                                        e.preventDefault();
+                                                        handleExportSession(); 
+                                                    }}
+                                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-sm font-bold transition-all shadow-sm"
+                                                    title="Exportar avance actual para continuar en otra PC"
+                                                >
+                                                    <Download className="w-4 h-4" />
+                                                    Exportar Avance
+                                                </button>
+                                            )}
                                             <button 
                                                 onClick={(e) => { 
                                                     e.stopPropagation(); 
                                                     e.preventDefault();
-                                                    handleExportSession(); 
+                                                    if (records.length > 0) {
+                                                        setIsConfirmImportModalOpen(true);
+                                                    } else {
+                                                        importInputRef.current?.click(); 
+                                                    }
                                                 }}
-                                                className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 rounded-lg text-sm font-bold transition-all shadow-sm"
-                                                title="Exportar avance actual para continuar en otra PC"
+                                                className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 rounded-lg text-sm font-bold transition-all shadow-sm"
+                                                title="Importar avance desde un archivo de respaldo"
                                             >
-                                                <Download className="w-4 h-4" />
-                                                Exportar Avance
+                                                <Upload className="w-4 h-4" />
+                                                Importar Avance
                                             </button>
-                                        )}
-                                        <button 
-                                            onClick={(e) => { 
-                                                e.stopPropagation(); 
-                                                e.preventDefault();
-                                                if (records.length > 0) {
-                                                    setIsConfirmImportModalOpen(true);
-                                                } else {
-                                                    importInputRef.current?.click(); 
-                                                }
-                                            }}
-                                            className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 rounded-lg text-sm font-bold transition-all shadow-sm"
-                                            title="Importar avance desde un archivo de respaldo"
-                                        >
-                                            <Upload className="w-4 h-4" />
-                                            Importar Avance
-                                        </button>
-                                        <input 
-                                            type="file" 
-                                            ref={importInputRef} 
-                                            accept=".json" 
-                                            onChange={handleImportSession} 
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="hidden" 
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Last Month Selection Modal */}
-                            {isLastMonthModalOpen && (
-                                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
-                                    <div className="bg-white p-6 rounded-2xl shadow-xl w-96">
-                                        <h3 className="text-lg font-bold text-gray-900 mb-4">Confirme la Fecha del Reporte</h3>
-                                        <p className="text-sm text-gray-500 mb-6">Para realizar un cálculo preciso, Aura necesita saber a qué mes corresponde la última columna de datos.</p>
-                                        <div className="mb-6">
-                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">MES DE CORTE (MES 12)</label>
                                             <input 
-                                                type="month"
-                                                className="w-full p-3 border rounded-lg text-center font-bold text-lg"
-                                                value={lastMonthYear}
-                                                onChange={(e) => setLastMonthYear(e.target.value)}
+                                                type="file" 
+                                                ref={importInputRef} 
+                                                accept=".json" 
+                                                onChange={handleImportSession} 
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="hidden" 
                                             />
                                         </div>
-                                        <div className="bg-blue-50 p-4 rounded-lg mb-6 flex gap-3">
-                                            <span className="text-blue-600">ℹ️</span>
-                                            <p className="text-xs text-blue-800"><strong>Nota:</strong> Si descargó el reporte hoy, la fecha por defecto suele ser correcta.</p>
+                                    </div>
+                                </div>
+
+                                {/* Last Month Selection Modal */}
+                                {isLastMonthModalOpen && (
+                                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
+                                        <div className="bg-white p-6 rounded-2xl shadow-xl w-96">
+                                            <h3 className="text-lg font-bold text-gray-900 mb-4">Confirme la Fecha del Reporte</h3>
+                                            <p className="text-sm text-gray-500 mb-6">Para realizar un cálculo preciso, Aura necesita saber a qué mes corresponde la última columna de datos.</p>
+                                            <div className="mb-6">
+                                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">MES DE CORTE (MES 12)</label>
+                                                <input 
+                                                    type="month"
+                                                    className="w-full p-3 border rounded-lg text-center font-bold text-lg"
+                                                    value={lastMonthYear}
+                                                    onChange={(e) => setLastMonthYear(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="bg-blue-50 p-4 rounded-lg mb-6 flex gap-3">
+                                                <span className="text-blue-600">ℹ️</span>
+                                                <p className="text-xs text-blue-800"><strong>Nota:</strong> Si descargó el reporte hoy, la fecha por defecto suele ser correcta.</p>
+                                            </div>
+                                            <button 
+                                                onClick={confirmFileProcessing}
+                                                className="w-full py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-bold flex items-center justify-center gap-2"
+                                            >
+                                                ✓ Confirmar y Cargar Datos
+                                            </button>
                                         </div>
-                                        <button 
-                                            onClick={confirmFileProcessing}
-                                            className="w-full py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-bold flex items-center justify-center gap-2"
-                                        >
-                                            ✓ Confirmar y Cargar Datos
-                                        </button>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {records.length > 0 && (
-                                <div className="mt-8 flex items-center gap-6 animate-in slide-in-from-bottom-4 duration-500">
-                                    <div className="text-center px-6 py-3 bg-green-50 rounded-xl border border-green-100">
-                                        <span className="block text-3xl font-bold text-green-600">{records.length.toLocaleString()}</span>
-                                        <span className="text-xs font-bold text-green-800 uppercase tracking-wider">Registros Cargados</span>
+                                {records.length > 0 && (
+                                    <div className="mt-8 flex items-center gap-6 animate-in slide-in-from-bottom-4 duration-500">
+                                        <div className="text-center px-6 py-3 bg-green-50 rounded-xl border border-green-100">
+                                            <span className="block text-3xl font-bold text-green-600">{records.length.toLocaleString()}</span>
+                                            <span className="text-xs font-bold text-green-800 uppercase tracking-wider">Registros Cargados</span>
+                                        </div>
+                                        <div className="h-10 w-px bg-gray-200"></div>
+                                        <div className="text-left">
+                                            <p className="text-sm text-gray-600 flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                                Datos validados correctamente
+                                            </p>
+                                            <p className="text-xs text-gray-400 mt-1">Listo para análisis de redistribución</p>
+                                        </div>
                                     </div>
-                                    <div className="h-10 w-px bg-gray-200"></div>
-                                    <div className="text-left">
-                                        <p className="text-sm text-gray-600 flex items-center gap-2">
-                                            <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                            Datos validados correctamente
-                                        </p>
-                                        <p className="text-xs text-gray-400 mt-1">Listo para análisis de redistribución</p>
-                                    </div>
-                                </div>
-                            )}
-                        </>
-                    )}
+                                )}
+                            </>
+                        )}
 
-                    {error && (
-                        <div className="mt-6 p-4 bg-red-50 text-red-700 rounded-xl text-sm flex items-center gap-3 border border-red-100 animate-in shake duration-300">
-                            <AlertCircle className="h-5 w-5 shrink-0" />
-                            <span className="font-medium">{error}</span>
-                        </div>
-                    )}
-                </div>
+                        {error && (
+                            <div className="mt-6 p-4 bg-red-50 text-red-700 rounded-xl text-sm flex items-center gap-3 border border-red-100 animate-in shake duration-300">
+                                <AlertCircle className="h-5 w-5 shrink-0" />
+                                <span className="font-medium">{error}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {records.length > 0 && (
@@ -2806,9 +2867,9 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                             {isMrDropdownOpen && createPortal(
                                 <>
-                                    <div className="fixed inset-0 z-[9998]" onClick={() => setIsMrDropdownOpen(false)} />
+                                    <div className="fixed inset-0 z-[99999]" onClick={() => setIsMrDropdownOpen(false)} />
                                     <div 
-                                        className="fixed mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200"
+                                        className="fixed mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[100000] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200"
                                         style={{
                                             top: mrTriggerRef.current ? mrTriggerRef.current.getBoundingClientRect().bottom : 0,
                                             left: mrTriggerRef.current ? mrTriggerRef.current.getBoundingClientRect().left : 0,
@@ -2900,7 +2961,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* REDISTRIBUTION TABLE */}
             {selectedMicrored.length > 0 && records.length > 0 && (
-                <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-[200]' : 'max-h-[85vh]'}`}>
+                <div ref={tableContainerRef} className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col ${isFullscreen ? 'h-screen w-screen fixed inset-0 z-[105000]' : 'max-h-[85vh]'}`}>
                     {(() => {
                         const dropdownPortalTarget = isFullscreen && tableContainerRef.current ? tableContainerRef.current : document.body;
                         return (
@@ -3375,7 +3436,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* QUICK TRANSFER CONFIRMATION MODAL */}
             {isQuickTransferConfirmOpen && quickTransferSource && quickTransferDestination && renderModal(
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4 backdrop-blur-md animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[110000] p-4 backdrop-blur-md animate-in fade-in duration-200">
                     <div className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-800 transform transition-all scale-100">
                         {/* Premium Header */}
                         <div className="relative p-6 pb-0 flex justify-between items-center">
@@ -3486,7 +3547,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* TRANSFER LIST MODAL */}
             {isTransferListOpen && renderModal(
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110000] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden border border-gray-200 flex flex-col max-h-[85vh]">
                         <div className="bg-gray-900 text-white p-4 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-2">
@@ -3615,7 +3676,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* CONSOLIDATION MODAL */}
             {isConsolidateModalOpen && renderModal(
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110000] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 flex flex-col max-h-[80vh]">
                         <div className="bg-gray-900 text-white p-4 flex justify-between items-center shrink-0">
                             <div className="flex items-center gap-2">
@@ -3710,7 +3771,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
             {/* REVIEW CONFIRMATION MODAL */}
             {isReviewConfirmOpen && renderModal(
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110000] p-4 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-200">
                         <div className="p-6 text-center">
                             <div className="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">

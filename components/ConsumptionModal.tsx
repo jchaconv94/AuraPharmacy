@@ -407,7 +407,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const maxDelay = systemConfig?.verificationDelaySeconds || 5;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4 animate-in fade-in duration-200 overflow-y-auto">
+    <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4 animate-in fade-in duration-200 overflow-y-auto">
       <div className={`bg-white rounded-xl shadow-2xl w-full max-w-7xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] sm:max-h-none h-auto sm:h-auto my-auto ${isReviewed ? 'ring-4 ring-teal-500/30' : ''} relative`}>
         
         {/* --- CUSTOM CONFIRMATION OVERLAY --- */}

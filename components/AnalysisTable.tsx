@@ -459,7 +459,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
 
             {/* Dropdown Menu */}
             {isOpen && field && createPortal(
-                <div ref={localDropdownRef} className="fixed z-[140] bg-white border border-gray-200 rounded-lg shadow-xl w-56 p-2 text-left font-normal normal-case flex flex-col" style={menuStyles}>
+                <div ref={localDropdownRef} className="fixed z-[100000] bg-white border border-gray-200 rounded-lg shadow-xl w-56 p-2 text-left font-normal normal-case flex flex-col" style={menuStyles}>
                     <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-100 shrink-0">
                         <span className="text-xs font-bold text-gray-700">Filtrar por {label}</span>
                         {isActive && (
@@ -519,7 +519,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
   };
 
   const containerClasses = isFullScreen 
-    ? "fixed inset-0 z-[200] bg-white flex flex-col h-screen w-screen animate-in fade-in duration-200"
+    ? "fixed inset-0 z-[105000] bg-white flex flex-col h-screen w-screen animate-in fade-in duration-200"
     : "bg-white shadow-lg rounded-xl border border-gray-200 overflow-visible flex flex-col transition-colors duration-300";
 
   return (
@@ -579,7 +579,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
                       </button>
 
                       {isMainFilterOpen && createPortal(
-                          <div ref={mainFilterDropdownRef} className="fixed z-[9999] bg-white rounded-lg shadow-xl border border-gray-200 py-1 text-gray-900 animate-in fade-in zoom-in-95 duration-100 w-56" style={{
+                          <div ref={mainFilterDropdownRef} className="fixed z-[100000] bg-white rounded-lg shadow-xl border border-gray-200 py-1 text-gray-900 animate-in fade-in zoom-in-95 duration-100 w-56" style={{
                               top: mainFilterRef.current ? mainFilterRef.current.getBoundingClientRect().bottom + 4 : 0,
                               left: mainFilterRef.current 
                                 ? (mainFilterRef.current.getBoundingClientRect().left + 224 > window.innerWidth 

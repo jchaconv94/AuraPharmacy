@@ -512,7 +512,7 @@ export const AdminPanel: React.FC = () => {
 
     {/* --- CUSTOM CONFIRMATION MODAL --- */}
     {userToToggle && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
                 <div className="p-6 text-center">
                     <div className={`mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4 ${userToToggle.currentStatus ? 'bg-red-100' : 'bg-green-100'}`}>
@@ -545,7 +545,7 @@ export const AdminPanel: React.FC = () => {
 
     {/* --- USER FORM MODAL --- */}
     {isUserModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
                 <div className="bg-gray-900 text-white px-6 py-4 flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-3">
