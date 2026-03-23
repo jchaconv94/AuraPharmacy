@@ -49,8 +49,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn("Failed to load system config (using defaults)", e);
         }
 
-        // 2. Check local storage for persisted session
-        const savedUser = localStorage.getItem('aura_auth_user');
+        // 2. Check session storage for persisted session
+        const savedUser = sessionStorage.getItem('aura_auth_user');
         
         if (savedUser) {
             try {
@@ -64,10 +64,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const freshData = await api.refreshSession(parsedUser.username);
                     
                     if (freshData.success && freshData.user) {
-                        localStorage.setItem('aura_auth_user', JSON.stringify(freshData.user));
+                        sessionStorage.setItem('aura_auth_user', JSON.stringify(freshData.user));
                         setState(prev => ({ ...prev, user: freshData.user as User }));
                     } else if (freshData.message === 'Usuario no encontrado o eliminado') {
-                         localStorage.removeItem('aura_auth_user');
+                         sessionStorage.removeItem('aura_auth_user');
                          setState(prev => ({ ...prev, user: null, isAuthenticated: false }));
                     }
                 } catch (refreshError) {
@@ -75,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
 
             } catch {
-                localStorage.removeItem('aura_auth_user');
+                sessionStorage.removeItem('aura_auth_user');
                 setState(prev => ({ ...prev, user: null, isAuthenticated: false, isLoading: false }));
             }
         } else {
@@ -102,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const result = await api.login(u, p);
     
     if (result.success && result.user) {
-        localStorage.setItem('aura_auth_user', JSON.stringify(result.user));
+        sessionStorage.setItem('aura_auth_user', JSON.stringify(result.user));
         // Reset welcome flag on new login
         sessionStorage.removeItem('aura_welcome_shown_session');
         
@@ -116,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    localStorage.removeItem('aura_auth_user');
+    sessionStorage.removeItem('aura_auth_user');
     sessionStorage.removeItem('aura_welcome_shown_session');
     setState(prev => ({ ...prev, user: null, isAuthenticated: false, isLoading: false }));
   };
@@ -126,10 +126,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return state.user.permissions.includes(module);
   };
 
+  // --- INACTIVITY TIMEOUT ---
+  useEffect(() => {
+      if (!state.isAuthenticated) return;
+
+      const timeoutDuration = 30 * 60 * 1000; // 30 minutos
+      let timeoutId: ReturnType<typeof setTimeout>;
+
+      const resetTimer = () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+              logout();
+              // Usar un alert personalizado o notificación si es necesario, 
+              // por ahora un simple alert es suficiente para el requerimiento de seguridad.
+              console.log("Sesión cerrada por inactividad.");
+          }, timeoutDuration);
+      };
+
+      // Eventos que reinician el temporizador
+      const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+      events.forEach(event => document.addEventListener(event, resetTimer));
+
+      resetTimer(); // Iniciar temporizador
+
+      return () => {
+          clearTimeout(timeoutId);
+          events.forEach(event => document.removeEventListener(event, resetTimer));
+      };
+  }, [state.isAuthenticated]);
+
   const updateUserContext = (data: Partial<User>) => {
       if (!state.user) return;
       const newUser = { ...state.user, ...data };
-      localStorage.setItem('aura_auth_user', JSON.stringify(newUser));
+      sessionStorage.setItem('aura_auth_user', JSON.stringify(newUser));
       setState(prev => ({ ...prev, user: newUser }));
   };
 
