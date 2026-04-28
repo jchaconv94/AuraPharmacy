@@ -19,6 +19,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { UserProfile } from './components/UserProfile';
 import { WelcomeModal } from './components/WelcomeModal'; // Importar Modal
 import { RedistributionModule } from './components/RedistributionModule';
+import { Sidebar } from './components/Sidebar'; // Nuevo Import
 import { Toaster } from 'sonner';
 
 const STORAGE_KEY = 'aura_data_v1';
@@ -40,6 +41,7 @@ const App: React.FC = () => {
 const AuthenticatedApp: React.FC = () => {
     const { isAuthenticated, isLoading, user, logout, hasPermission } = useAuth();
     const [currentView, setCurrentView] = useState<AppModule>('DASHBOARD');
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     
     // Welcome Modal State
     const [showWelcome, setShowWelcome] = useState(false);
@@ -71,132 +73,45 @@ const AuthenticatedApp: React.FC = () => {
 
     // --- RENDER MAIN LAYOUT ---
     return (
-        <div className="min-h-screen bg-gray-50/50">
-            {/* PREMIUM HEADER */}
-            <header className="bg-gray-950 border-b border-white/5 sticky top-0 z-[100001] backdrop-blur-md bg-opacity-95 shadow-xl">
-                <div className="max-w-[98%] mx-auto px-4 sm:px-6">
-                    <div className="flex justify-between items-center h-16 2xl:h-18 py-2 2xl:py-3">
-                        
-                        {/* LEFT: BRANDING */}
-                        <div 
-                            className="flex items-center gap-3 cursor-pointer group" 
-                            onClick={() => setCurrentView('DASHBOARD')}
-                        >
-                            <div className="relative">
-                                <div className="absolute inset-0 bg-teal-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
-                                <div className="bg-gray-900 border border-white/10 p-2 rounded-xl relative">
-                                    <ShieldCheck className="h-5 w-5 2xl:h-6 2xl:w-6 text-teal-400" />
-                                </div>
-                            </div>
-                            <div className="flex flex-col">
-                                <h1 className="text-lg 2xl:text-xl font-black text-white tracking-tight leading-none flex items-center gap-1">
-                                    AURA <span className="text-teal-500 text-xs font-bold px-1.5 py-0.5 bg-teal-500/10 rounded-md border border-teal-500/20">PRO</span>
-                                </h1>
-                                <p className="text-[9px] 2xl:text-[10px] text-gray-400 font-medium leading-none mt-1 tracking-wide uppercase">
-                                    {user?.facilityData?.name || 'Logística Farmacéutica'}
-                                </p>
-                            </div>
-                        </div>
+        <div className="flex h-screen bg-gray-50/50 overflow-hidden">
+            <Sidebar 
+                currentView={currentView}
+                setCurrentView={setCurrentView}
+                isCollapsed={isSidebarCollapsed}
+                setIsCollapsed={setIsSidebarCollapsed}
+                user={user}
+                logout={logout}
+                hasPermission={hasPermission}
+            />
 
+            <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+                {/* Simplified Header for context */}
+                <header className="bg-white/80 border-b border-gray-200 sticky top-0 z-[1000] backdrop-blur-sm shadow-sm h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 transition-all duration-300 shrink-0">
+                     <div className="flex items-center gap-3">
+                        <h2 className="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
+                           {currentView === 'DASHBOARD' && 'Análisis de Requerimiento'}
+                           {currentView === 'REDISTRIBUTION' && 'Módulo de Redistribución'}
+                           {currentView.startsWith('ADMIN') && 'Panel de Administración'}
+                           {currentView === 'PROFILE' && 'Perfil de Usuario'}
+                        </h2>
+                     </div>
+                     <div className="flex items-center gap-3 text-xs sm:text-sm text-gray-500 font-medium bg-gray-100/80 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-gray-200 shadow-inner">
+                         <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-teal-500 animate-[pulse_2s_ease-in-out_infinite] shadow-[0_0_8px_rgba(20,184,166,0.6)]"></span>
+                         <span className="truncate max-w-[150px] sm:max-w-[200px]">{user?.facilityData?.name || 'Logística Farmacéutica'}</span>
+                     </div>
+                </header>
 
-
-                        {/* CENTER: FLOATING NAVIGATION PILL */}
-                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:block">
-                            <nav className="flex items-center gap-1 bg-gray-900/80 border border-white/5 p-1 rounded-full shadow-inner">
-                                {hasPermission('DASHBOARD') && (
-                                    <button 
-                                        onClick={() => setCurrentView('DASHBOARD')}
-                                        className={`flex items-center gap-2 px-4 2xl:px-6 py-2 2xl:py-2.5 rounded-full text-xs 2xl:text-sm font-bold transition-all duration-300 ${
-                                            currentView === 'DASHBOARD' 
-                                            ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/50' 
-                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                        }`}
-                                    >
-                                        <BarChart2 className="h-4 w-4 2xl:h-5 2xl:w-5" />
-                                        Análisis
-                                    </button>
-                                )}
-
-                                {/* NEW: REDISTRIBUTION BUTTON */}
-                                {hasPermission('REDISTRIBUTION') && (
-                                    <button 
-                                        onClick={() => setCurrentView('REDISTRIBUTION')}
-                                        className={`flex items-center gap-2 px-4 2xl:px-6 py-2 2xl:py-2.5 rounded-full text-xs 2xl:text-sm font-bold transition-all duration-300 ${
-                                            currentView === 'REDISTRIBUTION' 
-                                            ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/50' 
-                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                        }`}
-                                    >
-                                        <ArrowRightLeft className="h-4 w-4 2xl:h-5 2xl:w-5" />
-                                        Redistribución
-                                    </button>
-                                )}
-                                
-                                {(hasPermission('ADMIN_USERS') || hasPermission('ADMIN_ROLES')) && (
-                                    <button 
-                                        onClick={() => setCurrentView('ADMIN_USERS')}
-                                        className={`flex items-center gap-2 px-4 2xl:px-6 py-2 2xl:py-2.5 rounded-full text-xs 2xl:text-sm font-bold transition-all duration-300 ${
-                                            currentView.startsWith('ADMIN') 
-                                            ? 'bg-teal-600 text-white shadow-lg shadow-teal-900/50' 
-                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                        }`}
-                                    >
-                                        <Settings className="h-4 w-4 2xl:h-5 2xl:w-5" />
-                                        Admin
-                                    </button>
-                                )}
-                            </nav>
-                        </div>
-
-                        {/* RIGHT: USER PROFILE & ACTIONS */}
-                        <div className="flex items-center gap-4">
-                            
-                            {/* Mobile Nav Toggle could go here */}
-
-                            <div className="flex items-center gap-3 pl-4 border-l border-white/5">
-                                <button 
-                                    onClick={() => setCurrentView('PROFILE')}
-                                    className="flex items-center gap-3 group p-1.5 pr-3 rounded-full hover:bg-white/5 transition-all border border-transparent hover:border-white/5"
-                                >
-                                    <div className="bg-gradient-to-br from-teal-500 to-emerald-600 p-[2px] rounded-full">
-                                        <div className="bg-gray-900 rounded-full p-1">
-                                            <UserCircle className="h-5 w-5 2xl:h-6 2xl:w-6 text-gray-200" />
-                                        </div>
-                                    </div>
-                                    <div className="text-right hidden sm:block">
-                                        <div className="text-xs font-bold text-white group-hover:text-teal-400 transition-colors">
-                                            {user?.personnelData?.firstName}
-                                        </div>
-                                        <div className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">
-                                            {user?.role}
-                                        </div>
-                                    </div>
-                                    <ChevronDown className="h-3 w-3 text-gray-500 group-hover:text-white transition-colors hidden sm:block" />
-                                </button>
-                                
-                                <button 
-                                    onClick={logout} 
-                                    className="bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 p-2 2xl:p-2.5 rounded-xl transition-all border border-transparent hover:border-red-500/30"
-                                    title="Cerrar Sesión"
-                                >
-                                    <LogOut className="h-4 w-4" />
-                                </button>
-                            </div>
-                        </div>
+                {/* CONTENT AREA SWITCHER */}
+                <main className="flex-1 overflow-y-auto w-full p-4 2xl:p-6 pb-20">
+                    <div className="mx-auto max-w-[1600px]">
+                        {currentView === 'DASHBOARD' && <AnalysisModule />}
+                        {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
+                        {(currentView === 'ADMIN_USERS' || currentView === 'ADMIN_ROLES') && <AdminPanel />}
+                        {currentView === 'PROFILE' && <UserProfile />}
                     </div>
-                </div>
-            </header>
-
-
-
-            {/* CONTENT AREA SWITCHER */}
-            <main className="mx-auto w-full">
-                {currentView === 'DASHBOARD' && <AnalysisModule />}
-                {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
-                {(currentView === 'ADMIN_USERS' || currentView === 'ADMIN_ROLES') && <AdminPanel />}
-                {currentView === 'PROFILE' && <UserProfile />}
-            </main>
-            {showWelcome && user && <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />}
+                </main>
+                {showWelcome && user && <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />}
+            </div>
         </div>
     );
 };

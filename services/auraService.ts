@@ -239,11 +239,11 @@ export const analyzeInventoryWithAura = async (
     
     const investment = analyzedMedications.reduce((sum, m) => sum + m.estimatedInvestment, 0);
 
-    let summary = `Resumen Ejecutivo Aura (${new Date().toLocaleDateString()}):\n\n`;
+    let summary = `Resumen Ejecutivo Toolkit (${new Date().toLocaleDateString()}):\n\n`;
     summary += `Se han analizado ${totalItems} ítems. Disponibilidad (DME): ${dmeScore.toFixed(1)}% (${indicatorStatus}).\n\n`;
     
     if (spikesFound > 0) {
-        summary += `Aura ajustó ${spikesFound} ítems con picos atípicos para evitar sobrestock.\n`;
+        summary += `El sistema ajustó ${spikesFound} ítems con picos atípicos para evitar sobrestock.\n`;
     }
     summary += `Estrategia Baja Rotación (< 6 meses/año): Se asegura cobertura de 3 meses. Esto evita caer en desabastecimiento inmediato tras una salida, manteniéndose en rango Normostock.\n`;
     summary += `ESTADO: ${itemsDesabastecidos} ítems críticos. Inversión Sugerida: S/ ${investment.toLocaleString('es-PE', { minimumFractionDigits: 2 })}.`;

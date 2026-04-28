@@ -538,7 +538,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
             const downloadAnchorNode = document.createElement('a');
             downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", `Aura_Respaldo_${new Date().toISOString().split('T')[0]}.json`);
+            downloadAnchorNode.setAttribute("download", `Toolkit_Respaldo_${new Date().toISOString().split('T')[0]}.json`);
             document.body.appendChild(downloadAnchorNode);
             downloadAnchorNode.click();
             downloadAnchorNode.remove();
@@ -2788,7 +2788,7 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
                                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
                                         <div className="bg-white p-6 rounded-2xl shadow-xl w-96">
                                             <h3 className="text-lg font-bold text-gray-900 mb-4">Confirme la Fecha del Reporte</h3>
-                                            <p className="text-sm text-gray-500 mb-6">Para realizar un cálculo preciso, Aura necesita saber a qué mes corresponde la última columna de datos.</p>
+                                            <p className="text-sm text-gray-500 mb-6">Para realizar un cálculo preciso, el sistema necesita saber a qué mes corresponde la última columna de datos.</p>
                                             <div className="mb-6">
                                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">MES DE CORTE (MES 12)</label>
                                                 <input 

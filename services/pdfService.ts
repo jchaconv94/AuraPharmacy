@@ -162,7 +162,7 @@ export const generateFullReportPDF = (
       doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(24);
-      doc.text("AURA", 15, 16);
+      doc.text("TOOLKIT SISMED WEB", 15, 16);
       
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
@@ -684,7 +684,7 @@ export const generateFullReportPDF = (
           });
       }
 
-      doc.save(`Reporte_Aura_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`Reporte_Toolkit_SISMED_${new Date().toISOString().split('T')[0]}.pdf`);
 
   } catch (error: any) {
       console.error(error);

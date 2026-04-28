@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { User } from '../types';
-import { Sparkles, ArrowRight, ShieldCheck, Building2, Calendar, Activity } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, Building2, Calendar, Layers } from 'lucide-react';
 
 interface WelcomeModalProps {
   user: User;
@@ -48,9 +48,9 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
                     
                     {/* Icon Container - Increased spacing from top */}
                     <div className="relative mb-8">
-                        <div className="absolute inset-0 bg-teal-400 rounded-3xl blur-xl opacity-20 animate-pulse"></div>
+                        <div className="absolute inset-0 bg-cyan-400 rounded-3xl blur-xl opacity-20 animate-pulse"></div>
                         <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-5 rounded-3xl shadow-2xl border border-white/10 relative z-10 ring-1 ring-white/5">
-                            <Activity className="h-10 w-10 text-teal-400 drop-shadow-[0_0_10px_rgba(45,212,191,0.5)]" />
+                            <Layers className="h-10 w-10 text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]" strokeWidth={2.5} />
                         </div>
                         <div className="absolute -bottom-1.5 -right-1.5 bg-green-500 border-4 border-gray-900 h-6 w-6 rounded-full z-20 flex items-center justify-center">
                             <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></div>
@@ -58,9 +58,9 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
                     </div>
 
                     {/* Status Badge - Light text for readability */}
-                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-teal-400/10 border border-teal-400/20 text-teal-200 text-[11px] font-bold uppercase tracking-wider backdrop-blur-md mb-6 shadow-lg">
-                        <Sparkles className="h-3 w-3 text-teal-300" />
-                        Sistema Aura Pro Conectado
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-400/10 border border-cyan-400/20 text-cyan-200 text-[11px] font-bold uppercase tracking-wider backdrop-blur-md mb-6 shadow-lg">
+                        <Sparkles className="h-3 w-3 text-cyan-300" />
+                        ToolKit SISMED Web Conectado
                     </div>
 
                     {/* Greeting - White Text */}

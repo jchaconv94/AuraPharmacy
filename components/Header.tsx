@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Pill, Activity } from 'lucide-react';
+import { Pill, Layers } from 'lucide-react';
 
 interface HeaderProps {
   // No props needed now
@@ -12,12 +12,14 @@ export const Header: React.FC<HeaderProps> = () => {
       <div className="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-3">
-            <div className="bg-teal-100 p-1.5 sm:p-2 rounded-lg">
-              <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" />
+            <div className="bg-gray-900 p-1.5 sm:p-2 rounded-lg flex items-center justify-center">
+              <Layers className="h-5 w-5 sm:h-6 sm:w-6 text-cyan-400" strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight leading-none">Aura</h1>
-              <p className="text-[10px] sm:text-xs text-teal-600 font-medium leading-none mt-0.5">Logística Farmacéutica</p>
+              <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight leading-none flex items-baseline gap-1">
+                ToolKit <span className="text-gray-600">SISMED</span> <span className="text-[9px] sm:text-[10px] font-bold text-cyan-600 px-1 py-0.5 bg-cyan-50 rounded border border-cyan-200 self-center ml-1 leading-none">WEB</span>
+              </h1>
+              <p className="text-[10px] sm:text-xs text-gray-500 font-medium leading-none mt-0.5 ml-0.5">Gestión Farmacéutica</p>
             </div>
           </div>
           <div className="flex items-center gap-4">

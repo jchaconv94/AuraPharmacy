@@ -154,7 +154,7 @@ export const UserProfile: React.FC = () => {
             {/* Banner Background */}
             <div className="h-32 2xl:h-48 rounded-t-2xl 2xl:rounded-t-3xl bg-gradient-to-r from-gray-900 via-teal-900 to-gray-900 relative overflow-hidden">
                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-                 <div className="absolute bottom-4 right-6 text-white/10 font-black text-4xl 2xl:text-6xl select-none hidden sm:block">AURA</div>
+                 <div className="absolute bottom-4 right-6 text-white/10 font-black text-4xl 2xl:text-6xl select-none hidden sm:block">ToolKit SISMED Web</div>
                  
                  {/* Manual Refresh Button (Top Right) */}
                  <button 

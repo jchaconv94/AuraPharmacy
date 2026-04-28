@@ -430,7 +430,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
               ) : (
                 <>
                   <Activity className="h-4 w-4" />
-                  Ejecutar Análisis Aura
+                  Ejecutar Análisis
                 </>
               )}
             </button>
@@ -550,7 +550,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
               Confirme la Fecha del Reporte
             </h3>
             <p className="text-xs sm:text-sm text-gray-500 mb-6">
-              Para realizar un cálculo preciso, Aura necesita saber a qué mes corresponde la última columna de datos.
+              Para realizar un cálculo preciso, el sistema necesita saber a qué mes corresponde la última columna de datos.
             </p>
 
             <div className="w-full bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">

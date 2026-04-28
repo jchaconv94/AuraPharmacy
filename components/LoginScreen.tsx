@@ -1,14 +1,25 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Activity, Lock, User, ArrowRight, Phone } from 'lucide-react';
+import { Activity, Lock, User, ArrowRight, Phone, ShieldCheck, Layers } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  React.useEffect(() => {
+      const savedUsername = localStorage.getItem('aura_saved_username');
+      const savedPassword = localStorage.getItem('aura_saved_password');
+      if (savedUsername && savedPassword) {
+          setUsername(savedUsername);
+          setPassword(savedPassword);
+          setRememberMe(true);
+      }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -19,6 +30,14 @@ export const LoginScreen: React.FC = () => {
       
       if (!result.success) {
           setError(result.message || 'Error al iniciar sesión');
+      } else {
+          if (rememberMe) {
+              localStorage.setItem('aura_saved_username', username);
+              localStorage.setItem('aura_saved_password', password);
+          } else {
+              localStorage.removeItem('aura_saved_username');
+              localStorage.removeItem('aura_saved_password');
+          }
       }
       setIsSubmitting(false);
   };
@@ -29,54 +48,92 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-teal-900 to-gray-900 flex items-center justify-center p-4">
-        {/* Adjusted max-width for compact screens (max-w-3xl) and large screens (2xl:max-w-5xl) */}
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl 2xl:max-w-5xl overflow-hidden flex flex-col md:flex-row transition-all duration-300">
+    <div className="flex min-h-screen bg-white">
+        {/* Left Side: Branding/Imagery (Hidden on Mobile) */}
+        <div className="hidden lg:flex lg:w-[45%] relative bg-gray-900 items-center justify-center overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-teal-900 via-gray-900 to-gray-950"></div>
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.04]"></div>
             
-            {/* Left Side: Brand */}
-            <div className="bg-teal-600 p-8 2xl:p-12 md:w-1/2 flex flex-col justify-center items-center text-center text-white hidden md:flex relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/medical-icons.png')] opacity-10"></div>
-                <div className="bg-white/20 p-3 2xl:p-4 rounded-2xl mb-4 2xl:mb-6 backdrop-blur-sm shadow-inner">
-                    <Activity className="h-12 w-12 2xl:h-16 2xl:w-16 text-white" />
+            {/* Subtle glow effect */}
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-[128px]"></div>
+            
+            <div className="relative z-10 flex flex-col items-center text-center p-12 max-w-lg">
+                <div className="bg-white/5 p-4 rounded-3xl mb-8 backdrop-blur-sm border border-white/10 shadow-2xl">
+                    <div className="bg-gray-900 p-4 rounded-2xl flex items-center justify-center">
+                        <Layers className="h-12 w-12 text-cyan-400" strokeWidth={2.5} />
+                    </div>
                 </div>
-                <h1 className="text-3xl 2xl:text-4xl font-black mb-2 tracking-tight">AURA</h1>
-                <p className="text-teal-100 font-medium text-sm 2xl:text-lg px-4 leading-relaxed">Inteligencia Artificial para<br/>para la Gestión Farmacéutica</p>
-                <div className="mt-6 2xl:mt-8 text-xs 2xl:text-sm text-teal-200 opacity-80 font-mono">
-                    <p>Oficina de Gestión de Medicamentos</p>
-                    <p> Red de Salud Bellavista © {new Date().getFullYear()}</p>
+                
+                <h1 className="text-4xl xl:text-5xl font-black text-white mb-6 tracking-tight leading-tight flex items-center gap-3">
+                    <span>ToolKit</span> <span className="text-gray-300">SISMED</span> <span className="text-lg font-bold text-cyan-400 px-2 py-1 bg-cyan-500/10 rounded-lg border border-cyan-500/20 self-start mt-1">WEB</span>
+                </h1>
+                
+                <p className="text-lg text-teal-100 font-medium leading-relaxed opacity-90 mb-10">
+                    La plataforma inteligente para la gestión, análisis y redistribución de recursos farmacéuticos.
+                </p>
+                
+                <div className="w-16 h-1 bg-teal-500/50 rounded-full mb-10"></div>
+                
+                <div className="flex items-center gap-2 text-sm text-gray-400 font-medium">
+                    <ShieldCheck className="h-4 w-4 text-teal-500/70" />
+                    <span>Oficina de Gestión de Medicamentos</span>
+                </div>
+                <div className="mt-2 text-xs text-gray-500 font-mono">
+                    Red de Salud Bellavista © {new Date().getFullYear()}
                 </div>
             </div>
+        </div>
 
-            {/* Right Side: Form - Reduced padding for 1366x768 */}
-            <div className="p-6 md:p-8 2xl:p-12 md:w-1/2 w-full bg-white flex flex-col justify-center">
+        {/* Right Side: Form Container */}
+        <div className="w-full lg:w-[55%] flex items-center justify-center p-8 sm:p-12 lg:p-24 bg-gray-50 relative">
+            
+            {/* Background minimal pattern for the right side */}
+            <div className="absolute top-0 right-0 p-8 opacity-20 pointer-events-none">
+                <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-gray-300"/>
+                        </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+                </svg>
+            </div>
+
+            <div className="w-full max-w-[400px] relative z-10">
                 
-                <div className="md:hidden flex items-center gap-2 mb-6 justify-center">
-                    <div className="bg-teal-100 p-2 rounded-lg">
-                        <Activity className="h-6 w-6 text-teal-600" />
+                {/* Mobile Header */}
+                <div className="lg:hidden mb-10 flex flex-col items-center justify-center">
+                    <div className="bg-gray-900 p-3 rounded-2xl mb-4 shadow-lg flex items-center justify-center">
+                        <Layers className="h-8 w-8 text-cyan-400" strokeWidth={2.5} />
                     </div>
-                    <span className="text-2xl font-black text-gray-900">AURA</span>
+                    <h1 className="text-2xl font-black text-gray-900 mb-1 tracking-tight flex items-baseline gap-1">
+                        ToolKit <span className="text-gray-600">SISMED</span> <span className="text-[10px] font-bold text-cyan-600 px-1 py-0.5 bg-cyan-50 rounded border border-cyan-200 self-center ml-1">WEB</span>
+                    </h1>
+                    <p className="text-sm font-medium text-gray-500">Gestión Farmacéutica</p>
                 </div>
 
-                <div className="mb-6 2xl:mb-8">
-                    <h2 className="text-xl 2xl:text-2xl font-bold text-gray-900 mb-1 2xl:mb-2">Iniciar Sesión</h2>
-                    <p className="text-gray-500 text-xs 2xl:text-sm">Ingrese sus credenciales para acceder.</p>
+                <div className="mb-10 text-center lg:text-left">
+                    <h2 className="text-3xl font-bold text-gray-900 mb-2 tracking-tight">Bienvenido</h2>
+                    <p className="text-gray-500 font-medium text-sm">Ingrese sus credenciales de acceso institucional.</p>
                 </div>
 
                 {error && (
-                    <div className="mb-4 2xl:mb-6 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-                        <Lock className="h-4 w-4 shrink-0" />
-                        {error}
+                    <div className="mb-6 p-4 bg-red-50/50 border border-red-200/60 text-red-700 text-sm rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                        <Lock className="h-5 w-5 shrink-0 mt-0.5 text-red-500" />
+                        <span>{error}</span>
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-4 2xl:space-y-5">
-                    <div>
-                        <label className="block text-[10px] 2xl:text-xs font-bold text-gray-700 uppercase mb-1 2xl:mb-1.5">Usuario</label>
-                        <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 2xl:h-5 2xl:w-5 text-gray-400 z-10" />
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-600 uppercase tracking-wider ml-1">Usuario</label>
+                        <div className="relative group">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-teal-600 transition-colors">
+                                <User className="h-5 w-5" />
+                            </div>
                             <input 
                                 type="text"
-                                className={`w-full pl-9 2xl:pl-10 pr-4 py-2 2xl:py-2.5 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all bg-white text-gray-900 font-medium text-sm ${error ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'}`}
+                                className={`w-full pl-12 pr-4 py-3.5 bg-white border ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : 'border-gray-200 focus:border-teal-500 focus:ring-teal-500/20'} rounded-xl focus:ring-4 outline-none transition-all text-gray-900 font-medium shadow-sm`}
                                 placeholder="Ej. jperez"
                                 value={username}
                                 onChange={(e) => handleInputChange(setUsername, e.target.value)}
@@ -84,13 +141,15 @@ export const LoginScreen: React.FC = () => {
                         </div>
                     </div>
                     
-                    <div>
-                        <label className="block text-[10px] 2xl:text-xs font-bold text-gray-700 uppercase mb-1 2xl:mb-1.5">Contraseña</label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 2xl:h-5 2xl:w-5 text-gray-400 z-10" />
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-600 uppercase tracking-wider ml-1">Contraseña</label>
+                        <div className="relative group">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-teal-600 transition-colors">
+                                <Lock className="h-5 w-5" />
+                            </div>
                             <input 
                                 type="password"
-                                className={`w-full pl-9 2xl:pl-10 pr-4 py-2 2xl:py-2.5 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all bg-white text-gray-900 font-medium text-sm ${error ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-200' : 'border-gray-300'}`}
+                                className={`w-full pl-12 pr-4 py-3.5 bg-white border ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : 'border-gray-200 focus:border-teal-500 focus:ring-teal-500/20'} rounded-xl focus:ring-4 outline-none transition-all text-gray-900 font-medium shadow-sm`}
                                 placeholder="••••••••"
                                 value={password}
                                 onChange={(e) => handleInputChange(setPassword, e.target.value)}
@@ -98,26 +157,40 @@ export const LoginScreen: React.FC = () => {
                         </div>
                     </div>
 
+                    <div className="flex items-center mt-2 ml-1">
+                        <input
+                            id="remember-me"
+                            name="remember-me"
+                            type="checkbox"
+                            checked={rememberMe}
+                            onChange={(e) => setRememberMe(e.target.checked)}
+                            className="h-4 w-4 text-teal-600 focus:ring-teal-500/50 border-gray-300 rounded transition-colors cursor-pointer"
+                        />
+                        <label htmlFor="remember-me" className="ml-2 block text-xs font-semibold text-gray-700 cursor-pointer select-none">
+                            Recordar mis credenciales
+                        </label>
+                    </div>
+
                     <button 
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full bg-gray-900 text-white font-bold py-2.5 2xl:py-3 rounded-lg hover:bg-black transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-70 disabled:cursor-not-allowed group mt-2 text-xs 2xl:text-sm"
+                        className="w-full bg-gray-900 text-white font-bold py-3.5 rounded-xl hover:bg-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20 disabled:opacity-70 disabled:cursor-not-allowed group mt-2"
                     >
-                        {isSubmitting ? 'Verificando...' : 'Ingresar al Sistema'}
-                        {!isSubmitting && <ArrowRight className="h-3 w-3 2xl:h-4 2xl:w-4 group-hover:translate-x-1 transition-transform" />}
+                        {isSubmitting ? 'Verificando...' : 'Ingresar al Espacio de Trabajo'}
+                        {!isSubmitting && <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />}
                     </button>
                 </form>
 
-                <div className="mt-6 2xl:mt-8 text-center flex flex-col items-center gap-3 2xl:gap-4 border-t border-gray-50 pt-4 2xl:pt-6">
-                    <button className="text-xs text-teal-600 hover:text-teal-800 font-bold transition-colors">
+                <div className="mt-8 text-center flex flex-col items-center gap-4 border-t border-gray-200 pt-6">
+                    <button className="text-sm font-bold text-teal-600 hover:text-teal-800 transition-colors">
                         ¿Olvidó su contraseña?
                     </button>
                     
-                    <div className="text-[10px] text-gray-400">
-                        <p>Contacte al soporte de TI de la Red de Salud Bellavista:</p>
-                        <div className="flex items-center justify-center gap-1.5 mt-1.5 bg-gray-50 py-1.5 px-3 rounded-full border border-gray-100">
-                            <Phone className="h-3 w-3 text-gray-400" />
-                            <span className="font-bold text-gray-600">956606972 - Ing. Jordan Chacon Villacis</span>
+                    <div className="text-xs text-gray-400 mt-2">
+                        <p className="mb-2">Contacta al administrador del sistema:</p>
+                        <div className="inline-flex items-center gap-2 bg-gray-50 hover:bg-gray-100 transition-colors py-2 px-4 rounded-full border border-gray-200">
+                            <Phone className="h-4 w-4 text-gray-500" />
+                            <span className="font-bold text-gray-700 tracking-wide">956606972 - Ing. Jordan Chacon Villacis</span>
                         </div>
                     </div>
                 </div>
