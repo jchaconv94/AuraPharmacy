@@ -8,7 +8,8 @@ import {
   ChevronRight,
   UserCircle,
   LogOut,
-  Layers
+  Layers,
+  Database
 } from 'lucide-react';
 import { AppModule, User } from '../types';
 
@@ -107,6 +108,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <ArrowRightLeft className={`h-5 w-5 shrink-0 ${currentView === 'REDISTRIBUTION' ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
             {!isCollapsed && <span className="font-semibold text-sm">Redistribución</span>}
+          </button>
+        )}
+
+        {hasPermission('SIG_SEARCH') && (
+          <button
+            onClick={() => setCurrentView('SIG_SEARCH')}
+            className={`w-full flex items-center gap-3 py-3 rounded-xl transition-all duration-300 group ${
+              currentView === 'SIG_SEARCH'
+                ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
+                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+            } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
+            title={isCollapsed ? "Consulta Stock" : ""}
+          >
+            <Database className={`h-5 w-5 shrink-0 ${currentView === 'SIG_SEARCH' ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
+            {!isCollapsed && <span className="font-semibold text-sm">Consulta Stock</span>}
           </button>
         )}
 

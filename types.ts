@@ -94,9 +94,9 @@ export interface ChartDataPoint {
 
 // --- NEW AUTHENTICATION & ADMIN TYPES ---
 
-export type UserRole = 'ADMIN' | 'FARMACIA' | 'INVITADO';
+export type UserRole = string;
 
-export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'PROFILE' | 'REDISTRIBUTION';
+export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'PROFILE' | 'REDISTRIBUTION' | 'SIG_SEARCH';
 
 export interface HealthFacility {
   code: string; // Codigo IPRESS
@@ -143,6 +143,7 @@ export interface RoleConfig {
   role: UserRole;
   label: string;
   allowedModules: AppModule[];
+  maxUrlsAllowed?: number;
 }
 
 // --- FILTER TYPES ---

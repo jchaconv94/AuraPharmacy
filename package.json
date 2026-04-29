@@ -13,11 +13,13 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "@types/papaparse": "^5.5.2",
     "clsx": "^2.1.1",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.3",
     "localforage": "^1.10.0",
     "lucide-react": "^0.460.0",
+    "papaparse": "^5.5.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.13.3",

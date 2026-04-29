@@ -19,6 +19,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { UserProfile } from './components/UserProfile';
 import { WelcomeModal } from './components/WelcomeModal'; // Importar Modal
 import { RedistributionModule } from './components/RedistributionModule';
+import { SheetSearchModule } from './components/SheetSearchModule';
 import { Sidebar } from './components/Sidebar'; // Nuevo Import
 import { Toaster } from 'sonner';
 
@@ -91,6 +92,7 @@ const AuthenticatedApp: React.FC = () => {
                         <h2 className="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
                            {currentView === 'DASHBOARD' && 'Análisis de Requerimiento'}
                            {currentView === 'REDISTRIBUTION' && 'Módulo de Redistribución'}
+                           {currentView === 'SIG_SEARCH' && 'Consulta Stock'}
                            {currentView.startsWith('ADMIN') && 'Panel de Administración'}
                            {currentView === 'PROFILE' && 'Perfil de Usuario'}
                         </h2>
@@ -106,6 +108,7 @@ const AuthenticatedApp: React.FC = () => {
                     <div className="mx-auto max-w-[1600px]">
                         {currentView === 'DASHBOARD' && <AnalysisModule />}
                         {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
+                        {currentView === 'SIG_SEARCH' && <SheetSearchModule />}
                         {(currentView === 'ADMIN_USERS' || currentView === 'ADMIN_ROLES') && <AdminPanel />}
                         {currentView === 'PROFILE' && <UserProfile />}
                     </div>

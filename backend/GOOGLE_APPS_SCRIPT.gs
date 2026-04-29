@@ -63,6 +63,12 @@ function handleRequest(e) {
       case 'getFacilities':
          result = handleGetFacilities(ss);
          break;
+      case 'getRolesConfig':
+         result = handleGetRolesConfig(ss);
+         break;
+      case 'updateRoleConfig':
+         result = handleUpdateRoleConfig(ss, params.roleConfig);
+         break;
       default:
          result = { success: false, message: "Unknown action: " + params.action };
     }
@@ -370,7 +376,7 @@ function setupDatabase() {
   const ss = SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
   createTableIfNotExists(ss, 'FACILITIES', ['Code', 'Name', 'Category'], [['00001', 'DIRESA SEDE CENTRAL', 'ADM']]);
   createTableIfNotExists(ss, 'PERSONNEL', ['ID', 'FirstName', 'LastName', 'DNI', 'Phone', 'Email', 'BirthDate', 'FacilityCode'], [['P001', 'Admin', 'User', '0000', '000', 'admin@aura.pe', '1990-01-01', '00001']]);
-  createTableIfNotExists(ss, 'ROLES', ['Role', 'Label', 'Modules'], [['ADMIN', 'Admin', 'DASHBOARD,ANALYSIS,ADMIN_USERS,ADMIN_ROLES,PROFILE']]);
+  createTableIfNotExists(ss, 'ROLES', ['Role', 'Label', 'Modules', 'MaxUrlsAllowed'], [['ADMIN', 'Admin', 'DASHBOARD,ANALYSIS,ADMIN_USERS,ADMIN_ROLES,PROFILE', 10]]);
   createTableIfNotExists(ss, 'USERS', ['Username', 'Password', 'Role', 'PersonnelID', 'Active'], [['admin', 'admin123', 'ADMIN', 'P001', true]]);
   createTableIfNotExists(ss, 'CONFIG', ['Key', 'Value'], [['verificationDelaySeconds', 5], ['apiUrl', '']]);
   Logger.log("Base de datos actualizada.");
@@ -384,4 +390,55 @@ function createTableIfNotExists(ss, sheetName, headers, defaultData) {
     sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#E6F4EA");
     if (defaultData && defaultData.length > 0) defaultData.forEach(row => sheet.appendRow(row));
   }
+}
+
+function handleGetRolesConfig(ss) {
+  const sheet = ss.getSheetByName('ROLES');
+  if (!sheet) return { success: false, data: [] };
+  const data = sheet.getDataRange().getValues();
+  const roles = [];
+  for (let i = 1; i < data.length; i++) {
+    roles.push({
+      role: String(data[i][0]),
+      label: String(data[i][1] || data[i][0]), // Use role name if label is empty
+      allowedModules: String(data[i][2]).split(',').filter(m => m.trim().length > 0),
+      maxUrlsAllowed: data[i][3] !== undefined && data[i][3] !== '' ? Number(data[i][3]) : undefined
+    });
+  }
+  return { success: true, data: roles };
+}
+
+function handleUpdateRoleConfig(ss, roleConfig) {
+  const sheet = ss.getSheetByName('ROLES');
+  if (!sheet) return { success: false, message: "Tabla ROLES no encontrada" };
+  
+  // Ensure headers have MaxUrlsAllowed column
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (headers.length < 4 || headers[3] !== 'MaxUrlsAllowed') {
+    sheet.getRange(1, 4).setValue('MaxUrlsAllowed');
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const modulesStr = roleConfig.allowedModules.join(',');
+  let found = false;
+  
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(roleConfig.role)) {
+      sheet.getRange(i + 1, 2).setValue(roleConfig.label);
+      sheet.getRange(i + 1, 3).setValue(modulesStr);
+      if (roleConfig.maxUrlsAllowed !== undefined) {
+         sheet.getRange(i + 1, 4).setValue(roleConfig.maxUrlsAllowed);
+      } else {
+         sheet.getRange(i + 1, 4).clearContent();
+      }
+      found = true;
+      break;
+    }
+  }
+  
+  if (!found) {
+    sheet.appendRow([roleConfig.role, roleConfig.label, modulesStr, roleConfig.maxUrlsAllowed !== undefined ? roleConfig.maxUrlsAllowed : '']);
+  }
+  
+  return { success: true };
 }

@@ -37,6 +37,11 @@ export const AdminPanel: React.FC = () => {
   // --- CONFIRMATION MODAL STATE ---
   const [userToToggle, setUserToToggle] = useState<{username: string, currentStatus: boolean} | null>(null);
 
+  // --- NEW ROLE MODAL STATE ---
+  const [isNewRoleModalOpen, setIsNewRoleModalOpen] = useState(false);
+  const [newRoleForm, setNewRoleForm] = useState({ role: '', label: '', allowedModules: [] });
+  const [isSavingRole, setIsSavingRole] = useState(false);
+
   useEffect(() => {
     // Initial load (uses cache if available)
     api.getUsers().then(setUsers);
@@ -189,6 +194,19 @@ export const AdminPanel: React.FC = () => {
       }));
   };
 
+  const handleRoleMaxUrlsChange = (roleName: string, maxUrlsStr: string) => {
+      const maxUrls = maxUrlsStr ? parseInt(maxUrlsStr) : undefined;
+      setRoles(prevRoles => prevRoles.map(r => 
+          r.role === roleName ? { ...r, maxUrlsAllowed: isNaN(maxUrls as any) ? undefined : maxUrls } : r
+      ));
+  };
+
+  const handleRoleLabelChange = (roleName: string, newLabel: string) => {
+      setRoles(prevRoles => prevRoles.map(r => 
+          r.role === roleName ? { ...r, label: newLabel } : r
+      ));
+  };
+
   const handleSaveRoleConfig = async (roleConfig: RoleConfig) => {
       const toastId = toast.loading('Guardando cambios...');
       try {
@@ -199,6 +217,10 @@ export const AdminPanel: React.FC = () => {
                   description: 'Los permisos han sido modificados exitosamente.'
               });
               
+              // Refresh roles to ensure sync
+              const updatedRoles = await api.getRolesConfig();
+              if (updatedRoles && updatedRoles.length > 0) setRoles(updatedRoles);
+
               // FORCE REFRESH IF CURRENT USER IS AFFECTED
               if (currentUser && currentUser.role === roleConfig.role) {
                   await refreshUserData();
@@ -219,6 +241,34 @@ export const AdminPanel: React.FC = () => {
           if (currentUser && currentUser.role === roleConfig.role) {
               await refreshUserData();
           }
+      }
+  };
+
+  const handleCreateRole = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setIsSavingRole(true);
+      const newRoleCode = newRoleForm.role.toUpperCase().replace(/\s+/g, '_');
+      const newRoleConfig: RoleConfig = {
+          role: newRoleCode as any,
+          label: newRoleForm.label || newRoleCode,
+          allowedModules: newRoleForm.allowedModules as any[]
+      };
+
+      const toastId = toast.loading('Creando rol...');
+      try {
+          const res = await api.updateRoleConfig(newRoleConfig);
+          if (res.success) {
+              toast.success(`Rol ${newRoleConfig.label} creado`, { id: toastId });
+              const updatedRoles = await api.getRolesConfig();
+              if (updatedRoles && updatedRoles.length > 0) setRoles(updatedRoles);
+              setIsNewRoleModalOpen(false);
+          } else {
+             toast.error("Error al crear rol: " + res.message, { id: toastId });
+          }
+      } catch (e: any) {
+          toast.error("Error al crear rol (Offline)", { id: toastId });
+      } finally {
+          setIsSavingRole(false);
       }
   };
 
@@ -347,26 +397,44 @@ export const AdminPanel: React.FC = () => {
 
                 {activeTab === 'ROLES' && (
                     <div className="space-y-6">
-                        <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg flex gap-3">
-                             <Settings className="h-5 w-5 text-blue-600 shrink-0" />
-                             <div>
-                                 <h4 className="font-bold text-blue-900 text-sm">Configuración de Acceso</h4>
-                                 <p className="text-xs text-blue-700 mt-1">
-                                     Aquí puede definir qué módulos son visibles para cada rol. Los cambios requieren reinicio de sesión de los usuarios afectados.
-                                 </p>
-                             </div>
+                        <div className="flex justify-between flex-wrap gap-4 items-center">
+                            <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg flex gap-3 flex-1">
+                                <Settings className="h-5 w-5 text-blue-600 shrink-0" />
+                                <div>
+                                    <h4 className="font-bold text-blue-900 text-sm">Configuración de Acceso</h4>
+                                    <p className="text-xs text-blue-700 mt-1">
+                                        Aquí puede definir qué módulos son visibles para cada rol. Los cambios requieren reinicio de sesión de los usuarios afectados.
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    setNewRoleForm({ role: '', label: '', allowedModules: [] });
+                                    setIsNewRoleModalOpen(true);
+                                }}
+                                className="flex items-center justify-center gap-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 px-5 py-3 rounded-lg transition-all shadow-sm"
+                            >
+                                <Shield className="h-4 w-4" />
+                                Nuevo Rol
+                            </button>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {roles.map((role) => (
                                 <div key={role.role} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                                     <div className="flex items-center justify-between mb-4">
-                                        <h3 className="font-bold text-lg">{role.label}</h3>
-                                        <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">{role.role}</span>
+                                        <input 
+                                            type="text" 
+                                            value={role.label} 
+                                            onChange={(e) => handleRoleLabelChange(role.role, e.target.value)} 
+                                            placeholder="Nombre del Rol"
+                                            className="font-bold text-lg bg-transparent border-0 border-b border-transparent hover:border-gray-300 focus:border-teal-500 focus:ring-0 px-0 focus:outline-none w-full mr-2"
+                                        />
+                                        <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded shrink-0">{role.role}</span>
                                     </div>
                                     <div className="space-y-2">
                                         <p className="text-xs font-bold text-gray-500 uppercase mb-2">Módulos Permitidos:</p>
-                                        {['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION'].map(module => (
+                                        {['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'].map(module => (
                                             <label key={module} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
                                                 <input 
                                                     type="checkbox" 
@@ -377,6 +445,18 @@ export const AdminPanel: React.FC = () => {
                                                 <span className="text-sm text-gray-700">{module}</span>
                                             </label>
                                         ))}
+                                    </div>
+                                    <div className="mt-4 border-t border-gray-100 pt-4">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Máximo de URLs (SIG_SEARCH):</label>
+                                        <input 
+                                            type="number"
+                                            min="1"
+                                            placeholder="Ilimitado"
+                                            value={role.maxUrlsAllowed || ''}
+                                            onChange={(e) => handleRoleMaxUrlsChange(role.role, e.target.value)}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                        />
+                                        <p className="text-[10px] text-gray-400 mt-1">Deje vacío para sin límite.</p>
                                     </div>
                                     <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
                                         <button 
@@ -649,8 +729,9 @@ export const AdminPanel: React.FC = () => {
                                         value={userForm.role}
                                         onChange={e => setUserForm({...userForm, role: e.target.value})}
                                     >
-                                        <option value="FARMACIA">FARMACIA</option>
-                                        <option value="ADMIN">ADMIN</option>
+                                        {roles.map(r => (
+                                            <option key={r.role} value={r.role}>{r.role}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div>
@@ -692,6 +773,102 @@ export const AdminPanel: React.FC = () => {
                         >
                             <Save className="h-4 w-4" />
                             {isSavingUser ? 'Guardando...' : 'Guardar Usuario'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )}
+
+    {/* --- NEW ROLE MODAL --- */}
+    {isNewRoleModalOpen && (
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+                <div className="bg-gray-900 text-white px-6 py-4 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-teal-500/20 p-2 rounded-lg">
+                            <Shield className="h-5 w-5 text-teal-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold">Crear Nuevo Rol</h3>
+                            <p className="text-xs text-gray-400">Defina el código y los permisos del nuevo rol.</p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setIsNewRoleModalOpen(false)}
+                        className="text-gray-400 hover:text-white transition-colors hover:bg-white/10 p-1 rounded-full"
+                    >
+                        <X className="h-6 w-6" />
+                    </button>
+                </div>
+
+                <form onSubmit={handleCreateRole} className="p-6">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 mb-1">Identificador del Rol *</label>
+                            <input 
+                                type="text"
+                                required
+                                placeholder="Ej: AUDITOR"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 uppercase outline-none"
+                                value={newRoleForm.role}
+                                onChange={e => setNewRoleForm({...newRoleForm, role: e.target.value})}
+                            />
+                            <p className="text-xs text-gray-400 mt-1">Código único sin espacios (Ej: MEDICO, ANALISTA).</p>
+                        </div>
+                        
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 mb-1">Nombre Descriptivo</label>
+                            <input 
+                                type="text"
+                                placeholder="Ej: Personal Auditor"
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                value={newRoleForm.label}
+                                onChange={e => setNewRoleForm({...newRoleForm, label: e.target.value})}
+                            />
+                        </div>
+                        
+                        <div className="pt-2">
+                            <label className="block text-xs font-bold text-gray-700 mb-2">Permisos Iniciales</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'].map(mod => {
+                                    const isChecked = newRoleForm.allowedModules.includes(mod as never);
+                                    return (
+                                        <label key={mod} className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-100 hover:bg-gray-100 cursor-pointer">
+                                            <input 
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={(e) => {
+                                                    const newMods = e.target.checked 
+                                                        ? [...newRoleForm.allowedModules, mod]
+                                                        : newRoleForm.allowedModules.filter(m => m !== mod);
+                                                    setNewRoleForm({...newRoleForm, allowedModules: newMods as any});
+                                                }}
+                                                className="rounded text-teal-600 focus:ring-teal-500"
+                                            />
+                                            <span className="text-xs text-gray-700 font-medium">{mod}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-8 flex justify-end gap-3 pt-4 border-t border-gray-100">
+                        <button 
+                            type="button"
+                            onClick={() => setIsNewRoleModalOpen(false)}
+                            className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            type="submit"
+                            disabled={isSavingRole || !newRoleForm.role}
+                            className="bg-teal-600 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:bg-teal-700 transition-all flex items-center gap-2 disabled:opacity-70"
+                        >
+                            <Save className="h-4 w-4" />
+                            {isSavingRole ? 'Creando...' : 'Crear Rol'}
                         </button>
                     </div>
                 </form>

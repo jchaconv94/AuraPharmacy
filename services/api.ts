@@ -31,13 +31,13 @@ const MOCK_DB = {
         try {
             const saved = localStorage.getItem('aura_mock_roles');
             return saved ? JSON.parse(saved) : [
-                { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION'] },
-                { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION'] }
+                { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 10 },
+                { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 1 }
             ];
         } catch (e) {
             return [
-                { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION'] },
-                { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION'] }
+                { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 10 },
+                { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 1 }
             ];
         }
     })(),
