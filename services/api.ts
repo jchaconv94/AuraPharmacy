@@ -333,5 +333,32 @@ export const api = {
             console.error("Error guardando configuración global:", e);
             return { success: false, message: "Error de conexión: No se pudo guardar la configuración global." };
         }
+    },
+
+    // --- UNGET CONFIGURATIONS ---
+    
+    getUngetConfigs: async (username: string): Promise<any[]> => {
+        try {
+            const result = await sendRequest('getUngetConfigs', { username });
+            if (result.success) return result.data;
+            return [];
+        } catch (e) {
+            console.warn("Offline mode (getUngetConfigs): Using local storage fallback.");
+            const saved = localStorage.getItem(`aura_sig_ungets_${username}`);
+            return saved ? JSON.parse(saved) : [];
+        }
+    },
+
+    saveUngetConfigs: async (username: string, configs: any[]): Promise<{ success: boolean; message?: string }> => {
+        try {
+            const result = await sendRequest('saveUngetConfigs', { username, configs });
+            // Sincronizamos con localStorage por redundancia
+            localStorage.setItem(`aura_sig_ungets_${username}`, JSON.stringify(configs));
+            return result;
+        } catch (e) {
+            console.error("Error saving unget configs:", e);
+            localStorage.setItem(`aura_sig_ungets_${username}`, JSON.stringify(configs));
+            return { success: false, message: "Guardado solo localmente (Error de conexión)" };
+        }
     }
 };

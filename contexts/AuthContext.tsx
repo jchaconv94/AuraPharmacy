@@ -122,8 +122,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const hasPermission = (module: AppModule): boolean => {
-      if (!state.user) return false;
-      return state.user.permissions.includes(module);
+      if (!state.user || !state.user.permissions) return false;
+      try {
+          return Array.isArray(state.user.permissions) && state.user.permissions.includes(module);
+      } catch (e) {
+          console.error("Error checking permission:", e);
+          return false;
+      }
   };
 
   // --- INACTIVITY TIMEOUT ---

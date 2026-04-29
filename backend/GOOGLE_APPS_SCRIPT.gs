@@ -67,8 +67,14 @@ function handleRequest(e) {
          result = handleGetRolesConfig(ss);
          break;
       case 'updateRoleConfig':
-         result = handleUpdateRoleConfig(ss, params.roleConfig);
-         break;
+        result = handleUpdateRoleConfig(ss, params.roleConfig);
+        break;
+      case 'getUngetConfigs':
+        result = handleGetUngetConfigs(ss, params.username);
+        break;
+      case 'saveUngetConfigs':
+        result = handleSaveUngetConfigs(ss, params.username, params.configs);
+        break;
       default:
          result = { success: false, message: "Unknown action: " + params.action };
     }
@@ -135,7 +141,8 @@ function buildUserResponse(ss, userRow) {
     const personnelData = getPersonnelData(ss, personnelId);
     if (!personnelData) return { success: false, message: 'Error de integridad: Personal no encontrado' };
     const facilityData = getFacilityData(ss, personnelData.facilityCode);
-    const rolePermissions = getRolePermissions(ss, userRow[2]);
+    const roleConfig = getFullRoleConfig(ss, userRow[2]);
+    
     return {
         success: true,
         user: {
@@ -145,7 +152,8 @@ function buildUserResponse(ss, userRow) {
         isActive: true,
         personnelData: personnelData,
         facilityData: facilityData,
-        permissions: rolePermissions
+        permissions: roleConfig.permissions,
+        maxUrlsAllowed: roleConfig.maxUrlsAllowed
         }
     };
 }
@@ -360,16 +368,25 @@ function getFacilityData(ss, code) {
 }
 
 function getRolePermissions(ss, role) {
+   const config = getFullRoleConfig(ss, role);
+   return config.permissions;
+}
+
+function getFullRoleConfig(ss, role) {
    const sheet = ss.getSheetByName('ROLES');
-   if (!sheet) return [];
+   if (!sheet) return { permissions: [], maxUrlsAllowed: undefined };
    const data = sheet.getDataRange().getValues();
    for(let i=1; i<data.length; i++) {
        if (String(data[i][0]) === String(role)) {
            const perms = data[i][2]; 
-           return perms ? perms.split(',') : [];
+           const max = data[i][3];
+           return {
+               permissions: perms ? String(perms).split(',') : [],
+               maxUrlsAllowed: (max !== undefined && max !== "") ? Number(max) : undefined
+           };
        }
    }
-   return [];
+   return { permissions: [], maxUrlsAllowed: undefined };
 }
 
 function setupDatabase() {
@@ -379,6 +396,7 @@ function setupDatabase() {
   createTableIfNotExists(ss, 'ROLES', ['Role', 'Label', 'Modules', 'MaxUrlsAllowed'], [['ADMIN', 'Admin', 'DASHBOARD,ANALYSIS,ADMIN_USERS,ADMIN_ROLES,PROFILE', 10]]);
   createTableIfNotExists(ss, 'USERS', ['Username', 'Password', 'Role', 'PersonnelID', 'Active'], [['admin', 'admin123', 'ADMIN', 'P001', true]]);
   createTableIfNotExists(ss, 'CONFIG', ['Key', 'Value'], [['verificationDelaySeconds', 5], ['apiUrl', '']]);
+  createTableIfNotExists(ss, 'UNGET_CONFIG', ['Username', 'UngetName', 'Url'], []);
   Logger.log("Base de datos actualizada.");
 }
 
@@ -441,4 +459,48 @@ function handleUpdateRoleConfig(ss, roleConfig) {
   }
   
   return { success: true };
+}
+
+function handleGetUngetConfigs(ss, username) {
+  const sheet = ss.getSheetByName('UNGET_CONFIG');
+  if (!sheet) return { success: true, data: [] };
+  
+  const data = sheet.getDataRange().getValues();
+  const configs = [];
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase() === String(username).toLowerCase()) {
+      configs.push({
+        name: data[i][1],
+        url: data[i][2]
+      });
+    }
+  }
+  return { success: true, data: configs };
+}
+
+function handleSaveUngetConfigs(ss, username, configs) {
+  let sheet = ss.getSheetByName('UNGET_CONFIG');
+  if (!sheet) {
+    createTableIfNotExists(ss, 'UNGET_CONFIG', ['Username', 'UngetName', 'Url'], []);
+    sheet = ss.getSheetByName('UNGET_CONFIG');
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  // Borrar configuraciones anteriores del usuario
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][0]).toLowerCase() === String(username).toLowerCase()) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+  
+  // Insertar nuevas configuraciones
+  if (Array.isArray(configs)) {
+    configs.forEach(config => {
+      if (config.url) {
+        sheet.appendRow([username, config.name, config.url]);
+      }
+    });
+  }
+  
+  return { success: true, message: "Ajustes de UNGET sincronizados en la nube." };
 }

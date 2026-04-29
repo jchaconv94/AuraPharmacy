@@ -21,6 +21,7 @@ import { WelcomeModal } from './components/WelcomeModal'; // Importar Modal
 import { RedistributionModule } from './components/RedistributionModule';
 import { SheetSearchModule } from './components/SheetSearchModule';
 import { Sidebar } from './components/Sidebar'; // Nuevo Import
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from 'sonner';
 
 const STORAGE_KEY = 'aura_data_v1';
@@ -31,10 +32,12 @@ const WELCOME_KEY = 'aura_welcome_shown_session'; // Clave de sesión
 // --- MAIN APP COMPONENT WRAPPED IN AUTH CONTEXT ---
 const App: React.FC = () => {
     return (
-        <AuthProvider>
-            <Toaster position="top-center" closeButton theme="light" style={{ zIndex: 2147483647 }} toastOptions={{ style: { zIndex: 2147483647, color: '#1e293b' }, className: 'text-slate-800' }} />
-            <AuthenticatedApp />
-        </AuthProvider>
+        <ErrorBoundary>
+            <AuthProvider>
+                <Toaster position="top-center" closeButton theme="light" style={{ zIndex: 2147483647 }} toastOptions={{ style: { zIndex: 2147483647, color: '#1e293b' }, className: 'text-slate-800' }} />
+                <AuthenticatedApp />
+            </AuthProvider>
+        </ErrorBoundary>
     );
 };
 
@@ -106,11 +109,13 @@ const AuthenticatedApp: React.FC = () => {
                 {/* CONTENT AREA SWITCHER */}
                 <main className="flex-1 overflow-y-auto w-full p-4 2xl:p-6 pb-20">
                     <div className="mx-auto max-w-[1600px]">
-                        {currentView === 'DASHBOARD' && <AnalysisModule />}
-                        {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
-                        {currentView === 'SIG_SEARCH' && <SheetSearchModule />}
-                        {(currentView === 'ADMIN_USERS' || currentView === 'ADMIN_ROLES') && <AdminPanel />}
-                        {currentView === 'PROFILE' && <UserProfile />}
+                        <ErrorBoundary>
+                            {currentView === 'DASHBOARD' && <AnalysisModule />}
+                            {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
+                            {currentView === 'SIG_SEARCH' && <SheetSearchModule />}
+                            {(currentView === 'ADMIN_USERS' || currentView === 'ADMIN_ROLES') && <AdminPanel />}
+                            {currentView === 'PROFILE' && <UserProfile />}
+                        </ErrorBoundary>
                     </div>
                 </main>
                 {showWelcome && user && <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />}
@@ -227,7 +232,11 @@ const AnalysisModule: React.FC = () => {
 
   useEffect(() => {
     if (result) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+      try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+      } catch (e) {
+          console.warn('Storage quota exceeded on main result.', e);
+      }
     } else {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -235,12 +244,16 @@ const AnalysisModule: React.FC = () => {
 
   // PERSIST REVIEWED IDS
   useEffect(() => {
-      localStorage.setItem(REVIEW_KEY, JSON.stringify(Array.from(reviewedIds)));
+      try {
+          localStorage.setItem(REVIEW_KEY, JSON.stringify(Array.from(reviewedIds)));
+      } catch(e) { console.warn(e); }
   }, [reviewedIds]);
 
   // PERSIST ADDITIONAL ITEMS
   useEffect(() => {
-      localStorage.setItem(ADDITIONAL_ITEMS_KEY, JSON.stringify(additionalItems));
+      try {
+          localStorage.setItem(ADDITIONAL_ITEMS_KEY, JSON.stringify(additionalItems));
+      } catch(e) { console.warn(e); }
   }, [additionalItems]);
 
   const handleAnalyze = useCallback(async (data: MedicationInput[], referenceDate: string, vaccinesExcluded: boolean) => {

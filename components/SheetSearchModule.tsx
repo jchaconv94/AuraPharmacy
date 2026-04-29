@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2 } from 'lucide-react';
+import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { api } from '../services/api';
 
 interface SIGData {
   ALMCOD: string;
@@ -27,7 +28,56 @@ interface SheetSource {
   id: string;
   name: string;
   urlIndex: number;
+  lastUpdate?: string;
+  lastUpdateTime?: number;
 }
+
+const parseDataDate = (str?: string): number => {
+    if (!str) return 0;
+    // Intentar parseo nativo primero
+    let d = new Date(str);
+    if (!isNaN(d.getTime())) return d.getTime();
+    
+    // Intentar DD/MM/YYYY HH:MM:SS (común en sheets latinas)
+    try {
+        const parts = str.trim().split(/\s+/);
+        const datePart = parts[0].replace(',', '');
+        const timePart = parts[1] || '00:00:00';
+        const dateMatch = datePart.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (dateMatch) {
+            const [, day, month, year] = dateMatch;
+            d = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${timePart}`);
+            return d.getTime() || 0;
+        }
+    } catch(e) {}
+    
+    return 0;
+};
+
+const formatFullDate = (timestamp?: number): string => {
+    if (!timestamp || timestamp === 0) return 'Sin fecha';
+    const d = new Date(timestamp);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+};
+
+const getUpdateStatus = (timestamp?: number) => {
+    if (!timestamp || timestamp === 0) return { color: 'bg-gray-400', label: 'Sin datos' };
+    
+    const now = new Date().getTime();
+    const diffMs = now - timestamp;
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    if (diffHours < 0) return { color: 'bg-emerald-500', label: 'Fecha en el futuro' };
+    if (diffHours < 1) return { color: 'bg-emerald-500', label: 'Actualizado recientemente' };
+    if (diffHours < 24) return { color: 'bg-amber-500', label: 'Más de 1 hora sin actualizar' };
+    return { color: 'bg-red-500', label: 'Más de 1 día sin actualizar' };
+};
 
 const formatDate = (dateValue: any): string => {
     if (!dateValue) return '';
@@ -47,101 +97,178 @@ const formatDate = (dateValue: any): string => {
     return str;
 };
 
+interface UngetConfig {
+  url: string;
+  name: string;
+}
+
 export const SheetSearchModule: React.FC = () => {
-    const { user } = useAuth();
+    const { user, hasPermission } = useAuth();
+    const canAccess = hasPermission('SIG_SEARCH');
 
     // Configuración
-    const [scriptUrls, setScriptUrls] = useState<string[]>([]);
+    const [scriptUrls, setScriptUrls] = useState<UngetConfig[]>([]);
     const [sources, setSources] = useState<SheetSource[]>([]);
     const [data, setData] = useState<SIGData[]>([]);
     
     // UI states
     const [isLoading, setIsLoading] = useState(false);
+    const [isConfigLoading, setIsConfigLoading] = useState(true); // Nuevo: Estado para carga de config
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedSourceId, setSelectedSourceId] = useState<string>(''); // '' means All
+    
+    // Navigation hierarchy
+    const [viewLevel, setViewLevel] = useState<'ungets' | 'sheets' | 'data'>('ungets');
+    const [selectedUngetIndex, setSelectedUngetIndex] = useState<number | null>(null);
+    const [selectedSourceId, setSelectedSourceId] = useState<string>(''); 
     
     // Modal & Config
     const [isConfigOpen, setIsConfigOpen] = useState(false);
-    const [tempUrls, setTempUrls] = useState<string[]>([]);
+    const [editingIndex, setEditingIndex] = useState<number | null>(null); // Nuevo: índice que se está editando
+    const [tempUrls, setTempUrls] = useState<UngetConfig[]>([]);
     const [newUrlInput, setNewUrlInput] = useState('');
+    const [newNameInput, setNewNameInput] = useState('');
     const [copied, setCopied] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<SIGData | null>(null);
 
-    const [maxUrlsAllowed, setMaxUrlsAllowed] = useState<number | undefined>();
+    const maxUrlsAllowed = user?.maxUrlsAllowed;
 
+    // Initialize from server
     useEffect(() => {
-        if (!user || !isConfigOpen) return;
-        import('../services/api').then(module => {
-            module.api.getRolesConfig().then(roles => {
-                const currentRoleConfig = roles.find(r => r.role === user.role);
-                if (currentRoleConfig) setMaxUrlsAllowed(currentRoleConfig.maxUrlsAllowed);
-            });
-        });
-    }, [user, isConfigOpen]);
+        if (!user || !canAccess) return;
+        
+        const loadConfigs = async () => {
+            setIsConfigLoading(true);
+            try {
+                const remoteConfigs = await api.getUngetConfigs(user.username);
+                if (remoteConfigs && remoteConfigs.length > 0) {
+                    setScriptUrls(remoteConfigs);
+                } else {
+                    // Si no hay remoto, intentar migrar desde local storage una vez
+                    const savedUrls = localStorage.getItem(`aura_sig_urls_${user.username}`);
+                    if (savedUrls) {
+                        try {
+                            const parsed = JSON.parse(savedUrls);
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                const migrated = parsed.map(u => typeof u === 'string' ? { url: u, name: `UNGET ${Math.random().toString(36).substr(2, 4).toUpperCase()}` } : u);
+                                setScriptUrls(migrated);
+                                await api.saveUngetConfigs(user.username, migrated);
+                            }
+                        } catch(e) {}
+                    }
+                }
+                
+                // Cargar datos locales de sesión (sources y data cache)
+                const savedSources = localStorage.getItem(`aura_sig_sources_${user.username}`);
+                if (savedSources) {
+                    try {
+                        const parsed = JSON.parse(savedSources);
+                        if (Array.isArray(parsed)) setSources(parsed);
+                    } catch(e) {}
+                }
 
-    // Initial load from local storage based on user
-    useEffect(() => {
-        if (!user) return;
-        try {
-            const savedUrls = localStorage.getItem(`aura_sig_urls_${user.username}`);
-            if (savedUrls) {
-                const parsed = JSON.parse(savedUrls);
-                if (Array.isArray(parsed)) setScriptUrls(parsed);
+                const savedData = localStorage.getItem(`aura_sig_data_${user.username}`);
+                if (savedData) {
+                    try {
+                        const parsed = JSON.parse(savedData);
+                        if (Array.isArray(parsed)) setData(parsed);
+                    } catch(e) {}
+                }
+            } catch(e) {
+                console.error("Error loading configs:", e);
+            } finally {
+                setIsConfigLoading(false);
             }
-            
-            const savedSources = localStorage.getItem(`aura_sig_sources_${user.username}`);
-            if (savedSources) {
-                const parsed = JSON.parse(savedSources);
-                if (Array.isArray(parsed)) setSources(parsed);
-            }
+        };
 
-            const savedData = localStorage.getItem(`aura_sig_data_${user.username}`);
-            if (savedData) {
-                const parsed = JSON.parse(savedData);
-                if (Array.isArray(parsed)) setData(parsed);
-            }
-        } catch(e) {}
-    }, [user]);
+        loadConfigs();
+    }, [user, canAccess]);
+
+    if (!canAccess) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full p-12 text-center">
+                <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100 flex flex-col items-center max-w-md">
+                    <AlertCircle className="h-12 w-12 text-amber-500 mb-4" />
+                    <h3 className="text-xl font-black text-gray-900 mb-2">Acceso Restringido</h3>
+                    <p className="text-gray-500 text-sm">
+                        Su rol actual no tiene permisos para utilizar el módulo de Consulta Stock (SIG). 
+                        Contacte al administrador para solicitar acceso.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     // Save to local storage when state changes
     useEffect(() => {
-        if (!user) return;
-        localStorage.setItem(`aura_sig_urls_${user.username}`, JSON.stringify(scriptUrls));
-        localStorage.setItem(`aura_sig_sources_${user.username}`, JSON.stringify(sources));
-        localStorage.setItem(`aura_sig_data_${user.username}`, JSON.stringify(data));
+        if (!user || isConfigLoading) return; // IMPORTANTE: No guardar si aún estamos cargando la config inicial
+        try {
+            localStorage.setItem(`aura_sig_urls_${user.username}`, JSON.stringify(scriptUrls));
+            localStorage.setItem(`aura_sig_sources_${user.username}`, JSON.stringify(sources));
+        } catch (e) {
+            console.warn("Storage quota exceeded for URLs/Sources.", e);
+        }
+
+        try {
+            localStorage.setItem(`aura_sig_data_${user.username}`, JSON.stringify(data));
+        } catch (e) {
+            console.warn("Storage quota exceeded. Data will not be cached locally.", e);
+        }
         
         if (sources.length > 0 && selectedSourceId !== '' && !sources.find(s => s.id === selectedSourceId)) {
             setSelectedSourceId('');
         }
     }, [scriptUrls, sources, data, selectedSourceId, user]);
 
-    const fetchData = async () => {
-        if (scriptUrls.length === 0) {
+    const fetchData = async (overrideUrls?: UngetConfig[]) => {
+        if (isConfigLoading && !overrideUrls) return; 
+
+        const urlsToUse = overrideUrls || scriptUrls;
+
+        if (urlsToUse.length === 0) {
             setError("Primero debe configurar al menos una URL de Web App de Apps Script.");
-            setTempUrls([]);
+            setTempUrls([...urlsToUse]);
             setIsConfigOpen(true);
             return;
         }
 
-        setIsLoading(true);
+        // Limpiar error inmediatamente al iniciar una carga válida
         setError(null);
+        setIsLoading(true);
 
         try {
             let allData: SIGData[] = [];
             let newSources: SheetSource[] = [];
 
             // Fetch todas las URLs en paralelo
-            const fetchPromises = scriptUrls.map(async (url, urlIndex) => {
+            const fetchPromises = urlsToUse.map(async (config, urlIndex) => {
                 try {
-                    const response = await fetch(url);
+                    const response = await fetch(config.url);
                     if (!response.ok) throw new Error("HTTP " + response.status);
                     const json = await response.json();
                     
                     if (Array.isArray(json)) {
                         json.forEach((sheet: any) => {
                             const uniqueSourceId = `${urlIndex}_${sheet.id}`;
-                            newSources.push({ id: uniqueSourceId, name: sheet.name, urlIndex });
+                            
+                            let lastUpdateStr = '';
+                            let lastUpdateTime = 0;
+                            if (Array.isArray(sheet.data) && sheet.data.length > 0) {
+                                // Tomar el dato de la primera fila de datos (que es la segunda de la hoja según el usuario)
+                                const firstRow = sheet.data[0];
+                                if (firstRow.Ultima_Actualizacion) {
+                                    lastUpdateStr = firstRow.Ultima_Actualizacion;
+                                    lastUpdateTime = parseDataDate(lastUpdateStr);
+                                }
+                            }
+
+                            newSources.push({ 
+                                id: uniqueSourceId, 
+                                name: sheet.name, 
+                                urlIndex,
+                                lastUpdate: lastUpdateStr,
+                                lastUpdateTime: lastUpdateTime || undefined
+                            });
                             
                             if (Array.isArray(sheet.data)) {
                                 const validData = sheet.data.filter((row: any) => row && (row.ID_Producto || row.Nombre)).map((row: any) => ({
@@ -178,32 +305,141 @@ export const SheetSearchModule: React.FC = () => {
 
     // Al montar, si hay URL pero no hay data, fetch automatically
     useEffect(() => {
-        if (scriptUrls.length > 0 && data.length === 0) {
+        if (!isConfigLoading && scriptUrls.length > 0 && data.length === 0) {
             fetchData();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [scriptUrls.length]); // only trigger once on mount if we have URLs loaded
+    }, [scriptUrls.length, isConfigLoading]); // Escuchar también isConfigLoading
 
-    const handleSaveConfig = () => {
-        setScriptUrls([...tempUrls]);
-        setIsConfigOpen(false);
-        // setTimeout para que se actualice el state de scriptUrls
-        setTimeout(() => {
-            const btn = document.getElementById('sync-btn');
-            if (btn) btn.click();
-        }, 100);
+    const handleSaveConfig = async () => {
+        if (!user) return;
+        
+        setIsLoading(true);
+        try {
+            const result = await api.saveUngetConfigs(user.username, tempUrls);
+            if (result.success) {
+                setScriptUrls([...tempUrls]);
+                setIsConfigOpen(false);
+                import('sonner').then(m => m.toast.success("Configuración guardada en la nube."));
+                
+                // Sincronizar datos inmediatamente con las nuevas URLs
+                fetchData(tempUrls);
+            } else {
+                import('sonner').then(m => m.toast.error("Error al guardar en el servidor: " + result.message));
+            }
+        } catch (e) {
+            import('sonner').then(m => m.toast.error("Error de conexión al guardar configuración."));
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleAddUrl = () => {
-        if (maxUrlsAllowed && tempUrls.length >= maxUrlsAllowed) {
-            import('sonner').then(m => m.toast.error(`Ha alcanzado el límite máximo de ${maxUrlsAllowed} URLs para su rol.`));
-            return;
+        const url = newUrlInput.trim();
+        const name = newNameInput.trim() || `UNGET ${tempUrls.length + 1}`;
+        
+        if (!url) return;
+
+        if (editingIndex !== null) {
+            // Caso edición
+            const updated = [...tempUrls];
+            updated[editingIndex] = { url, name };
+            setTempUrls(updated);
+            setEditingIndex(null);
+        } else {
+            // Caso nuevo
+            if (maxUrlsAllowed && tempUrls.length >= maxUrlsAllowed) {
+                import('sonner').then(m => m.toast.error(`Ha alcanzado el límite máximo de ${maxUrlsAllowed} URLs para su rol.`));
+                return;
+            }
+            if (tempUrls.find(u => u.url === url)) {
+                import('sonner').then(m => m.toast.error("Esta URL ya está registrada."));
+                return;
+            }
+            setTempUrls([...tempUrls, { url, name }]);
         }
 
-        const url = newUrlInput.trim();
-        if (url && !tempUrls.includes(url)) {
-            setTempUrls([...tempUrls, url]);
-            setNewUrlInput('');
+        setNewUrlInput('');
+        setNewNameInput('');
+    };
+
+    const handleEditUrl = (index: number, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        const config = tempUrls[index];
+        setEditingIndex(index);
+        setNewUrlInput(config.url);
+        setNewNameInput(config.name);
+        setIsConfigOpen(true);
+    };
+
+    const handleDirectEdit = (index: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const config = scriptUrls[index];
+        setTempUrls([...scriptUrls]);
+        setEditingIndex(index);
+        setNewUrlInput(config.url);
+        setNewNameInput(config.name);
+        setIsConfigOpen(true);
+    };
+
+    const handleDirectDelete = async (index: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!user) return;
+        
+        // Usamos una confirmación por toast en lugar de window.confirm que falla en iframes
+        import('sonner').then(m => {
+            m.toast("¿Eliminar esta conexión?", {
+                description: `Se borrará el acceso a "${scriptUrls[index].name}"`,
+                action: {
+                    label: "Eliminar",
+                    onClick: async () => {
+                        const updated = scriptUrls.filter((_, idx) => idx !== index);
+                        setIsLoading(true);
+                        try {
+                            const result = await api.saveUngetConfigs(user.username, updated);
+                            if (result.success) {
+                                setScriptUrls(updated);
+                                if (selectedUngetIndex === index) {
+                                    setViewLevel('ungets');
+                                    setSelectedUngetIndex(null);
+                                }
+                                m.toast.success("Eliminado correctamente");
+                            }
+                        } catch(e) {
+                            m.toast.error("Error al eliminar");
+                        } finally {
+                            setIsLoading(false);
+                        }
+                    }
+                },
+                cancel: {
+                    label: "Cancelar",
+                    onClick: () => {}
+                }
+            });
+        });
+    };
+
+    const handleSelectUnget = (index: number) => {
+        setSelectedUngetIndex(index);
+        setViewLevel('sheets');
+        setSelectedSourceId('');
+        setSearchTerm('');
+    };
+
+    const handleSelectSheet = (sourceId: string) => {
+        setSelectedSourceId(sourceId);
+        setViewLevel('data');
+        setSearchTerm('');
+    };
+
+    const goBack = () => {
+        if (viewLevel === 'data') {
+            setViewLevel('sheets');
+            setSelectedSourceId('');
+        } else if (viewLevel === 'sheets') {
+            setViewLevel('ungets');
+            setSelectedUngetIndex(null);
         }
     };
 
@@ -305,7 +541,7 @@ export const SheetSearchModule: React.FC = () => {
                     </button>
                     <button 
                         id="sync-btn"
-                        onClick={fetchData} disabled={isLoading}
+                        onClick={() => fetchData()} disabled={isLoading}
                         className="flex-1 sm:flex-none bg-teal-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                     >
                         <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -315,90 +551,177 @@ export const SheetSearchModule: React.FC = () => {
             </div>
 
             {isConfigOpen && (
-                <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm mb-6 animate-in fade-in slide-in-from-top-4">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <LinkIcon className="h-5 w-5 text-teal-500" />
-                        Conexión mediante Google Apps Script
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div>
-                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                                <h4 className="text-sm font-bold text-gray-700 mb-2">1. URLs del Web App (Ejecutable)</h4>
-                                <p className="text-xs text-gray-500 mb-4">
-                                    Añada las URLs públicas de las implementaciones (Deployments) de sus proyectos Google Apps Script. 
-                                    {maxUrlsAllowed ? ` Puede añadir hasta ${maxUrlsAllowed} en total.` : ' Puede agregar varias URLs para consolidar información.'}
-                                </p>
-                                <div className="space-y-4">
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="url"
-                                            placeholder="https://script.google.com/macros/s/.../exec"
-                                            value={newUrlInput}
-                                            onChange={e => setNewUrlInput(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && handleAddUrl()}
-                                            disabled={maxUrlsAllowed !== undefined && tempUrls.length >= maxUrlsAllowed}
-                                            className="flex-1 text-sm rounded-lg border-gray-300 focus:border-teal-500 focus:ring-teal-500 shadow-sm py-2 px-3 disabled:bg-gray-100 disabled:text-gray-400"
-                                        />
-                                        <button 
-                                            onClick={handleAddUrl}
-                                            disabled={!newUrlInput.trim() || (maxUrlsAllowed !== undefined && tempUrls.length >= maxUrlsAllowed)}
-                                            className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
-                                        >
-                                            <Plus className="h-5 w-5" />
-                                        </button>
-                                    </div>
-                                    
-                                    {tempUrls.length > 0 && (
-                                        <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                            {tempUrls.map((url, idx) => (
-                                                <div key={idx} className="flex gap-2 items-center bg-white border border-gray-200 p-2 rounded-lg">
-                                                    <span className="flex-1 text-xs text-gray-600 truncate" title={url}>{url}</span>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col border border-white/20">
+                        {/* Header Modal */}
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600">
+                                    <Settings className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-gray-900 text-lg uppercase tracking-tight">Gestión de Orígenes UNGET</h3>
+                                    <p className="text-xs text-gray-500 font-medium tracking-tight">Configure sus conexiones a Google Apps Script</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => { setIsConfigOpen(false); setEditingIndex(null); setNewUrlInput(''); setNewNameInput(''); }}
+                                className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-900"
+                            >
+                                <X className="h-6 w-6" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <div className="space-y-6">
+                                    <div className="bg-gray-50 border border-gray-200 rounded-3xl p-6">
+                                        <h4 className="text-sm font-black text-gray-800 mb-4 flex items-center gap-2">
+                                            <Plus className={`h-4 w-4 ${editingIndex !== null ? 'text-amber-500' : 'text-teal-500'}`} />
+                                            {editingIndex !== null ? 'EDITAR ORÍGEN' : 'AÑADIR NUEVO ORÍGEN'}
+                                        </h4>
+                                        <div className="space-y-4">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-gray-400 ml-1 uppercase">Nombre Identificador</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Ej: UNGET CENTRO"
+                                                    value={newNameInput}
+                                                    onChange={e => setNewNameInput(e.target.value)}
+                                                    className="w-full text-sm rounded-xl border-gray-300 focus:border-teal-500 focus:ring-teal-500 shadow-sm py-2.5 px-4 font-medium"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-black text-gray-400 ml-1 uppercase">URL Web App (Apps Script)</label>
+                                                <input
+                                                    type="url"
+                                                    placeholder="https://script.google.com/..."
+                                                    value={newUrlInput}
+                                                    onChange={e => setNewUrlInput(e.target.value)}
+                                                    onKeyDown={e => e.key === 'Enter' && handleAddUrl()}
+                                                    className="w-full text-sm rounded-xl border-gray-300 focus:border-teal-500 focus:ring-teal-500 shadow-sm py-2.5 px-4 font-mono text-[11px]"
+                                                />
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={handleAddUrl}
+                                                    className={`flex-1 py-2.5 rounded-xl text-white font-bold text-sm transition-all shadow-sm flex items-center justify-center gap-2 ${editingIndex !== null ? 'bg-amber-500 hover:bg-amber-600' : 'bg-teal-600 hover:bg-teal-700'}`}
+                                                >
+                                                    {editingIndex !== null ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                                                    {editingIndex !== null ? 'Actualizar en Lista' : 'Añadir a Lista'}
+                                                </button>
+                                                {editingIndex !== null && (
                                                     <button 
-                                                        onClick={() => handleRemoveUrl(idx)}
-                                                        className="text-red-500 hover:text-red-700 p-1"
+                                                        onClick={() => { setEditingIndex(null); setNewUrlInput(''); setNewNameInput(''); }}
+                                                        className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all font-bold text-sm"
                                                     >
-                                                        <Trash2 className="h-4 w-4" />
+                                                        Cancelar
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center px-1">
+                                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Lista de Conexiones ({tempUrls.length})</h4>
+                                            {maxUrlsAllowed && <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">Límite: {maxUrlsAllowed}</span>}
+                                        </div>
+                                        <div className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                                            {tempUrls.length > 0 ? tempUrls.map((config, idx) => (
+                                                <div key={idx} className={`group flex gap-3 items-center bg-white border p-3 rounded-2xl transition-all shadow-sm ${editingIndex === idx ? 'border-amber-500 bg-amber-50/30' : 'border-gray-100 hover:border-gray-200'}`}>
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${editingIndex === idx ? 'bg-amber-100 text-amber-600' : 'bg-gray-50 text-gray-400'}`}>
+                                                        <LinkIcon className="h-4 w-4" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-xs font-black text-gray-800 truncate uppercase">{config.name}</div>
+                                                        <div className="text-[9px] text-gray-400 truncate font-mono">{config.url}</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <button 
+                                                            onClick={(e) => handleEditUrl(idx, e)}
+                                                            className={`p-1.5 rounded-lg transition-colors ${editingIndex === idx ? 'text-amber-600 bg-white' : 'text-gray-400 hover:bg-gray-100 hover:text-blue-600'}`}
+                                                            title="Editar"
+                                                        >
+                                                            <Settings className="h-4 w-4" />
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleRemoveUrl(idx)}
+                                                            className="p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+                                                            title="Quitar"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )) : (
+                                                <div className="py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                                    <LinkIcon className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                                                    <p className="text-xs font-bold text-gray-400">No hay orígenes en la lista</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                    <div className="bg-blue-50/50 border border-blue-100 rounded-[2rem] p-6 h-full flex flex-col">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-black">?</div>
+                                            <h4 className="text-sm font-black text-blue-900 uppercase">¿Cómo obtener la URL?</h4>
+                                        </div>
+                                        <div className="flex-1 space-y-4">
+                                            <div className="space-y-4 text-[11px] text-blue-800 font-medium leading-relaxed">
+                                                <div className="flex gap-3">
+                                                    <div className="w-5 h-5 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0 font-black">1</div>
+                                                    <p>Cree un Nuevo Proyecto en <a href="https://script.google.com" target="_blank" rel="noreferrer" className="font-black underline decoration-2">script.google.com</a> con el código adjunto.</p>
+                                                </div>
+                                                <div className="flex gap-3">
+                                                    <div className="w-5 h-5 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0 font-black">2</div>
+                                                    <p>Click en <span className="font-black">Implementar &gt; Nueva Implementación</span>.</p>
+                                                </div>
+                                                <div className="flex gap-3">
+                                                    <div className="w-5 h-5 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0 font-black">3</div>
+                                                    <p>Tipo: <span className="font-black text-blue-900">Aplicación Web</span>, Acceso: <span className="bg-blue-900 text-white px-1.5 py-0.5 rounded text-[9px]">Cualquier persona</span>.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="relative mt-4">
+                                                <div className="absolute -top-3 left-4 bg-blue-600 text-[10px] text-white px-2 py-0.5 rounded font-black tracking-wider shadow-sm z-10">CÓDIGO RECOMENDADO</div>
+                                                <div className="relative pt-2">
+                                                    <pre className="text-[10px] bg-slate-900 text-slate-300 p-5 rounded-3xl overflow-hidden h-44 overflow-y-auto font-mono scrollbar-thin scrollbar-thumb-slate-700 border border-slate-800 shadow-xl">
+                                                        {scriptCode}
+                                                    </pre>
+                                                    <button 
+                                                        onClick={copyScript}
+                                                        className="absolute top-5 right-5 bg-white/10 hover:bg-white/20 p-2 rounded-xl text-white backdrop-blur-sm transition-all border border-white/5"
+                                                    >
+                                                        {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
                                                     </button>
                                                 </div>
-                                            ))}
+                                            </div>
                                         </div>
-                                    )}
-
-                                    <button
-                                        onClick={handleSaveConfig}
-                                        className="w-full bg-gray-800 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-black transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        <Save className="h-4 w-4" />
-                                        Guardar Configuración ({tempUrls.length} origen{tempUrls.length !== 1 ? 'es' : ''})
-                                    </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div>
-                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 relative h-full">
-                                <h4 className="text-sm font-bold text-blue-900 mb-2">2. Instrucciones para Apps Script</h4>
-                                <ul className="text-xs text-blue-800 space-y-1 mb-3 list-decimal pl-4 font-medium">
-                                    <li>Abra <a href="https://script.google.com" target="_blank" rel="noreferrer" className="underline font-bold">script.google.com</a> y cree un Nuevo Proyecto.</li>
-                                    <li>Pegue el código de abajo en <code>Código.gs</code>.</li>
-                                    <li>Haga clic en <strong>Implementar &gt; Nueva Implementación</strong>.</li>
-                                    <li>Elija <strong>Aplicación Web</strong>, Acceso: <strong>Cualquier persona</strong>.</li>
-                                    <li>Copie la URL resultante y péguela usando el botón (+).</li>
-                                </ul>
-                                <div className="relative group">
-                                    <pre className="text-[10px] bg-slate-900 text-slate-300 p-3 rounded-lg overflow-hidden h-32 overflow-y-auto font-mono scrollbar-thin scrollbar-thumb-slate-700">
-                                        {scriptCode}
-                                    </pre>
-                                    <button 
-                                        onClick={copyScript}
-                                        className="absolute top-2 right-2 bg-white/10 hover:bg-white/20 p-1.5 rounded-md text-white backdrop-blur-sm transition-all"
-                                        title="Copiar código"
-                                    >
-                                        {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-                                    </button>
-                                </div>
-                            </div>
+
+                        {/* Footer Modal */}
+                        <div className="p-6 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3 sticky bottom-0 z-10">
+                            <button 
+                                onClick={() => { setIsConfigOpen(false); setEditingIndex(null); }}
+                                className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
+                            >
+                                Cerrar sin Guardar
+                            </button>
+                            <button
+                                onClick={handleSaveConfig}
+                                disabled={isLoading || tempUrls.length === 0}
+                                className="bg-teal-600 text-white px-8 py-2.5 rounded-2xl text-sm font-black hover:bg-teal-700 transition-all shadow-lg shadow-teal-600/20 flex items-center gap-2 disabled:opacity-50"
+                            >
+                                <Save className="h-4 w-4" />
+                                GUARDAR Y SINCRONIZAR CAMBIOS
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -411,117 +734,279 @@ export const SheetSearchModule: React.FC = () => {
                 </div>
             )}
 
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col min-h-[500px] overflow-hidden">
-                <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50/50">
-                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto flex-1">
-                        {/* Selector de Establecimiento/Hoja */}
-                        <div className="w-full sm:w-64 shrink-0">
-                            <select
-                                value={selectedSourceId}
-                                onChange={(e) => setSelectedSourceId(e.target.value)}
-                                className="block w-full py-2.5 px-3 border border-gray-300 bg-white rounded-xl text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-colors shadow-sm"
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col min-h-[600px] overflow-hidden">
+                {/* BREADCRUMBS & SEARCH */}
+                <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+                    <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+                        <nav className="flex items-center gap-2 text-sm font-medium">
+                            <button 
+                                onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${viewLevel === 'ungets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
                             >
-                                {sources.length === 0 ? (
-                                    <option value="" disabled>1. Sincronice para obtener Hojas...</option>
-                                ) : (
-                                    <>
-                                        <option value="">-- Todas las hojas --</option>
-                                        {sources.map((s) => (
-                                            <option key={s.id} value={s.id}>[Url {s.urlIndex + 1}] {s.name} - ESTABLECIMIENTO</option>
-                                        ))}
-                                    </>
-                                )}
-                            </select>
-                        </div>
-                        
-                        <div className="w-full relative max-w-md">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Search className="h-4 w-4 text-gray-400" />
+                                <Building2 className="h-4 w-4" />
+                                UNGETs
+                            </button>
+                            
+                            {selectedUngetIndex !== null && (
+                                <>
+                                    <ChevronRight className="h-4 w-4 text-gray-300" />
+                                    <button 
+                                        onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${viewLevel === 'sheets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
+                                    >
+                                        <MapPin className="h-4 w-4" />
+                                        {scriptUrls[selectedUngetIndex]?.name || 'Documento'}
+                                    </button>
+                                </>
+                            )}
+
+                            {selectedSourceId && (
+                                <>
+                                    <ChevronRight className="h-4 w-4 text-gray-300" />
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-100 text-teal-800">
+                                        <FileSpreadsheet className="h-4 w-4" />
+                                        {(() => {
+                                            const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
+                                            const lastDash = name.lastIndexOf('-');
+                                            if (lastDash === -1) return name.replace(/^FARM\s*-\s*/i, '');
+                                            const desc = name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                            const code = name.substring(lastDash + 1).trim();
+                                            return `${desc} (${code})`;
+                                        })()}
+                                    </div>
+                                </>
+                            )}
+                        </nav>
+
+                        <div className="flex items-center gap-3 w-full md:w-auto">
+                            {viewLevel === 'data' && (
+                                <div className="relative flex-1 md:w-80">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar en esta hoja..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="block w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-xs transition-all shadow-sm"
+                                    />
+                                </div>
+                            )}
+                            <div className="text-xs text-gray-500 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm shrink-0 font-medium">
+                                {viewLevel === 'ungets' ? `${scriptUrls.length} UNGETs` : 
+                                 viewLevel === 'sheets' ? `${sources.filter(s => s.urlIndex === selectedUngetIndex).length} Hojas` : 
+                                 `${filteredData.length} productos`}
                             </div>
-                            <input
-                                type="text"
-                                placeholder="Buscar medicamento, código o lote..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="block w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent sm:text-sm transition-all shadow-sm"
-                            />
                         </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 text-sm text-gray-500 bg-white px-4 py-2 rounded-xl border border-gray-200 shadow-sm shrink-0">
-                        <span className="font-black text-gray-900">{filteredData.length}</span> resultados
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-auto rounded-b-2xl max-h-[calc(100vh-250px)]">
+                <div className="flex-1 overflow-auto p-4 md:p-6 bg-gray-50/30">
                     {isLoading ? (
-                        <div className="flex flex-col items-center justify-center h-64 text-teal-600 gap-3">
-                            <RefreshCw className="h-8 w-8 animate-spin" />
-                            <span className="font-medium">Sincronizando información desde Apps Script...</span>
+                        <div className="flex flex-col items-center justify-center h-full text-teal-600 gap-3 py-20">
+                            <RefreshCw className="h-10 w-10 animate-spin" />
+                            <span className="font-bold text-lg">Sincronizando información...</span>
                         </div>
-                    ) : (data.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                            <FileSpreadsheet className="h-12 w-12 text-gray-200 mb-3" />
-                            <p className="font-medium text-gray-500">No hay datos sincronizados.</p>
-                            <p className="text-sm mt-1">Configure la URL de Script y presione Sincronizar.</p>
+                    ) : error ? (
+                         <div className="flex flex-col items-center justify-center h-full text-center max-w-md mx-auto py-20">
+                            <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
+                            <h3 className="text-lg font-black text-gray-900 mb-2">Error de conexión</h3>
+                            <p className="text-sm text-gray-500 mb-6">{error}</p>
+                            <button onClick={() => fetchData()} className="bg-teal-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-teal-700 transition-colors">
+                                Reintentar Sincronización
+                            </button>
                         </div>
                     ) : (
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50/80 sticky top-0 z-10 backdrop-blur-sm">
-                                <tr>
-                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">ID / Código SIG</th>
-                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider min-w-[250px]">Descripción del Producto</th>
-                                    <th scope="col" className="px-4 py-3 text-right text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Saldo</th>
-                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Lote / Venc.</th>
-                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Tipo Sum.</th>
-                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">F. Finan.</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-100">
-                                {filteredData.length > 0 ? filteredData.map((row, i) => (
-                                    <tr 
-                                        key={i} 
-                                        onClick={() => setSelectedRecord(row)}
-                                        className="hover:bg-teal-50/50 transition-colors cursor-pointer group"
-                                    >
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono group-hover:text-teal-700">
-                                            <div className="font-bold">{row.ID_Producto || '-'}</div>
-                                            <div className="text-[10px] text-gray-400 mt-0.5">{row.CODIGO_SIG || '-'}</div>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                                            {row.Nombre || '-'}
-                                            <div className="text-[10px] text-gray-400 font-normal mt-0.5 max-w-sm truncate" title={row.Reg_Sanitario}>
-                                                RS: {row.Reg_Sanitario || 'S/N'}
+                        <>
+                            {/* LEVEL 1: UNGET CARDS */}
+                            {viewLevel === 'ungets' && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in zoom-in-95 duration-300">
+                                    {scriptUrls.length > 0 ? scriptUrls.map((config, idx) => (
+                                        <div
+                                            key={idx}
+                                            onClick={() => handleSelectUnget(idx)}
+                                            className="group bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col h-full cursor-pointer relative overflow-hidden"
+                                        >
+                                            {/* Botones de acción rápidos */}
+                                            <div className="absolute top-4 right-4 flex items-center gap-2 opacity-100 sm:opacity-40 group-hover:opacity-100 transition-opacity z-10">
+                                                <button 
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleDirectEdit(idx, e);
+                                                    }}
+                                                    className="p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all"
+                                                    title="Editar conexión"
+                                                >
+                                                    <Settings className="h-4 w-4" />
+                                                </button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleDirectDelete(idx, e);
+                                                    }}
+                                                    className="p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 transition-all"
+                                                    title="Eliminar conexión"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
                                             </div>
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
-                                            {(!isNaN(parseInt(String(row.Saldo), 10))) ? parseInt(String(row.Saldo), 10) : 0}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                            <span className="font-mono text-gray-700">{row.Lote || '-'}</span>
-                                            <div className="text-[10px] mt-0.5">Vence: {formatDate(row.Fec_Vencim) || '-'}</div>
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase" title={row.DESC_TIPSUM}>
-                                                {row.TIPSUM || '-'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 uppercase" title={row.DESC_FFINAN}>
-                                                {row.FFINAN || '-'}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                )) : (
-                                    <tr>
-                                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">
-                                            No se encontraron coincidencias para su búsqueda en este establecimiento.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    ))}
+
+                                            <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                                                <Building2 className="h-6 w-6" />
+                                            </div>
+                                            <h3 className="text-lg font-black text-gray-900 mb-2 group-hover:text-teal-700 transition-colors uppercase tracking-tight">{config.name}</h3>
+                                            <div className="flex items-center gap-2 text-xs text-gray-400 mt-auto">
+                                                <LinkIcon className="h-3 w-3" />
+                                                <span className="truncate max-w-[150px]">{config.url}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
+                                                <span className="text-xs font-bold text-gray-500">
+                                                    {sources.filter(s => s.urlIndex === idx).length} Hojas
+                                                </span>
+                                                <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
+                                            </div>
+                                        </div>
+                                    )) : (
+                                        <div className="col-span-full py-20 text-center">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Settings className="h-8 w-8 text-gray-400" />
+                                            </div>
+                                            <h3 className="text-xl font-bold text-gray-800">No hay UNGETs configuradas</h3>
+                                            <p className="text-gray-500 mt-2">Haga clic en 'Configurar Conexión' para comenzar.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* LEVEL 2: SHEET CARDS */}
+                            {viewLevel === 'sheets' && (
+                                <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h3 className="text-lg font-black text-gray-900 uppercase">Seleccione una Hoja de Cálculo</h3>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                                        {sources.filter(s => s.urlIndex === selectedUngetIndex).map((sheet) => (
+                                            <button
+                                                key={sheet.id}
+                                                onClick={() => handleSelectSheet(sheet.id)}
+                                                className="group bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col h-full"
+                                            >
+                                                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
+                                                    <FileSpreadsheet className="h-6 w-6" />
+                                                    <div 
+                                                        className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`}
+                                                        title={getUpdateStatus(sheet.lastUpdateTime).label}
+                                                    />
+                                                </div>
+                                                <div className="flex-1 mb-4">
+                                                    {(() => {
+                                                        const lastDash = sheet.name.lastIndexOf('-');
+                                                        if (lastDash === -1) {
+                                                            const cleanName = sheet.name.replace(/^FARM\s*-\s*/i, '');
+                                                            return (
+                                                                <>
+                                                                    <h3 className="text-lg font-black text-gray-900 leading-tight mb-1" title={cleanName}>{cleanName}</h3>
+                                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Establecimiento</p>
+                                                                </>
+                                                            );
+                                                        }
+                                                        const description = sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                                        const code = sheet.name.substring(lastDash + 1).trim();
+                                                        return (
+                                                            <>
+                                                                <p className="text-xs font-bold text-teal-600 mb-0.5">{code}</p>
+                                                                <h3 className="text-lg font-black text-gray-900 leading-tight mb-1" title={description}>{description}</h3>
+                                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Establecimiento</p>
+                                                            </>
+                                                        );
+                                                    })()}
+                                                    
+                                                    {sheet.lastUpdateTime && (
+                                                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 mt-2">
+                                                            <RefreshCw className="h-3 w-3" />
+                                                            <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
+                                                    <span className="text-[10px] font-black text-teal-600 uppercase">Consultar Stock</span>
+                                                    <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* LEVEL 3: DATA TABLE */}
+                            {viewLevel === 'data' && (
+                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 -mx-4 md:-mx-6 -mt-4 md:-mt-6">
+                                    <div className="bg-white border-t border-gray-100 max-h-[600px] overflow-y-auto custom-scrollbar">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50/80 sticky top-0 z-10 backdrop-blur-sm">
+                                                <tr>
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">ID / Código SIG</th>
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider min-w-[250px]">Descripción del Producto</th>
+                                                    <th scope="col" className="px-4 py-3 text-right text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Saldo</th>
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Lote / Venc.</th>
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Tipo Sum.</th>
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">F. Finan.</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-100">
+                                                {filteredData.length > 0 ? filteredData.map((row, i) => (
+                                                    <tr 
+                                                        key={i} 
+                                                        onClick={() => setSelectedRecord(row)}
+                                                        className="hover:bg-teal-50/50 transition-colors cursor-pointer group"
+                                                    >
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono group-hover:text-teal-700">
+                                                            <div className="font-bold">{row.ID_Producto || '-'}</div>
+                                                            <div className="text-[10px] text-gray-400 mt-0.5">{row.CODIGO_SIG || '-'}</div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                                                            {row.Nombre || '-'}
+                                                            <div className="text-[10px] text-gray-400 font-normal mt-0.5 max-w-sm truncate" title={row.Reg_Sanitario}>
+                                                                RS: {row.Reg_Sanitario || 'S/N'}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                                                            {(!isNaN(parseInt(String(row.Saldo), 10))) ? parseInt(String(row.Saldo), 10) : 0}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                            <span className="font-mono text-gray-700">{row.Lote || '-'}</span>
+                                                            <div className="text-[10px] mt-0.5">Vence: {formatDate(row.Fec_Vencim) || '-'}</div>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase" title={row.DESC_TIPSUM}>
+                                                                {row.TIPSUM || '-'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 uppercase" title={row.DESC_FFINAN}>
+                                                                {row.FFINAN || '-'}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-500">
+                                                            No se encontraron coincidencias para su búsqueda.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -561,7 +1046,7 @@ export const SheetSearchModule: React.FC = () => {
                                     <div className="space-y-3">
                                         <div>
                                             <p className="text-[10px] text-gray-500 uppercase font-bold">Establecimiento / Almacén</p>
-                                            <p className="text-sm font-medium text-gray-900">{selectedRecord.DESC_ALM || '-'} <span className="text-gray-400 text-xs">({selectedRecord.ALMCOD || '-'})</span></p>
+                                            <p className="text-sm font-medium text-gray-900">{(selectedRecord.DESC_ALM || '-').replace(/^FARM\s*-\s*/i, '')} <span className="text-gray-400 text-xs">({selectedRecord.ALMCOD || '-'})</span></p>
                                         </div>
                                         <div>
                                             <p className="text-[10px] text-gray-500 uppercase font-bold">Saldo Actual</p>

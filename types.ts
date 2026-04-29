@@ -123,6 +123,7 @@ export interface User {
   personnelData?: Personnel; // Hydrated data
   facilityData?: HealthFacility; // Hydrated data
   permissions: AppModule[]; // Computed from Role
+  maxUrlsAllowed?: number;
 }
 
 export interface SystemConfig {
