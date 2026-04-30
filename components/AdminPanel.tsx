@@ -42,10 +42,37 @@ export const AdminPanel: React.FC = () => {
   const [newRoleForm, setNewRoleForm] = useState({ role: '', label: '', allowedModules: [] });
   const [isSavingRole, setIsSavingRole] = useState(false);
 
+  const [isRolesLoading, setIsRolesLoading] = useState(true);
+
   useEffect(() => {
     // Initial load (uses cache if available)
-    api.getUsers().then(setUsers);
-    api.getRolesConfig().then(setRoles);
+    
+    // Quick load from local storage
+    const cachedRoles = localStorage.getItem('aura_roles_cache');
+    if (cachedRoles) {
+        try {
+            setRoles(JSON.parse(cachedRoles));
+            setIsRolesLoading(false);
+        } catch (e) {}
+    }
+
+    const cachedUsers = localStorage.getItem('aura_users_cache');
+    if (cachedUsers) {
+        try {
+            setUsers(JSON.parse(cachedUsers));
+        } catch (e) {}
+    }
+
+    api.getUsers().then((data) => {
+        setUsers(data);
+        localStorage.setItem('aura_users_cache', JSON.stringify(data));
+    });
+    
+    api.getRolesConfig().then((data) => {
+        setRoles(data);
+        setIsRolesLoading(false);
+        localStorage.setItem('aura_roles_cache', JSON.stringify(data));
+    });
     
     // Cargar establecimientos REALES desde la Base de Datos
     api.getFacilities().then(data => {
@@ -60,7 +87,10 @@ export const AdminPanel: React.FC = () => {
       setIsRefreshingUsers(true);
       // Force refresh bypasses cache
       const updatedUsers = await api.getUsers(true);
-      setUsers(updatedUsers);
+      if (updatedUsers && updatedUsers.length > 0) {
+          setUsers(updatedUsers);
+          localStorage.setItem('aura_users_cache', JSON.stringify(updatedUsers));
+      }
       setIsRefreshingUsers(false);
   };
 
@@ -130,7 +160,9 @@ export const AdminPanel: React.FC = () => {
 
       // --- ACTUALIZACIÓN OPTIMISTA (Instantánea) ---
       const originalUsers = [...users];
-      setUsers(prev => prev.map(u => u.username === username ? { ...u, isActive: newStatus } : u));
+      const newUsers = originalUsers.map(u => u.username === username ? { ...u, isActive: newStatus } : u);
+      setUsers(newUsers);
+      localStorage.setItem('aura_users_cache', JSON.stringify(newUsers));
       
       const toastId = toast.loading('Actualizando estado...');
 
@@ -219,7 +251,10 @@ export const AdminPanel: React.FC = () => {
               
               // Refresh roles to ensure sync
               const updatedRoles = await api.getRolesConfig();
-              if (updatedRoles && updatedRoles.length > 0) setRoles(updatedRoles);
+              if (updatedRoles && updatedRoles.length > 0) {
+                  setRoles(updatedRoles);
+                  localStorage.setItem('aura_roles_cache', JSON.stringify(updatedRoles));
+              }
 
               // FORCE REFRESH IF CURRENT USER IS AFFECTED
               if (currentUser && currentUser.role === roleConfig.role) {
@@ -260,7 +295,10 @@ export const AdminPanel: React.FC = () => {
           if (res.success) {
               toast.success(`Rol ${newRoleConfig.label} creado`, { id: toastId });
               const updatedRoles = await api.getRolesConfig();
-              if (updatedRoles && updatedRoles.length > 0) setRoles(updatedRoles);
+              if (updatedRoles && updatedRoles.length > 0) {
+                  setRoles(updatedRoles);
+                  localStorage.setItem('aura_roles_cache', JSON.stringify(updatedRoles));
+              }
               setIsNewRoleModalOpen(false);
           } else {
              toast.error("Error al crear rol: " + res.message, { id: toastId });
@@ -420,7 +458,16 @@ export const AdminPanel: React.FC = () => {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {roles.map((role) => (
+                            {isRolesLoading ? (
+                                <div className="col-span-full flex flex-col items-center justify-center py-12 text-teal-600">
+                                    <RefreshCw className="h-8 w-8 animate-spin mb-4" />
+                                    <span className="font-bold">Cargando roles...</span>
+                                </div>
+                            ) : roles.length === 0 ? (
+                                <div className="col-span-full text-center py-12 text-gray-500">
+                                    No hay roles configurados.
+                                </div>
+                            ) : roles.map((role) => (
                                 <div key={role.role} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                                     <div className="flex items-center justify-between mb-4">
                                         <input 

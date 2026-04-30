@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin } from 'lucide-react';
+import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
 
@@ -102,6 +102,45 @@ interface UngetConfig {
   name: string;
 }
 
+const getExpirationStats = (records: SIGData[]) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    const expired: SIGData[] = [];
+    const expiringThisMonth: SIGData[] = [];
+    
+    records.forEach(r => {
+        const stock = parseFloat(String(r.Saldo || '0').replace(/,/g, ''));
+        if (stock <= 0) return;
+        if (!r.Fec_Vencim) return;
+        
+        const parts = r.Fec_Vencim.split(/[\/\-]/);
+        if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const year = parseInt(parts[2], 10);
+            if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                const fullYear = year < 100 ? year + 2000 : year;
+                const expDate = new Date(fullYear, month, day);
+                if (expDate < today) {
+                    expired.push(r);
+                } else if (month === currentMonth && fullYear === currentYear) {
+                    expiringThisMonth.push(r);
+                }
+            }
+        }
+    });
+
+    return { 
+        expired, 
+        expiringThisMonth,
+        expiredCount: expired.length, 
+        expiringThisMonthCount: expiringThisMonth.length 
+    };
+};
+
 export const SheetSearchModule: React.FC = () => {
     const { user, hasPermission } = useAuth();
     const canAccess = hasPermission('SIG_SEARCH');
@@ -113,6 +152,7 @@ export const SheetSearchModule: React.FC = () => {
     
     // UI states
     const [isLoading, setIsLoading] = useState(false);
+    const [isSilentSyncing, setIsSilentSyncing] = useState(false);
     const [isConfigLoading, setIsConfigLoading] = useState(true); // Nuevo: Estado para carga de config
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -131,6 +171,10 @@ export const SheetSearchModule: React.FC = () => {
     const [copied, setCopied] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<SIGData | null>(null);
 
+    // Modal para vencimientos en tabla
+    const [isExpirationModalOpen, setIsExpirationModalOpen] = useState(false);
+    const [expirationModalType, setExpirationModalType] = useState<'expired' | 'expiring' | null>(null);
+
     const maxUrlsAllowed = user?.maxUrlsAllowed;
 
     // Initialize from server
@@ -139,39 +183,46 @@ export const SheetSearchModule: React.FC = () => {
         
         const loadConfigs = async () => {
             setIsConfigLoading(true);
+            
+            // 1. CARGA RÁPIDA DESDE CACHÉ (Optimistic UI)
+            const savedUrls = localStorage.getItem(`aura_sig_urls_${user.username}`);
+            if (savedUrls) {
+                try {
+                    const parsed = JSON.parse(savedUrls);
+                    if (Array.isArray(parsed) && parsed.length > 0) setScriptUrls(parsed);
+                } catch(e) {}
+            }
+            
+            const savedSources = localStorage.getItem(`aura_sig_sources_${user.username}`);
+            if (savedSources) {
+                try {
+                    const parsed = JSON.parse(savedSources);
+                    if (Array.isArray(parsed)) setSources(parsed);
+                } catch(e) {}
+            }
+
+            const savedData = localStorage.getItem(`aura_sig_data_${user.username}`);
+            if (savedData) {
+                try {
+                    const parsed = JSON.parse(savedData);
+                    if (Array.isArray(parsed)) setData(parsed);
+                } catch(e) {}
+            }
+
+            // 2. CARGA EN SEGUNDO PLANO DESDE EL SERVIDOR
             try {
                 const remoteConfigs = await api.getUngetConfigs(user.username);
                 if (remoteConfigs && remoteConfigs.length > 0) {
                     setScriptUrls(remoteConfigs);
-                } else {
-                    // Si no hay remoto, intentar migrar desde local storage una vez
-                    const savedUrls = localStorage.getItem(`aura_sig_urls_${user.username}`);
-                    if (savedUrls) {
-                        try {
-                            const parsed = JSON.parse(savedUrls);
-                            if (Array.isArray(parsed) && parsed.length > 0) {
-                                const migrated = parsed.map(u => typeof u === 'string' ? { url: u, name: `UNGET ${Math.random().toString(36).substr(2, 4).toUpperCase()}` } : u);
-                                setScriptUrls(migrated);
-                                await api.saveUngetConfigs(user.username, migrated);
-                            }
-                        } catch(e) {}
-                    }
-                }
-                
-                // Cargar datos locales de sesión (sources y data cache)
-                const savedSources = localStorage.getItem(`aura_sig_sources_${user.username}`);
-                if (savedSources) {
+                } else if (savedUrls) {
+                    // Si no hay remoto pero sí local, intentar migrar al servidor
                     try {
-                        const parsed = JSON.parse(savedSources);
-                        if (Array.isArray(parsed)) setSources(parsed);
-                    } catch(e) {}
-                }
-
-                const savedData = localStorage.getItem(`aura_sig_data_${user.username}`);
-                if (savedData) {
-                    try {
-                        const parsed = JSON.parse(savedData);
-                        if (Array.isArray(parsed)) setData(parsed);
+                        const parsed = JSON.parse(savedUrls);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            const migrated = parsed.map(u => typeof u === 'string' ? { url: u, name: `UNGET ${Math.random().toString(36).substr(2, 4).toUpperCase()}` } : u);
+                            setScriptUrls(migrated);
+                            await api.saveUngetConfigs(user.username, migrated);
+                        }
                     } catch(e) {}
                 }
             } catch(e) {
@@ -220,21 +271,27 @@ export const SheetSearchModule: React.FC = () => {
         }
     }, [scriptUrls, sources, data, selectedSourceId, user]);
 
-    const fetchData = async (overrideUrls?: UngetConfig[]) => {
+    const fetchData = async (overrideUrls?: UngetConfig[], silent: boolean = false) => {
         if (isConfigLoading && !overrideUrls) return; 
 
         const urlsToUse = overrideUrls || scriptUrls;
 
         if (urlsToUse.length === 0) {
-            setError("Primero debe configurar al menos una URL de Web App de Apps Script.");
-            setTempUrls([...urlsToUse]);
-            setIsConfigOpen(true);
+            if (!silent) {
+                setError("Primero debe configurar al menos una URL de Web App de Apps Script.");
+                setTempUrls([...urlsToUse]);
+                setIsConfigOpen(true);
+            }
             return;
         }
 
-        // Limpiar error inmediatamente al iniciar una carga válida
-        setError(null);
-        setIsLoading(true);
+        if (!silent) {
+            // Limpiar error inmediatamente al iniciar una carga válida
+            setError(null);
+            setIsLoading(true);
+        } else {
+            setIsSilentSyncing(true);
+        }
 
         try {
             let allData: SIGData[] = [];
@@ -292,24 +349,58 @@ export const SheetSearchModule: React.FC = () => {
             setSources(newSources);
             setData(allData);
             
-            if (allData.length === 0) {
+            if (allData.length === 0 && !silent) {
                setError("No se encontraron registros en las hojas de cálculo. Revise que tengan información.");
+            } else if (allData.length > 0 && silent && error) {
+                setError(null); // Clear previous errors silently
             }
             
         } catch (err: any) {
-            setError("Ocurrió un error al cargar los datos: " + err.message);
+            if (!silent) setError("Ocurrió un error al cargar los datos: " + err.message);
+            else console.error("Silent auto-sync failed:", err);
         } finally {
-            setIsLoading(false);
+            if (!silent) setIsLoading(false);
+            else setIsSilentSyncing(false);
         }
     };
 
-    // Al montar, si hay URL pero no hay data, fetch automatically
+    // Al montar y cargar la configuración, hacer refresh de los datos.
     useEffect(() => {
-        if (!isConfigLoading && scriptUrls.length > 0 && data.length === 0) {
-            fetchData();
+        if (!isConfigLoading && scriptUrls.length > 0) {
+            // Si no hay datos cacheados, hacemos fetch con UI de carga, sino, silent
+            fetchData(undefined, data.length > 0);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [scriptUrls.length, isConfigLoading]); // Escuchar también isConfigLoading
+    }, [isConfigLoading]); // Solo cuando termine de cargar la configuración
+
+    // Sincronización automática periódica y al enfocar ventana
+    useEffect(() => {
+        if (isConfigLoading || scriptUrls.length === 0) return;
+
+        // Auto-sync cada 15 minutos (900000 ms)
+        const AUTO_SYNC_INTERVAL = 15 * 60 * 1000;
+        const intervalId = setInterval(() => {
+            fetchData(undefined, true);
+        }, AUTO_SYNC_INTERVAL);
+
+        // Auto-sync al volver la pestaña (si ha pasado más de 10 minutos desde la última vez)
+        let lastSyncTime = Date.now();
+        const handleFocus = () => {
+            const now = Date.now();
+            if (now - lastSyncTime > 10 * 60 * 1000) {
+                lastSyncTime = now;
+                fetchData(undefined, true);
+            }
+        };
+
+        window.addEventListener('focus', handleFocus);
+
+        return () => {
+            clearInterval(intervalId);
+            window.removeEventListener('focus', handleFocus);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [scriptUrls, isConfigLoading]);
 
     const handleSaveConfig = async () => {
         if (!user) return;
@@ -516,6 +607,9 @@ export const SheetSearchModule: React.FC = () => {
         });
     }, [data, searchTerm, selectedSourceId]);
 
+    const activeSheetData = useMemo(() => selectedSourceId ? data.filter(item => item && item.sourceId === selectedSourceId) : [], [data, selectedSourceId]);
+    const activeSheetExpirationInfo = useMemo(() => getExpirationStats(activeSheetData), [activeSheetData]);
+
     return (
         <div className="flex flex-col h-full bg-gray-50/50 p-4 2xl:p-6 pb-20 max-w-7xl mx-auto w-full">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4 border-b border-gray-200 pb-4">
@@ -541,11 +635,11 @@ export const SheetSearchModule: React.FC = () => {
                     </button>
                     <button 
                         id="sync-btn"
-                        onClick={() => fetchData()} disabled={isLoading}
-                        className="flex-1 sm:flex-none bg-teal-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                        onClick={() => fetchData()} disabled={isLoading || isSilentSyncing}
+                        className="flex-1 sm:flex-none bg-teal-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
                     >
-                        <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                        {isLoading ? 'Sincronizando...' : 'Sincronizar'}
+                        <RefreshCw className={`h-4 w-4 ${isLoading || isSilentSyncing ? 'animate-spin' : ''}`} />
+                        {isLoading || isSilentSyncing ? 'Sincronizando...' : 'Sincronizar'}
                     </button>
                 </div>
             </div>
@@ -736,51 +830,54 @@ export const SheetSearchModule: React.FC = () => {
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col min-h-[600px] overflow-hidden">
                 {/* BREADCRUMBS & SEARCH */}
-                <div className="p-4 border-b border-gray-100 bg-gray-50/50">
-                    <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-                        <nav className="flex items-center gap-2 text-sm font-medium">
-                            <button 
-                                onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${viewLevel === 'ungets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
-                            >
-                                <Building2 className="h-4 w-4" />
-                                UNGETs
-                            </button>
-                            
-                            {selectedUngetIndex !== null && (
-                                <>
-                                    <ChevronRight className="h-4 w-4 text-gray-300" />
-                                    <button 
-                                        onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${viewLevel === 'sheets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
-                                    >
-                                        <MapPin className="h-4 w-4" />
-                                        {scriptUrls[selectedUngetIndex]?.name || 'Documento'}
-                                    </button>
-                                </>
-                            )}
+                <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4">
+                    {/* BREADCRUMBS */}
+                    <nav className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                        <button 
+                            onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${viewLevel === 'ungets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
+                        >
+                            <Building2 className="h-4 w-4" />
+                            UNGETs
+                        </button>
+                        
+                        {selectedUngetIndex !== null && (
+                            <>
+                                <ChevronRight className="h-4 w-4 text-gray-300" />
+                                <button 
+                                    onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${viewLevel === 'sheets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
+                                >
+                                    <MapPin className="h-4 w-4" />
+                                    {scriptUrls[selectedUngetIndex]?.name || 'Documento'}
+                                </button>
+                            </>
+                        )}
 
-                            {selectedSourceId && (
-                                <>
-                                    <ChevronRight className="h-4 w-4 text-gray-300" />
-                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-100 text-teal-800">
-                                        <FileSpreadsheet className="h-4 w-4" />
-                                        {(() => {
-                                            const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
-                                            const lastDash = name.lastIndexOf('-');
-                                            if (lastDash === -1) return name.replace(/^FARM\s*-\s*/i, '');
-                                            const desc = name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
-                                            const code = name.substring(lastDash + 1).trim();
-                                            return `${desc} (${code})`;
-                                        })()}
-                                    </div>
-                                </>
-                            )}
-                        </nav>
+                        {selectedSourceId && (
+                            <>
+                                <ChevronRight className="h-4 w-4 text-gray-300" />
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-100 text-teal-800">
+                                    <FileSpreadsheet className="h-4 w-4" />
+                                    {(() => {
+                                        const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
+                                        const lastDash = name.lastIndexOf('-');
+                                        if (lastDash === -1) return name.replace(/^FARM\s*-\s*/i, '');
+                                        const desc = name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                        const code = name.substring(lastDash + 1).trim();
+                                        return `${desc} (${code})`;
+                                    })()}
+                                </div>
+                            </>
+                        )}
+                    </nav>
 
-                        <div className="flex items-center gap-3 w-full md:w-auto">
+                    {/* ACTIONS (Search & Filters) */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        {/* Search */}
+                        <div className="w-full sm:max-w-md">
                             {viewLevel === 'data' && (
-                                <div className="relative flex-1 md:w-80">
+                                <div className="relative w-full">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                         <Search className="h-4 w-4 text-gray-400" />
                                     </div>
@@ -789,11 +886,41 @@ export const SheetSearchModule: React.FC = () => {
                                         placeholder="Buscar en esta hoja..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="block w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-xs transition-all shadow-sm"
+                                        className="block w-full pl-9 pr-3 py-2 border border-teal-500/30 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-xs transition-all shadow-sm"
                                     />
                                 </div>
                             )}
-                            <div className="text-xs text-gray-500 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm shrink-0 font-medium">
+                        </div>
+
+                        {/* Alerts and count */}
+                        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto shrink-0 justify-start sm:justify-end">
+                            {viewLevel === 'data' && (
+                                <>
+                                    {activeSheetExpirationInfo.expiredCount > 0 && (
+                                        <button 
+                                            onClick={() => { setExpirationModalType('expired'); setIsExpirationModalOpen(true); }}
+                                            className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 px-3 py-2 rounded-xl border border-red-200 shadow-sm text-xs font-bold transition-colors"
+                                            title="Ver productos vencidos"
+                                        >
+                                            <AlertTriangle className="h-4 w-4" />
+                                            <span className="hidden sm:inline">{activeSheetExpirationInfo.expiredCount} vencido{activeSheetExpirationInfo.expiredCount !== 1 ? 's' : ''}</span>
+                                            <span className="sm:hidden">{activeSheetExpirationInfo.expiredCount}</span>
+                                        </button>
+                                    )}
+                                    {activeSheetExpirationInfo.expiringThisMonthCount > 0 && (
+                                        <button 
+                                            onClick={() => { setExpirationModalType('expiring'); setIsExpirationModalOpen(true); }}
+                                            className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl border border-amber-200 shadow-sm text-xs font-bold transition-colors"
+                                            title="Ver productos por vencer este mes"
+                                        >
+                                            <Clock className="h-4 w-4" />
+                                            <span className="hidden sm:inline">{activeSheetExpirationInfo.expiringThisMonthCount} por vencer</span>
+                                            <span className="sm:hidden">{activeSheetExpirationInfo.expiringThisMonthCount}</span>
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                            <div className="text-xs text-gray-500 bg-white px-4 py-2 rounded-xl border border-gray-200 shadow-sm font-medium">
                                 {viewLevel === 'ungets' ? `${scriptUrls.length} UNGETs` : 
                                  viewLevel === 'sheets' ? `${sources.filter(s => s.urlIndex === selectedUngetIndex).length} Hojas` : 
                                  `${filteredData.length} productos`}
@@ -803,12 +930,17 @@ export const SheetSearchModule: React.FC = () => {
                 </div>
 
                 <div className="flex-1 overflow-auto p-4 md:p-6 bg-gray-50/30">
-                    {isLoading ? (
+                    {isConfigLoading && scriptUrls.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-teal-600 gap-3 py-20">
+                            <RefreshCw className="h-10 w-10 animate-spin" />
+                            <span className="font-bold text-lg">Cargando configuración...</span>
+                        </div>
+                    ) : isLoading && data.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-teal-600 gap-3 py-20">
                             <RefreshCw className="h-10 w-10 animate-spin" />
                             <span className="font-bold text-lg">Sincronizando información...</span>
                         </div>
-                    ) : error ? (
+                    ) : error && data.length === 0 ? (
                          <div className="flex flex-col items-center justify-center h-full text-center max-w-md mx-auto py-20">
                             <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
                             <h3 className="text-lg font-black text-gray-900 mb-2">Error de conexión</h3>
@@ -890,12 +1022,30 @@ export const SheetSearchModule: React.FC = () => {
                                         <h3 className="text-lg font-black text-gray-900 uppercase">Seleccione una Hoja de Cálculo</h3>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                                        {sources.filter(s => s.urlIndex === selectedUngetIndex).map((sheet) => (
+                                        {sources.filter(s => s.urlIndex === selectedUngetIndex).map((sheet) => {
+                                            const sheetData = data.filter(r => r.sourceId === sheet.id);
+                                            const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
+
+                                            return (
                                             <button
                                                 key={sheet.id}
                                                 onClick={() => handleSelectSheet(sheet.id)}
-                                                className="group bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col h-full"
+                                                className="group relative bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col h-full"
                                             >
+                                                <div className="absolute top-4 right-4 flex flex-col gap-2 items-end z-10">
+                                                    {expiredCount > 0 && (
+                                                        <div className="flex items-center gap-1.5 bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm" title="Vencido en stock">
+                                                            <AlertTriangle className="h-3 w-3" />
+                                                            <span>{expiredCount} vencido{expiredCount !== 1 ? 's' : ''}</span>
+                                                        </div>
+                                                    )}
+                                                    {expiringThisMonthCount > 0 && (
+                                                        <div className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm" title="Vence este mes">
+                                                            <Clock className="h-3 w-3" />
+                                                            <span>{expiringThisMonthCount} por vencer</span>
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
                                                     <FileSpreadsheet className="h-6 w-6" />
                                                     <div 
@@ -938,7 +1088,8 @@ export const SheetSearchModule: React.FC = () => {
                                                     <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
                                                 </div>
                                             </button>
-                                        ))}
+                                        );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -1107,6 +1258,76 @@ export const SheetSearchModule: React.FC = () => {
                             >
                                 Cerrar Detalle
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Expiración */}
+            {isExpirationModalOpen && expirationModalType && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsExpirationModalOpen(false)}>
+                    <div 
+                        className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 max-h-[90vh]"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className={`p-4 sm:p-6 border-b border-gray-100 flex items-start justify-between ${expirationModalType === 'expired' ? 'bg-red-50' : 'bg-amber-50'}`}>
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${expirationModalType === 'expired' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'}`}>
+                                    {expirationModalType === 'expired' ? <AlertTriangle className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-gray-900">
+                                        {expirationModalType === 'expired' ? 'Productos Vencidos' : 'Productos por Vencer (Este Mes)'}
+                                    </h3>
+                                    <p className="text-sm text-gray-500">
+                                        {expirationModalType === 'expired' ? 'Atención urgente requerida' : 'Asegure la rotación de estos inventarios'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsExpirationModalOpen(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors shrink-0">
+                                <X className="h-5 w-5 text-gray-400" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-auto bg-gray-50/30 p-0">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50/80 sticky top-0 z-10 backdrop-blur-sm">
+                                    <tr>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">ID / Código SIG</th>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider">Descripción del Producto</th>
+                                        <th scope="col" className="px-4 py-3 text-right text-xs font-black text-gray-500 uppercase tracking-wider">Saldo</th>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider">Lote / Venc.</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-100">
+                                    {(expirationModalType === 'expired' ? activeSheetExpirationInfo.expired : activeSheetExpirationInfo.expiringThisMonth).map((row, i) => (
+                                        <tr key={i} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => { setIsExpirationModalOpen(false); setSelectedRecord(row); }}>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-black text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded w-fit mb-1">{row.ID_Producto || '-'}</span>
+                                                    <span className="text-[10px] text-gray-400 font-bold">{row.CODIGO_SIG}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="text-sm font-bold text-gray-900 break-words line-clamp-2" title={row.Nombre}>{row.Nombre || '-'}</div>
+                                                <div className="text-[10px] text-gray-400 mt-0.5 break-words line-clamp-1 truncate" title={row.Reg_Sanitario}>RS: {row.Reg_Sanitario || 'S/N'}</div>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-right">
+                                                <span className={`text-base font-black ${row.Saldo?.toString() === '0' ? 'text-red-500' : 'text-gray-900'} bg-gray-50 px-2 py-1 rounded inline-block`}>{row.Saldo || '0'}</span>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                <div className="text-sm font-medium text-gray-900 uppercase">{row.Lote || '-'}</div>
+                                                <div className={`text-[10px] font-bold mt-0.5 ${expirationModalType === 'expired' ? 'text-red-600' : 'text-amber-600'}`}>Vence: {row.Fec_Vencim || '-'}</div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {((expirationModalType === 'expired' ? activeSheetExpirationInfo.expired : activeSheetExpirationInfo.expiringThisMonth).length === 0) && (
+                                <div className="text-center py-12 text-gray-500">
+                                    No hay registros para mostrar.
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
