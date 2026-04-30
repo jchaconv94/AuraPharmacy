@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle } from 'lucide-react';
+import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
 
@@ -102,6 +103,23 @@ interface UngetConfig {
   name: string;
 }
 
+const formatAlmCode = (code: string | undefined): string => {
+    if (!code) return '-';
+    const c = String(code).trim();
+    if (c.length >= 8) {
+        if (c.substring(5, 8).toUpperCase() === 'F01') {
+            return c.substring(0, 5);
+        }
+        return c.substring(0, c.length - 2);
+    }
+    return c;
+};
+
+const getAlmCodeForSheet = (sheetId: string, sheetData: SIGData[]): string => {
+    const row = sheetData.find(r => r.sourceId === sheetId && r.ALMCOD);
+    return row ? formatAlmCode(row.ALMCOD) : '';
+};
+
 const getExpirationStats = (records: SIGData[]) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -156,6 +174,7 @@ export const SheetSearchModule: React.FC = () => {
     const [isConfigLoading, setIsConfigLoading] = useState(true); // Nuevo: Estado para carga de config
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [sheetSearchTerm, setSheetSearchTerm] = useState('');
     
     // Navigation hierarchy
     const [viewLevel, setViewLevel] = useState<'ungets' | 'sheets' | 'data'>('ungets');
@@ -538,6 +557,71 @@ export const SheetSearchModule: React.FC = () => {
         setTempUrls(tempUrls.filter((_, idx) => idx !== indexToRemove));
     };
 
+    const exportCurrentSheetToExcel = () => {
+        if (!selectedSourceId) return;
+        const sheetInfo = sources.find(s => s.id === selectedSourceId);
+        if (!sheetInfo) return;
+
+        const dataToExport = filteredData.map(r => ({
+            'ALMCOD': r.ALMCOD || '',
+            'DESC_ALM': r.DESC_ALM || sheetInfo.name || '',
+            'ID_Producto': r.ID_Producto || '',
+            'CODIGO_SIG': r.CODIGO_SIG || r.SIGA || '',
+            'Nombre': r.Nombre || r.DESC_ITEM || '',
+            'Lote': r.Lote || r.LOTE || '',
+            'Fec_Vencim': r.Fec_Vencim || r.VENCIMIENTO || '',
+            'Reg_Sanitario': r.Reg_Sanitario || r.REG_SANITARIO || '',
+            'TIPSUM': r.TIPSUM || '',
+            'DESC_TIPSUM': r.DESC_TIPSUM || r.TIPO_SUMINISTRO || '',
+            'FFINAN': r.FFINAN || '',
+            'DESC_FFINAN': r.DESC_FFINAN || r.FF || '',
+            'Saldo': r.Saldo !== undefined ? r.Saldo : (r.SALDO !== undefined ? r.SALDO : ''),
+            'Precio_Det': r.Precio_Det || r.PRECIO_COMPRA || '',
+            'Precio_Cab': r.Precio_Cab || r.PRECIO_REF || ''
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Stock");
+        XLSX.writeFile(wb, `Stock_${sheetInfo.name}_${new Date().toISOString().split('T')[0]}.xlsx`.replace(/\s+/g, '_'));
+    };
+
+    const exportAllEstablishmentsToExcel = () => {
+        if (selectedUngetIndex === null) return;
+        
+        const ungetData = data.filter(r => {
+            const source = sources.find(s => s.id === r.sourceId);
+            return source && source.urlIndex === selectedUngetIndex;
+        });
+
+        const dataToExport = ungetData.map(r => {
+            const sheetInfo = sources.find(s => s.id === r.sourceId);
+            return {
+                'ALMCOD': r.ALMCOD || '',
+                'DESC_ALM': r.DESC_ALM || (sheetInfo ? sheetInfo.name : ''),
+                'ID_Producto': r.ID_Producto || '',
+                'CODIGO_SIG': r.CODIGO_SIG || r.SIGA || '',
+                'Nombre': r.Nombre || r.DESC_ITEM || '',
+                'Lote': r.Lote || r.LOTE || '',
+                'Fec_Vencim': r.Fec_Vencim || r.VENCIMIENTO || '',
+                'Reg_Sanitario': r.Reg_Sanitario || r.REG_SANITARIO || '',
+                'TIPSUM': r.TIPSUM || '',
+                'DESC_TIPSUM': r.DESC_TIPSUM || r.TIPO_SUMINISTRO || '',
+                'FFINAN': r.FFINAN || '',
+                'DESC_FFINAN': r.DESC_FFINAN || r.FF || '',
+                'Saldo': r.Saldo !== undefined ? r.Saldo : (r.SALDO !== undefined ? r.SALDO : ''),
+                'Precio_Det': r.Precio_Det || r.PRECIO_COMPRA || '',
+                'Precio_Cab': r.Precio_Cab || r.PRECIO_REF || ''
+            };
+        });
+
+        const ungetName = scriptUrls[selectedUngetIndex]?.name || 'UNGET';
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Stock Consolidado");
+        XLSX.writeFile(wb, `Stock_Consolidado_${ungetName}_${new Date().toISOString().split('T')[0]}.xlsx`.replace(/\s+/g, '_'));
+    };
+
     const copyScript = () => {
         navigator.clipboard.writeText(scriptCode);
         setCopied(true);
@@ -862,10 +946,9 @@ export const SheetSearchModule: React.FC = () => {
                                     {(() => {
                                         const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
                                         const lastDash = name.lastIndexOf('-');
-                                        if (lastDash === -1) return name.replace(/^FARM\s*-\s*/i, '');
-                                        const desc = name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
-                                        const code = name.substring(lastDash + 1).trim();
-                                        return `${desc} (${code})`;
+                                        const desc = lastDash === -1 ? name.replace(/^FARM\s*-\s*/i, '') : name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                        const code = selectedSourceId ? getAlmCodeForSheet(selectedSourceId, data) : '';
+                                        return code ? `${desc} (${code})` : desc;
                                     })()}
                                 </div>
                             </>
@@ -886,6 +969,20 @@ export const SheetSearchModule: React.FC = () => {
                                         placeholder="Buscar en esta hoja..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="block w-full pl-9 pr-3 py-2 border border-teal-500/30 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-xs transition-all shadow-sm"
+                                    />
+                                </div>
+                            )}
+                            {viewLevel === 'sheets' && (
+                                <div className="relative w-full">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar establecimiento por nombre o código..."
+                                        value={sheetSearchTerm}
+                                        onChange={(e) => setSheetSearchTerm(e.target.value)}
                                         className="block w-full pl-9 pr-3 py-2 border border-teal-500/30 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-xs transition-all shadow-sm"
                                     />
                                 </div>
@@ -920,9 +1017,32 @@ export const SheetSearchModule: React.FC = () => {
                                     )}
                                 </>
                             )}
+                            
+                            {viewLevel === 'sheets' && (
+                                <button
+                                    onClick={exportAllEstablishmentsToExcel}
+                                    className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold transition-colors"
+                                    title="Descargar Excel de Todos los Establecimientos"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Exportar Todos</span>
+                                </button>
+                            )}
+
+                            {viewLevel === 'data' && (
+                                <button
+                                    onClick={exportCurrentSheetToExcel}
+                                    className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold transition-colors"
+                                    title="Descargar Excel del Establecimiento"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Exportar Excel</span>
+                                </button>
+                            )}
+
                             <div className="text-xs text-gray-500 bg-white px-4 py-2 rounded-xl border border-gray-200 shadow-sm font-medium">
                                 {viewLevel === 'ungets' ? `${scriptUrls.length} UNGETs` : 
-                                 viewLevel === 'sheets' ? `${sources.filter(s => s.urlIndex === selectedUngetIndex).length} Hojas` : 
+                                 viewLevel === 'sheets' ? `${sources.filter(s => s.urlIndex === selectedUngetIndex).length} Establecimientos` : 
                                  `${filteredData.length} productos`}
                             </div>
                         </div>
@@ -998,7 +1118,7 @@ export const SheetSearchModule: React.FC = () => {
                                             </div>
                                             <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
                                                 <span className="text-xs font-bold text-gray-500">
-                                                    {sources.filter(s => s.urlIndex === idx).length} Hojas
+                                                    {sources.filter(s => s.urlIndex === idx).length} Establecimientos
                                                 </span>
                                                 <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
                                             </div>
@@ -1019,10 +1139,20 @@ export const SheetSearchModule: React.FC = () => {
                             {viewLevel === 'sheets' && (
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                                     <div className="flex items-center justify-between mb-6">
-                                        <h3 className="text-lg font-black text-gray-900 uppercase">Seleccione una Hoja de Cálculo</h3>
+                                        <h3 className="text-lg font-black text-gray-900 uppercase">Seleccione un establecimiento</h3>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                                        {sources.filter(s => s.urlIndex === selectedUngetIndex).map((sheet) => {
+                                        {sources.filter(s => {
+                                            if (s.urlIndex !== selectedUngetIndex) return false;
+                                            if (!sheetSearchTerm) return true;
+                                            
+                                            const term = sheetSearchTerm.toLowerCase();
+                                            const lastDash = s.name.lastIndexOf('-');
+                                            const description = lastDash === -1 ? s.name.replace(/^FARM\s*-\s*/i, '') : s.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                            const code = getAlmCodeForSheet(s.id, data);
+                                            
+                                            return description.toLowerCase().includes(term) || code.toLowerCase().includes(term);
+                                        }).map((sheet) => {
                                             const sheetData = data.filter(r => r.sourceId === sheet.id);
                                             const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
 
@@ -1056,20 +1186,12 @@ export const SheetSearchModule: React.FC = () => {
                                                 <div className="flex-1 mb-4">
                                                     {(() => {
                                                         const lastDash = sheet.name.lastIndexOf('-');
-                                                        if (lastDash === -1) {
-                                                            const cleanName = sheet.name.replace(/^FARM\s*-\s*/i, '');
-                                                            return (
-                                                                <>
-                                                                    <h3 className="text-lg font-black text-gray-900 leading-tight mb-1" title={cleanName}>{cleanName}</h3>
-                                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Establecimiento</p>
-                                                                </>
-                                                            );
-                                                        }
-                                                        const description = sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
-                                                        const code = sheet.name.substring(lastDash + 1).trim();
+                                                        const description = lastDash === -1 ? sheet.name.replace(/^FARM\s*-\s*/i, '') : sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                                        const code = getAlmCodeForSheet(sheet.id, data);
+                                                        
                                                         return (
                                                             <>
-                                                                <p className="text-xs font-bold text-teal-600 mb-0.5">{code}</p>
+                                                                {code && <p className="text-xs font-bold text-teal-600 mb-0.5">{code}</p>}
                                                                 <h3 className="text-lg font-black text-gray-900 leading-tight mb-1" title={description}>{description}</h3>
                                                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Establecimiento</p>
                                                             </>
@@ -1101,7 +1223,7 @@ export const SheetSearchModule: React.FC = () => {
                                         <table className="min-w-full divide-y divide-gray-200">
                                             <thead className="bg-gray-50/80 sticky top-0 z-10 backdrop-blur-sm">
                                                 <tr>
-                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">ID / Código SIG</th>
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Cód. SISMED / SIGA</th>
                                                     <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider min-w-[250px]">Descripción del Producto</th>
                                                     <th scope="col" className="px-4 py-3 text-right text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Saldo</th>
                                                     <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Lote / Venc.</th>
@@ -1165,98 +1287,126 @@ export const SheetSearchModule: React.FC = () => {
             {selectedRecord && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedRecord(null)}>
                     <div 
-                        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+                        className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
                         onClick={e => e.stopPropagation()}
                     >
-                        <div className="p-4 sm:p-6 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
-                            <div>
-                                <h3 className="text-xl font-black text-gray-900 pr-8 leading-tight">
-                                    {selectedRecord.Nombre || 'Sin Descripción'}
-                                </h3>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-800">
-                                        {selectedRecord.ID_Producto || 'S/ID'}
+                        {/* Header Minimalista y Elegante */}
+                        <div className="px-8 pt-8 pb-6 bg-gradient-to-b from-teal-50/50 to-white flex justify-between items-start relative border-b border-gray-100">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 to-blue-500"></div>
+                            <div className="pr-12">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <span className="inline-flex items-center justify-center h-8 px-3 rounded-full text-xs font-black bg-teal-100 text-teal-800 shadow-sm border border-teal-200/50">
+                                        COD. SISMED: {selectedRecord.ID_Producto || 'S/ID'}
                                     </span>
-                                    <span className="text-xs text-gray-500 font-mono">
-                                        SIG: {selectedRecord.CODIGO_SIG || '-'}
+                                    <span className="text-[11px] font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-full uppercase tracking-wider">
+                                        SIGA: {selectedRecord.CODIGO_SIG || '-'}
                                     </span>
                                 </div>
+                                <h3 className="text-2xl font-black text-gray-900 leading-tight tracking-tight">
+                                    {selectedRecord.Nombre || 'Sin Descripción'}
+                                </h3>
                             </div>
                             <button 
                                 onClick={() => setSelectedRecord(null)}
-                                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-xl transition-colors shrink-0"
+                                className="absolute top-6 right-6 text-gray-400 hover:text-gray-900 hover:bg-gray-100 p-2.5 rounded-full transition-all"
                             >
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
                         
-                        <div className="p-4 sm:p-6 overflow-y-auto max-h-[70vh]">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                <section>
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 pb-1 border-b border-gray-100">Ubicación y Estado</h4>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Establecimiento / Almacén</p>
-                                            <p className="text-sm font-medium text-gray-900">{(selectedRecord.DESC_ALM || '-').replace(/^FARM\s*-\s*/i, '')} <span className="text-gray-400 text-xs">({selectedRecord.ALMCOD || '-'})</span></p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Saldo Actual</p>
-                                            <p className="text-lg font-black text-teal-600">{(!isNaN(parseInt(String(selectedRecord.Saldo), 10))) ? parseInt(String(selectedRecord.Saldo), 10) : 0}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Última Actualización</p>
-                                            <p className="text-sm text-gray-700">{formatDate(selectedRecord.Ultima_Actualizacion) || '-'}</p>
-                                        </div>
+                        <div className="px-8 pb-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mt-6">
+                                {/* Estado y Ubicación - Destacado */}
+                                <div className="col-span-full bg-gray-50/80 rounded-2xl p-5 border border-gray-100/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                    <div>
+                                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-black mb-1">Establecimiento</p>
+                                        <p className="text-sm font-bold text-gray-900">{(selectedRecord.DESC_ALM || '-').replace(/^FARM\s*-\s*/i, '')} <span className="text-gray-400 font-medium">({formatAlmCode(selectedRecord.ALMCOD)})</span></p>
                                     </div>
-                                </section>
-                                
-                                <section>
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 pb-1 border-b border-gray-100">Datos Lote / Vencimiento</h4>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Lote</p>
-                                            <p className="text-sm font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded inline-block">{selectedRecord.Lote || '-'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Fecha de Vencimiento</p>
-                                            <p className="text-sm font-medium text-gray-900">{formatDate(selectedRecord.Fec_Vencim) || '-'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Registro Sanitario</p>
-                                            <p className="text-sm text-gray-700 uppercase">{selectedRecord.Reg_Sanitario || '-'}</p>
-                                        </div>
+                                    <div className="flex flex-col sm:items-end w-full sm:w-auto bg-white sm:bg-transparent p-3 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-gray-100">
+                                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-black mb-1">Saldo Actual</p>
+                                        <p className={`text-3xl font-black leading-none ${parseFloat(String(selectedRecord.Saldo || '0').replace(/,/g, '')) <= 0 ? 'text-red-500' : 'text-teal-600'}`}>
+                                            {(!isNaN(parseInt(String(selectedRecord.Saldo), 10))) ? parseInt(String(selectedRecord.Saldo), 10) : 0}
+                                        </p>
                                     </div>
-                                </section>
+                                </div>
 
-                                <section className="sm:col-span-2 pt-2">
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 pb-1 border-b border-gray-100">Clasificación y Financiamiento</h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {/* Bloque de Datos Lote/Vencimiento */}
+                                <div className="space-y-5">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Clock className="w-4 h-4 text-gray-400" />
+                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">Control de Calidad</h4>
+                                    </div>
+                                    <div className="bg-white space-y-4">
                                         <div>
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Tipo de Suministro</p>
-                                            <p className="text-sm font-medium text-gray-700">{selectedRecord.DESC_TIPSUM || '-'} <span className="text-gray-400 text-xs">({selectedRecord.TIPSUM || '-'})</span></p>
+                                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">Lote</p>
+                                            <p className="text-sm font-mono font-bold text-gray-800">{selectedRecord.Lote || '-'}</p>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Fuente de Financiamiento</p>
-                                            <p className="text-sm font-medium text-gray-700">{selectedRecord.DESC_FFINAN || '-'} <span className="text-gray-400 text-xs">({selectedRecord.FFINAN || '-'})</span></p>
+                                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">Fecha de Vencimiento</p>
+                                            <p className={`text-sm font-black ${
+                                                (() => {
+                                                    if (!selectedRecord.Fec_Vencim) return 'text-gray-800';
+                                                    const today = new Date(); today.setHours(0,0,0,0);
+                                                    const parts = selectedRecord.Fec_Vencim.split(/[\/\-]/);
+                                                    if (parts.length === 3) {
+                                                        const m = parseInt(parts[1],10)-1; const y = parseInt(parts[2],10); const d = parseInt(parts[0],10);
+                                                        const fy = y < 100 ? y + 2000 : y;
+                                                        const exp = new Date(fy, m, d);
+                                                        if (exp < today) return 'text-red-600';
+                                                        if (m === today.getMonth() && fy === today.getFullYear()) return 'text-amber-600';
+                                                    }
+                                                    return 'text-gray-800';
+                                                })()
+                                            }`}>
+                                                {formatDate(selectedRecord.Fec_Vencim) || '-'}
+                                            </p>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Precio Unitario (Detalle)</p>
-                                            <p className="text-sm font-medium text-gray-900 bg-gray-50 border border-gray-100 rounded px-2 py-1 inline-block">S/ {selectedRecord.Precio_Det || '-'}</p>
+                                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">Registro Sanitario</p>
+                                            <p className="text-sm font-medium text-gray-800 uppercase">{selectedRecord.Reg_Sanitario || '-'}</p>
                                         </div>
-                                         <div>
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Precio (Cabecera)</p>
-                                            <p className="text-sm font-medium text-gray-500">S/ {selectedRecord.Precio_Cab || '-'}</p>
+                                        <div>
+                                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">Última Actualización</p>
+                                            <p className="text-xs font-medium text-gray-500">{formatDate(selectedRecord.Ultima_Actualizacion) || '-'}</p>
                                         </div>
                                     </div>
-                                </section>
+                                </div>
+                                
+                                {/* Bloque de Clasificación y Financiamiento */}
+                                <div className="space-y-5">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Database className="w-4 h-4 text-gray-400" />
+                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">Clasificación</h4>
+                                    </div>
+                                    <div className="bg-white space-y-4">
+                                        <div>
+                                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">Tipo de Suministro</p>
+                                            <p className="text-sm font-medium text-gray-800">{selectedRecord.DESC_TIPSUM || '-'} <span className="text-gray-400 font-bold text-[10px] uppercase ml-1 px-1.5 py-0.5 bg-gray-100 rounded">{selectedRecord.TIPSUM || '-'}</span></p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">F. Financiamiento</p>
+                                            <p className="text-sm font-medium text-gray-800">{selectedRecord.DESC_FFINAN || '-'} <span className="text-gray-400 font-bold text-[10px] uppercase ml-1 px-1.5 py-0.5 bg-gray-100 rounded">{selectedRecord.FFINAN || '-'}</span></p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4 pt-2">
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">Precio Compra</p>
+                                                <p className="text-sm font-black text-gray-900">S/ {selectedRecord.Precio_Det || '-'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">Precio Referencial</p>
+                                                <p className="text-sm font-bold text-gray-500">S/ {selectedRecord.Precio_Cab || '-'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+                        <div className="px-8 py-5 bg-gray-50/80 border-t border-gray-100 flex justify-end">
                             <button 
                                 onClick={() => setSelectedRecord(null)}
-                                className="bg-white border border-gray-300 text-gray-700 px-5 py-2 rounded-xl text-sm font-bold hover:bg-gray-50 transition-colors"
+                                className="bg-white border border-gray-200 text-gray-700 px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
                             >
-                                Cerrar Detalle
+                                Cerrar
                             </button>
                         </div>
                     </div>
@@ -1293,7 +1443,7 @@ export const SheetSearchModule: React.FC = () => {
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50/80 sticky top-0 z-10 backdrop-blur-sm">
                                     <tr>
-                                        <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">ID / Código SIG</th>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Cód. SISMED / SIGA</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider">Descripción del Producto</th>
                                         <th scope="col" className="px-4 py-3 text-right text-xs font-black text-gray-500 uppercase tracking-wider">Saldo</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider">Lote / Venc.</th>
