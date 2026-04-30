@@ -1,5 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { User } from '../types';
 import { Sparkles, ArrowRight, ShieldCheck, Building2, Calendar, Layers } from 'lucide-react';
 
@@ -30,10 +31,9 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
 
   if (!user || !user.personnelData) return null;
 
-  return (
-    <div className={`fixed inset-0 z-[110000] flex items-center justify-center p-4 transition-all duration-700 ${show ? 'bg-gray-950/80 backdrop-blur-md' : 'bg-transparent pointer-events-none'}`}>
-        
-        <div className={`w-full max-w-[500px] rounded-3xl overflow-hidden relative transition-all duration-700 transform shadow-2xl ${show ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 translate-y-8'}`}>
+  return createPortal(
+    <div className={`fixed inset-0 z-[999999] flex items-center justify-center p-4 transition-all duration-700 ${show ? 'bg-gray-950/80 backdrop-blur-md' : 'bg-transparent pointer-events-none'}`}>
+      <div className={`w-full max-w-[500px] rounded-3xl overflow-hidden relative transition-all duration-700 transform shadow-2xl ${show ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 translate-y-8'}`}>
             
             {/* --- UPPER DARK SECTION --- */}
             <div className="relative bg-gradient-to-br from-gray-900 via-teal-950 to-gray-900 pb-12">
@@ -140,6 +140,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
             </div>
 
         </div>
-    </div>
+    </div>,
+    document.body
   );
 };

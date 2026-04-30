@@ -175,6 +175,7 @@ export const SheetSearchModule: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [sheetSearchTerm, setSheetSearchTerm] = useState('');
+    const [ungetSearchTerm, setUngetSearchTerm] = useState('');
     
     // Navigation hierarchy
     const [viewLevel, setViewLevel] = useState<'ungets' | 'sheets' | 'data'>('ungets');
@@ -622,6 +623,38 @@ export const SheetSearchModule: React.FC = () => {
         XLSX.writeFile(wb, `Stock_Consolidado_${ungetName}_${new Date().toISOString().split('T')[0]}.xlsx`.replace(/\s+/g, '_'));
     };
 
+    const exportAllUngetsToExcel = () => {
+        if (data.length === 0) return;
+        
+        const dataToExport = data.map(r => {
+            const sheetInfo = sources.find(s => s.id === r.sourceId);
+            const ungetInfo = sheetInfo ? scriptUrls[sheetInfo.urlIndex] : null;
+            return {
+                'UNGET': ungetInfo ? ungetInfo.name : 'N/A',
+                'ALMCOD': r.ALMCOD || '',
+                'DESC_ALM': r.DESC_ALM || (sheetInfo ? sheetInfo.name : ''),
+                'ID_Producto': r.ID_Producto || '',
+                'CODIGO_SIG': r.CODIGO_SIG || r.SIGA || '',
+                'Nombre': r.Nombre || r.DESC_ITEM || '',
+                'Lote': r.Lote || r.LOTE || '',
+                'Fec_Vencim': r.Fec_Vencim || r.VENCIMIENTO || '',
+                'Reg_Sanitario': r.Reg_Sanitario || r.REG_SANITARIO || '',
+                'TIPSUM': r.TIPSUM || '',
+                'DESC_TIPSUM': r.DESC_TIPSUM || r.TIPO_SUMINISTRO || '',
+                'FFINAN': r.FFINAN || '',
+                'DESC_FFINAN': r.DESC_FFINAN || r.FF || '',
+                'Saldo': r.Saldo !== undefined ? r.Saldo : (r.SALDO !== undefined ? r.SALDO : ''),
+                'Precio_Det': r.Precio_Det || r.PRECIO_COMPRA || '',
+                'Precio_Cab': r.Precio_Cab || r.PRECIO_REF || ''
+            };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Consolidado Nacional");
+        XLSX.writeFile(wb, `Stock_Consolidado_Regional_${new Date().toISOString().split('T')[0]}.xlsx`.replace(/\s+/g, '_'));
+    };
+
     const copyScript = () => {
         navigator.clipboard.writeText(scriptCode);
         setCopied(true);
@@ -673,6 +706,12 @@ export const SheetSearchModule: React.FC = () => {
   }
 }`;
 
+    const filteredUngets = useMemo(() => {
+        if (!ungetSearchTerm.trim()) return scriptUrls;
+        const term = ungetSearchTerm.toLowerCase();
+        return scriptUrls.filter(u => u.name.toLowerCase().includes(term));
+    }, [scriptUrls, ungetSearchTerm]);
+
     const filteredData = useMemo(() => {
         let currentData = selectedSourceId ? data.filter(item => item && item.sourceId === selectedSourceId) : data;
         
@@ -693,6 +732,65 @@ export const SheetSearchModule: React.FC = () => {
 
     const activeSheetData = useMemo(() => selectedSourceId ? data.filter(item => item && item.sourceId === selectedSourceId) : [], [data, selectedSourceId]);
     const activeSheetExpirationInfo = useMemo(() => getExpirationStats(activeSheetData), [activeSheetData]);
+
+    const allUngetSummaries = useMemo(() => {
+        const summaries: Record<number, { cs: number, ps: number, alm: number, hosp: number }> = {};
+        
+        scriptUrls.forEach((_, urlIndex) => {
+            const counts = { cs: 0, ps: 0, alm: 0, hosp: 0 };
+            const ungetSources = sources.filter(s => s.urlIndex === urlIndex);
+            
+            ungetSources.forEach(s => {
+                const name = s.name.toUpperCase();
+                if (name.includes('C.S.') || name.includes('CENTRO DE SALUD')) counts.cs++;
+                else if (name.includes('P.S.') || name.includes('PUESTO DE SALUD')) counts.ps++;
+                else if (name.includes('ALM') || name.includes('ALMACEN')) counts.alm++;
+                else if (name.includes('HOSP') || name.includes('HOSPITAL')) counts.hosp++;
+            });
+            summaries[urlIndex] = counts;
+        });
+        
+        return summaries;
+    }, [scriptUrls, sources]);
+
+    const globalUngetSummary = useMemo(() => {
+        const counts = { cs: 0, ps: 0, alm: 0, hosp: 0 };
+        sources.forEach(s => {
+            const name = s.name.toUpperCase();
+            if (name.includes('C.S.') || name.includes('CENTRO DE SALUD')) counts.cs++;
+            else if (name.includes('P.S.') || name.includes('PUESTO DE SALUD')) counts.ps++;
+            else if (name.includes('ALM') || name.includes('ALMACEN')) counts.alm++;
+            else if (name.includes('HOSP') || name.includes('HOSPITAL')) counts.hosp++;
+        });
+        return counts;
+    }, [sources]);
+
+    const establishmentSummary = useMemo(() => {
+        if (viewLevel !== 'sheets' || selectedUngetIndex === null) return null;
+        
+        const filteredSources = sources.filter(s => {
+            if (s.urlIndex !== selectedUngetIndex) return false;
+            if (!sheetSearchTerm) return true;
+            
+            const term = sheetSearchTerm.toLowerCase();
+            const lastDash = s.name.lastIndexOf('-');
+            const description = lastDash === -1 ? s.name.replace(/^FARM\s*-\s*/i, '') : s.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+            const code = getAlmCodeForSheet(s.id, data);
+            
+            return description.toLowerCase().includes(term) || code.toLowerCase().includes(term);
+        });
+
+        const counts = { cs: 0, ps: 0, alm: 0, hosp: 0 };
+        filteredSources.forEach(s => {
+            const name = s.name.toUpperCase();
+            if (name.includes('C.S.') || name.includes('CENTRO DE SALUD')) counts.cs++;
+            else if (name.includes('P.S.') || name.includes('PUESTO DE SALUD')) counts.ps++;
+            else if (name.includes('ALM') || name.includes('ALMACEN')) counts.alm++;
+            else if (name.includes('HOSP') || name.includes('HOSPITAL')) counts.hosp++;
+        });
+
+        return counts;
+    }, [viewLevel, selectedUngetIndex, sources, sheetSearchTerm, data]);
 
     return (
         <div className="flex flex-col h-full bg-gray-50/50 p-4 2xl:p-6 pb-20 max-w-7xl mx-auto w-full">
@@ -959,6 +1057,20 @@ export const SheetSearchModule: React.FC = () => {
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                         {/* Search */}
                         <div className="w-full sm:max-w-md">
+                            {viewLevel === 'ungets' && (
+                                <div className="relative w-full">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar UNGET por nombre..."
+                                        value={ungetSearchTerm}
+                                        onChange={(e) => setUngetSearchTerm(e.target.value)}
+                                        className="block w-full pl-9 pr-3 py-2 border border-teal-500/30 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-xs transition-all shadow-sm"
+                                    />
+                                </div>
+                            )}
                             {viewLevel === 'data' && (
                                 <div className="relative w-full">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1029,6 +1141,51 @@ export const SheetSearchModule: React.FC = () => {
                                 </button>
                             )}
 
+                            {viewLevel === 'sheets' && establishmentSummary && (
+                                <div className="flex flex-wrap items-center gap-1.5 px-3 py-1 bg-gray-50 border border-gray-200 rounded-xl">
+                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-blue-700 text-[10px] font-black border border-blue-100 shadow-sm">
+                                        C.S: {establishmentSummary.cs}
+                                    </div>
+                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-amber-700 text-[10px] font-black border border-amber-100 shadow-sm">
+                                        P.S: {establishmentSummary.ps}
+                                    </div>
+                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-teal-700 text-[10px] font-black border border-teal-100 shadow-sm">
+                                        ALM: {establishmentSummary.alm}
+                                    </div>
+                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-red-700 text-[10px] font-black border border-red-100 shadow-sm">
+                                        HOSP: {establishmentSummary.hosp}
+                                    </div>
+                                </div>
+                            )}
+
+                            {viewLevel === 'ungets' && globalUngetSummary && sources.length > 0 && (
+                                <>
+                                    <button
+                                        onClick={exportAllUngetsToExcel}
+                                        className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold transition-colors"
+                                        title="Descargar Excel de Todas las UNGETs"
+                                    >
+                                        <Download className="h-4 w-4" />
+                                        <span className="hidden sm:inline">Exportar todos</span>
+                                    </button>
+                                    
+                                    <div className="flex flex-wrap items-center gap-1.5 px-3 py-1 bg-gray-50 border border-gray-200 rounded-xl">
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-blue-700 text-[10px] font-black border border-blue-100 shadow-sm">
+                                            C.S: {globalUngetSummary.cs}
+                                        </div>
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-amber-700 text-[10px] font-black border border-amber-100 shadow-sm">
+                                            P.S: {globalUngetSummary.ps}
+                                        </div>
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-teal-700 text-[10px] font-black border border-teal-100 shadow-sm">
+                                            ALM: {globalUngetSummary.alm}
+                                        </div>
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-red-700 text-[10px] font-black border border-red-100 shadow-sm">
+                                            HOSP: {globalUngetSummary.hosp}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
                             {viewLevel === 'data' && (
                                 <button
                                     onClick={exportCurrentSheetToExcel}
@@ -1073,65 +1230,98 @@ export const SheetSearchModule: React.FC = () => {
                         <>
                             {/* LEVEL 1: UNGET CARDS */}
                             {viewLevel === 'ungets' && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-in fade-in zoom-in-95 duration-300">
-                                    {scriptUrls.length > 0 ? scriptUrls.map((config, idx) => (
-                                        <div
-                                            key={idx}
-                                            onClick={() => handleSelectUnget(idx)}
-                                            className="group bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col h-full cursor-pointer relative overflow-hidden"
-                                        >
-                                            {/* Botones de acción rápidos */}
-                                            <div className="absolute top-4 right-4 flex items-center gap-2 opacity-100 sm:opacity-40 group-hover:opacity-100 transition-opacity z-10">
-                                                <button 
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        handleDirectEdit(idx, e);
-                                                    }}
-                                                    className="p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all"
-                                                    title="Editar conexión"
+                                <div className="animate-in fade-in zoom-in-95 duration-300">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                        {filteredUngets.length > 0 ? filteredUngets.map((config, idx) => {
+                                            // Encontrar el índice original en scriptUrls para las funciones de edición/borrado
+                                            const originalIdx = scriptUrls.findIndex(u => u.url === config.url && u.name === config.name);
+                                            return (
+                                                <div
+                                                    key={idx}
+                                                    onClick={() => handleSelectUnget(originalIdx)}
+                                                    className="group bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col h-full cursor-pointer relative overflow-hidden"
                                                 >
-                                                    <Settings className="h-4 w-4" />
-                                                </button>
-                                                <button 
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        handleDirectDelete(idx, e);
-                                                    }}
-                                                    className="p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 transition-all"
-                                                    title="Eliminar conexión"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
-                                            </div>
+                                                    {/* Botones de acción rápidos */}
+                                                    <div className="absolute top-4 right-4 flex items-center gap-2 opacity-100 sm:opacity-40 group-hover:opacity-100 transition-opacity z-10">
+                                                        <button 
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                handleDirectEdit(originalIdx, e);
+                                                            }}
+                                                            className="p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all"
+                                                            title="Editar conexión"
+                                                        >
+                                                            <Settings className="h-4 w-4" />
+                                                        </button>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                handleDirectDelete(originalIdx, e);
+                                                            }}
+                                                            className="p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 transition-all"
+                                                            title="Eliminar conexión"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
 
-                                            <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-teal-600 group-hover:text-white transition-colors">
-                                                <Building2 className="h-6 w-6" />
+                                                    <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                                                        <Building2 className="h-6 w-6" />
+                                                    </div>
+                                                    <h3 className="text-lg font-black text-gray-900 mb-2 group-hover:text-teal-700 transition-colors uppercase tracking-tight">{config.name}</h3>
+                                                    
+                                                    {/* Resumen de establecimientos por tipo */}
+                                                    {allUngetSummaries[originalIdx] && (
+                                                        <div className="flex flex-wrap gap-1 mb-4">
+                                                            {allUngetSummaries[originalIdx].cs > 0 && (
+                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 uppercase" title="Centros de Salud">
+                                                                    C.S: {allUngetSummaries[originalIdx].cs}
+                                                                </span>
+                                                            )}
+                                                            {allUngetSummaries[originalIdx].ps > 0 && (
+                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-100 uppercase" title="Puestos de Salud">
+                                                                    P.S: {allUngetSummaries[originalIdx].ps}
+                                                                </span>
+                                                            )}
+                                                            {allUngetSummaries[originalIdx].alm > 0 && (
+                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-100 uppercase" title="Almacenes">
+                                                                    ALM: {allUngetSummaries[originalIdx].alm}
+                                                                </span>
+                                                            )}
+                                                            {allUngetSummaries[originalIdx].hosp > 0 && (
+                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100 uppercase" title="Hospitales">
+                                                                    HOSP: {allUngetSummaries[originalIdx].hosp}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-auto">
+                                                        <LinkIcon className="h-3 w-3" />
+                                                        <span className="truncate max-w-[150px]">{config.url}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
+                                                        <span className="text-xs font-bold text-gray-500">
+                                                            {sources.filter(s => s.urlIndex === originalIdx).length} Establecimientos
+                                                        </span>
+                                                        <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
+                                                    </div>
+                                                </div>
+                                            );
+                                        }) : (
+                                            <div className="col-span-full py-20 text-center">
+                                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                    <Settings className="h-8 w-8 text-gray-400" />
+                                                </div>
+                                                <h3 className="text-xl font-bold text-gray-800">No hay UNGETs que coincidan</h3>
+                                                <p className="text-gray-500 mt-2">Intente con otro término de búsqueda.</p>
                                             </div>
-                                            <h3 className="text-lg font-black text-gray-900 mb-2 group-hover:text-teal-700 transition-colors uppercase tracking-tight">{config.name}</h3>
-                                            <div className="flex items-center gap-2 text-xs text-gray-400 mt-auto">
-                                                <LinkIcon className="h-3 w-3" />
-                                                <span className="truncate max-w-[150px]">{config.url}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
-                                                <span className="text-xs font-bold text-gray-500">
-                                                    {sources.filter(s => s.urlIndex === idx).length} Establecimientos
-                                                </span>
-                                                <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
-                                            </div>
-                                        </div>
-                                    )) : (
-                                        <div className="col-span-full py-20 text-center">
-                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                <Settings className="h-8 w-8 text-gray-400" />
-                                            </div>
-                                            <h3 className="text-xl font-bold text-gray-800">No hay UNGETs configuradas</h3>
-                                            <p className="text-gray-500 mt-2">Haga clic en 'Configurar Conexión' para comenzar.</p>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
                             )}
 

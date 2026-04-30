@@ -1,12 +1,13 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Activity, Lock, User, ArrowRight, Phone, ShieldCheck, Layers } from 'lucide-react';
+import { Activity, Lock, User, ArrowRight, Phone, ShieldCheck, Layers, Eye, EyeOff } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,17 +70,17 @@ export const LoginScreen: React.FC = () => {
                 </h1>
                 
                 <p className="text-lg text-teal-100 font-medium leading-relaxed opacity-90 mb-10">
-                    La plataforma inteligente para la gestión, análisis y redistribución de recursos farmacéuticos.
+                    ToolKit SISMED automatiza y simplifica la gestión operativa del SISMED en una sola plataforma.
                 </p>
                 
                 <div className="w-16 h-1 bg-teal-500/50 rounded-full mb-10"></div>
                 
                 <div className="flex items-center gap-2 text-sm text-gray-400 font-medium">
                     <ShieldCheck className="h-4 w-4 text-teal-500/70" />
-                    <span>Oficina de Gestión de Medicamentos</span>
+                    <span>Gestión Eficiente de información Farmacéutica</span>
                 </div>
                 <div className="mt-2 text-xs text-gray-500 font-mono">
-                    Red de Salud Bellavista © {new Date().getFullYear()}
+                    ToolKit SISMED © {new Date().getFullYear()}
                 </div>
             </div>
         </div>
@@ -148,12 +149,23 @@ export const LoginScreen: React.FC = () => {
                                 <Lock className="h-5 w-5" />
                             </div>
                             <input 
-                                type="password"
-                                className={`w-full pl-12 pr-4 py-3.5 bg-white border ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : 'border-gray-200 focus:border-teal-500 focus:ring-teal-500/20'} rounded-xl focus:ring-4 outline-none transition-all text-gray-900 font-medium shadow-sm`}
+                                type={showPassword ? 'text' : 'password'}
+                                className={`w-full pl-12 pr-12 py-3.5 bg-white border ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : 'border-gray-200 focus:border-teal-500 focus:ring-teal-500/20'} rounded-xl focus:ring-4 outline-none transition-all text-gray-900 font-medium shadow-sm`}
                                 placeholder="••••••••"
                                 value={password}
                                 onChange={(e) => handleInputChange(setPassword, e.target.value)}
                             />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-teal-600 transition-colors focus:outline-none"
+                            >
+                                {showPassword ? (
+                                    <EyeOff className="h-5 w-5" />
+                                ) : (
+                                    <Eye className="h-5 w-5" />
+                                )}
+                            </button>
                         </div>
                     </div>
 
@@ -176,7 +188,7 @@ export const LoginScreen: React.FC = () => {
                         disabled={isSubmitting}
                         className="w-full bg-gray-900 text-white font-bold py-3.5 rounded-xl hover:bg-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20 disabled:opacity-70 disabled:cursor-not-allowed group mt-2"
                     >
-                        {isSubmitting ? 'Verificando...' : 'Ingresar al Espacio de Trabajo'}
+                        {isSubmitting ? 'Verificando...' : 'Iniciar sesión'}
                         {!isSubmitting && <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />}
                     </button>
                 </form>

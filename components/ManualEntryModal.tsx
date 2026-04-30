@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, ShoppingCart, StickyNote, Tag, Beaker } from 'lucide-react';
 import { AdditionalItem } from '../types';
 
@@ -49,8 +50,8 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
     setObservation('');
   };
 
-  return (
-    <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 flex flex-col max-h-[90vh]">
         
         {/* Header */}
@@ -222,6 +223,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

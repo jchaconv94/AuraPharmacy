@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X, AlertTriangle, ClipboardList, ScanLine } from 'lucide-react';
 
 interface ReviewWarningModalProps {
@@ -15,8 +16,8 @@ export const ReviewWarningModal: React.FC<ReviewWarningModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-l-8 border-amber-500">
         
         {/* Header */}
@@ -76,6 +77,7 @@ export const ReviewWarningModal: React.FC<ReviewWarningModalProps> = ({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
