@@ -827,7 +827,7 @@ export const SheetSearchModule: React.FC = () => {
             </div>
 
             {isConfigOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col border border-white/20">
                         {/* Header Modal */}
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
@@ -1475,7 +1475,7 @@ export const SheetSearchModule: React.FC = () => {
 
             {/* Modal de Detalle */}
             {selectedRecord && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedRecord(null)}>
+                <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setSelectedRecord(null)}>
                     <div 
                         className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
                         onClick={e => e.stopPropagation()}
@@ -1605,7 +1605,7 @@ export const SheetSearchModule: React.FC = () => {
 
             {/* Modal de Expiración */}
             {isExpirationModalOpen && expirationModalType && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsExpirationModalOpen(false)}>
+                <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsExpirationModalOpen(false)}>
                     <div 
                         className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 max-h-[90vh]"
                         onClick={e => e.stopPropagation()}
