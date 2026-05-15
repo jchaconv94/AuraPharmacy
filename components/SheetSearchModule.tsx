@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download } from 'lucide-react';
+import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
@@ -176,6 +176,7 @@ export const SheetSearchModule: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [sheetSearchTerm, setSheetSearchTerm] = useState('');
     const [ungetSearchTerm, setUngetSearchTerm] = useState('');
+    const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
     
     // Navigation hierarchy
     const [viewLevel, setViewLevel] = useState<'ungets' | 'sheets' | 'data'>('ungets');
@@ -793,32 +794,32 @@ export const SheetSearchModule: React.FC = () => {
     }, [viewLevel, selectedUngetIndex, sources, sheetSearchTerm, data]);
 
     return (
-        <div className="flex flex-col h-full bg-gray-50/50 p-4 2xl:p-6 pb-20 max-w-7xl mx-auto w-full">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4 border-b border-gray-200 pb-4">
-                <div>
-                    <h2 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                        <Database className="h-6 w-6 text-teal-600" />
-                        Consulta Stock
+        <div className="flex flex-col h-full bg-gray-50/50 sm:p-4 2xl:p-6 pb-20 max-w-7xl mx-auto w-full">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3 sm:gap-4 border-b border-gray-200 pb-4 px-4 pt-4 sm:px-0 sm:pt-0">
+                <div className="w-full sm:w-auto">
+                    <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
+                        <Database className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600 shrink-0" />
+                        <span className="truncate">Consulta Stock</span>
                     </h2>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1 line-clamp-2 sm:line-clamp-none">
                         Consulte medicamentos e insumos directamente desde el registro consolidado (Apps Script).
                     </p>
                 </div>
-                <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-0 overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
                     <button 
                         onClick={() => {
                             setTempUrls([...scriptUrls]);
                             setIsConfigOpen(!isConfigOpen);
                         }}
-                        className="flex-1 sm:flex-none border border-gray-300 bg-white text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                        className="flex-1 sm:flex-none border border-gray-300 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5 sm:gap-2 shrink-0"
                     >
                         <Settings className="h-4 w-4 text-gray-500" />
-                        Configurar Conexión
+                        Configurar
                     </button>
                     <button 
                         id="sync-btn"
                         onClick={() => fetchData()} disabled={isLoading || isSilentSyncing}
-                        className="flex-1 sm:flex-none bg-teal-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+                        className="flex-1 sm:flex-none bg-teal-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm shrink-0"
                     >
                         <RefreshCw className={`h-4 w-4 ${isLoading || isSilentSyncing ? 'animate-spin' : ''}`} />
                         {isLoading || isSilentSyncing ? 'Sincronizando...' : 'Sincronizar'}
@@ -1004,57 +1005,104 @@ export const SheetSearchModule: React.FC = () => {
             )}
 
             {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2 mb-6">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 sm:rounded-xl flex items-center gap-2 mb-6 mx-4 sm:mx-0">
                     <AlertCircle className="h-5 w-5 shrink-0" />
                     <span className="text-sm">{error}</span>
                 </div>
             )}
 
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col min-h-[600px] overflow-hidden">
+            <div className="bg-white sm:rounded-2xl border-y sm:border border-gray-200 shadow-sm flex-1 flex flex-col min-h-[600px] overflow-hidden">
                 {/* BREADCRUMBS & SEARCH */}
                 <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4">
                     {/* BREADCRUMBS */}
-                    <nav className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                    {/* Mobile Breadcrumb (Back button + Current state) */}
+                    <div className="flex sm:hidden items-center gap-2 text-sm">
+                        {viewLevel === 'sheets' && (
+                            <button 
+                                onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
+                                className="p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
+                            >
+                                <ArrowLeft className="h-5 w-5" />
+                            </button>
+                        )}
+                        {viewLevel === 'data' && (
+                             <button 
+                                onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
+                                className="p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
+                            >
+                                <ArrowLeft className="h-5 w-5" />
+                            </button>       
+                        )}
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-100 text-teal-800 shrink-0 min-w-0">
+                             {viewLevel === 'ungets' && (
+                                <>
+                                    <Building2 className="h-4 w-4 shrink-0" />
+                                    <span className="whitespace-nowrap font-bold">UNGETs</span>
+                                </>
+                             )}
+                             {viewLevel === 'sheets' && (
+                                <>
+                                    <MapPin className="h-4 w-4 shrink-0" />
+                                    <span className="whitespace-nowrap font-bold truncate">{scriptUrls[selectedUngetIndex!]?.name || 'Documento'}</span>
+                                </>
+                             )}
+                             {viewLevel === 'data' && (
+                                <>
+                                    <FileSpreadsheet className="h-4 w-4 shrink-0" />
+                                    <span className="whitespace-nowrap font-bold truncate">{(() => {
+                                        const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
+                                        const lastDash = name.lastIndexOf('-');
+                                        const desc = lastDash === -1 ? name.replace(/^FARM\s*-\s*/i, '') : name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                        const code = selectedSourceId ? getAlmCodeForSheet(selectedSourceId, data) : '';
+                                        return code ? `${desc} (${code})` : desc;
+                                    })()}</span>
+                                </>
+                             )}
+                        </div>
+                    </div>
+
+                    {/* Desktop Breadcrumbs */}
+                    <nav className="hidden sm:flex items-center gap-2 text-sm font-medium overflow-x-auto pb-1 -mb-1 hide-scrollbar">
                         <button 
                             onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${viewLevel === 'ungets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors shrink-0 ${viewLevel === 'ungets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
                         >
-                            <Building2 className="h-4 w-4" />
-                            UNGETs
+                            <Building2 className="h-4 w-4 shrink-0" />
+                            <span className="whitespace-nowrap">UNGETs</span>
                         </button>
                         
                         {selectedUngetIndex !== null && (
                             <>
-                                <ChevronRight className="h-4 w-4 text-gray-300" />
+                                <ChevronRight className="h-4 w-4 text-gray-300 shrink-0" />
                                 <button 
                                     onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${viewLevel === 'sheets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors shrink-0 ${viewLevel === 'sheets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
                                 >
-                                    <MapPin className="h-4 w-4" />
-                                    {scriptUrls[selectedUngetIndex]?.name || 'Documento'}
+                                    <MapPin className="h-4 w-4 shrink-0" />
+                                    <span className="whitespace-nowrap truncate max-w-[200px] sm:max-w-none">{scriptUrls[selectedUngetIndex]?.name || 'Documento'}</span>
                                 </button>
                             </>
                         )}
 
                         {selectedSourceId && (
                             <>
-                                <ChevronRight className="h-4 w-4 text-gray-300" />
-                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-100 text-teal-800">
-                                    <FileSpreadsheet className="h-4 w-4" />
-                                    {(() => {
+                                <ChevronRight className="h-4 w-4 text-gray-300 shrink-0" />
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-100 text-teal-800 shrink-0">
+                                    <FileSpreadsheet className="h-4 w-4 shrink-0" />
+                                    <span className="whitespace-nowrap truncate max-w-[200px] sm:max-w-none">{(() => {
                                         const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
                                         const lastDash = name.lastIndexOf('-');
                                         const desc = lastDash === -1 ? name.replace(/^FARM\s*-\s*/i, '') : name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
                                         const code = selectedSourceId ? getAlmCodeForSheet(selectedSourceId, data) : '';
                                         return code ? `${desc} (${code})` : desc;
-                                    })()}
+                                    })()}</span>
                                 </div>
                             </>
                         )}
                     </nav>
 
                     {/* ACTIONS (Search & Filters) */}
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center w-full">
                         {/* Search */}
                         <div className="w-full sm:max-w-md">
                             {viewLevel === 'ungets' && (
@@ -1102,29 +1150,27 @@ export const SheetSearchModule: React.FC = () => {
                         </div>
 
                         {/* Alerts and count */}
-                        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto shrink-0 justify-start sm:justify-end">
+                        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto shrink-0 justify-start sm:justify-end overflow-x-auto pb-1 sm:pb-0 hide-scrollbar scroll-smooth">
                             {viewLevel === 'data' && (
                                 <>
                                     {activeSheetExpirationInfo.expiredCount > 0 && (
                                         <button 
                                             onClick={() => { setExpirationModalType('expired'); setIsExpirationModalOpen(true); }}
-                                            className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 px-3 py-2 rounded-xl border border-red-200 shadow-sm text-xs font-bold transition-colors"
+                                            className="flex items-center gap-1.5 bg-red-50 text-red-700 px-3 py-2 rounded-xl border border-red-200 shadow-sm text-xs font-bold shrink-0"
                                             title="Ver productos vencidos"
                                         >
                                             <AlertTriangle className="h-4 w-4" />
-                                            <span className="hidden sm:inline">{activeSheetExpirationInfo.expiredCount} vencido{activeSheetExpirationInfo.expiredCount !== 1 ? 's' : ''}</span>
-                                            <span className="sm:hidden">{activeSheetExpirationInfo.expiredCount}</span>
+                                            <span>{activeSheetExpirationInfo.expiredCount} vencido{activeSheetExpirationInfo.expiredCount !== 1 ? 's' : ''}</span>
                                         </button>
                                     )}
                                     {activeSheetExpirationInfo.expiringThisMonthCount > 0 && (
                                         <button 
                                             onClick={() => { setExpirationModalType('expiring'); setIsExpirationModalOpen(true); }}
-                                            className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-2 rounded-xl border border-amber-200 shadow-sm text-xs font-bold transition-colors"
+                                            className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-2 rounded-xl border border-amber-200 shadow-sm text-xs font-bold shrink-0"
                                             title="Ver productos por vencer este mes"
                                         >
                                             <Clock className="h-4 w-4" />
-                                            <span className="hidden sm:inline">{activeSheetExpirationInfo.expiringThisMonthCount} por vencer</span>
-                                            <span className="sm:hidden">{activeSheetExpirationInfo.expiringThisMonthCount}</span>
+                                            <span>{activeSheetExpirationInfo.expiringThisMonthCount} por vencer</span>
                                         </button>
                                     )}
                                 </>
@@ -1133,7 +1179,7 @@ export const SheetSearchModule: React.FC = () => {
                             {viewLevel === 'sheets' && (
                                 <button
                                     onClick={exportAllEstablishmentsToExcel}
-                                    className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold transition-colors"
+                                    className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold shrink-0 transition-colors"
                                     title="Descargar Excel de Todos los Establecimientos"
                                 >
                                     <Download className="h-4 w-4" />
@@ -1142,17 +1188,17 @@ export const SheetSearchModule: React.FC = () => {
                             )}
 
                             {viewLevel === 'sheets' && establishmentSummary && (
-                                <div className="flex flex-wrap items-center gap-1.5 px-3 py-1 bg-gray-50 border border-gray-200 rounded-xl">
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-blue-700 text-[10px] font-black border border-blue-100 shadow-sm">
+                                <div className="flex items-center gap-1.5 px-3 py-2 sm:py-1 bg-gray-50 border border-gray-200 rounded-xl shrink-0 overflow-x-auto hide-scrollbar">
+                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-blue-700 text-[10px] sm:text-[11px] font-black border border-blue-100 shadow-sm whitespace-nowrap">
                                         C.S: {establishmentSummary.cs}
                                     </div>
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-amber-700 text-[10px] font-black border border-amber-100 shadow-sm">
+                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-amber-700 text-[10px] sm:text-[11px] font-black border border-amber-100 shadow-sm whitespace-nowrap">
                                         P.S: {establishmentSummary.ps}
                                     </div>
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-teal-700 text-[10px] font-black border border-teal-100 shadow-sm">
+                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-teal-700 text-[10px] sm:text-[11px] font-black border border-teal-100 shadow-sm whitespace-nowrap">
                                         ALM: {establishmentSummary.alm}
                                     </div>
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-red-700 text-[10px] font-black border border-red-100 shadow-sm">
+                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-red-700 text-[10px] sm:text-[11px] font-black border border-red-100 shadow-sm whitespace-nowrap">
                                         HOSP: {establishmentSummary.hosp}
                                     </div>
                                 </div>
@@ -1162,24 +1208,24 @@ export const SheetSearchModule: React.FC = () => {
                                 <>
                                     <button
                                         onClick={exportAllUngetsToExcel}
-                                        className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold transition-colors"
+                                        className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold shrink-0 transition-colors"
                                         title="Descargar Excel de Todas las UNGETs"
                                     >
                                         <Download className="h-4 w-4" />
                                         <span className="hidden sm:inline">Exportar todos</span>
                                     </button>
                                     
-                                    <div className="flex flex-wrap items-center gap-1.5 px-3 py-1 bg-gray-50 border border-gray-200 rounded-xl">
-                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-blue-700 text-[10px] font-black border border-blue-100 shadow-sm">
+                                    <div className="flex items-center gap-1.5 px-3 py-2 sm:py-1 bg-gray-50 border border-gray-200 rounded-xl shrink-0 overflow-x-auto hide-scrollbar">
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-blue-700 text-[10px] sm:text-[11px] font-black border border-blue-100 shadow-sm whitespace-nowrap">
                                             C.S: {globalUngetSummary.cs}
                                         </div>
-                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-amber-700 text-[10px] font-black border border-amber-100 shadow-sm">
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-amber-700 text-[10px] sm:text-[11px] font-black border border-amber-100 shadow-sm whitespace-nowrap">
                                             P.S: {globalUngetSummary.ps}
                                         </div>
-                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-teal-700 text-[10px] font-black border border-teal-100 shadow-sm">
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-teal-700 text-[10px] sm:text-[11px] font-black border border-teal-100 shadow-sm whitespace-nowrap">
                                             ALM: {globalUngetSummary.alm}
                                         </div>
-                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-red-700 text-[10px] font-black border border-red-100 shadow-sm">
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-red-700 text-[10px] sm:text-[11px] font-black border border-red-100 shadow-sm whitespace-nowrap">
                                             HOSP: {globalUngetSummary.hosp}
                                         </div>
                                     </div>
@@ -1189,7 +1235,7 @@ export const SheetSearchModule: React.FC = () => {
                             {viewLevel === 'data' && (
                                 <button
                                     onClick={exportCurrentSheetToExcel}
-                                    className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold transition-colors"
+                                    className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold shrink-0 transition-colors"
                                     title="Descargar Excel del Establecimiento"
                                 >
                                     <Download className="h-4 w-4" />
@@ -1197,16 +1243,16 @@ export const SheetSearchModule: React.FC = () => {
                                 </button>
                             )}
 
-                            <div className="text-xs text-gray-500 bg-white px-4 py-2 rounded-xl border border-gray-200 shadow-sm font-medium">
+                            <div className="hidden sm:block text-xs text-gray-500 bg-white px-3 sm:px-4 py-2 rounded-xl border border-gray-200 shadow-sm font-medium shrink-0 whitespace-nowrap">
                                 {viewLevel === 'ungets' ? `${scriptUrls.length} UNGETs` : 
-                                 viewLevel === 'sheets' ? `${sources.filter(s => s.urlIndex === selectedUngetIndex).length} Establecimientos` : 
-                                 `${filteredData.length} productos`}
+                                 viewLevel === 'sheets' ? `${sources.filter(s => s.urlIndex === selectedUngetIndex).length} Establ.` : 
+                                 `${filteredData.length} prod.`}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-auto p-4 md:p-6 bg-gray-50/30">
+                <div className="flex-1 overflow-auto p-4 sm:p-6 pb-32 sm:pb-6 bg-gray-50/30">
                     {isConfigLoading && scriptUrls.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-teal-600 gap-3 py-20">
                             <RefreshCw className="h-10 w-10 animate-spin" />
@@ -1231,7 +1277,7 @@ export const SheetSearchModule: React.FC = () => {
                             {/* LEVEL 1: UNGET CARDS */}
                             {viewLevel === 'ungets' && (
                                 <div className="animate-in fade-in zoom-in-95 duration-300">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                                         {filteredUngets.length > 0 ? filteredUngets.map((config, idx) => {
                                             // Encontrar el índice original en scriptUrls para las funciones de edición/borrado
                                             const originalIdx = scriptUrls.findIndex(u => u.url === config.url && u.name === config.name);
@@ -1239,7 +1285,7 @@ export const SheetSearchModule: React.FC = () => {
                                                 <div
                                                     key={idx}
                                                     onClick={() => handleSelectUnget(originalIdx)}
-                                                    className="group bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col h-full cursor-pointer relative overflow-hidden"
+                                                    className="group bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer relative overflow-hidden"
                                                 >
                                                     {/* Botones de acción rápidos */}
                                                     <div className="absolute top-4 right-4 flex items-center gap-2 opacity-100 sm:opacity-40 group-hover:opacity-100 transition-opacity z-10">
@@ -1250,7 +1296,7 @@ export const SheetSearchModule: React.FC = () => {
                                                                 e.stopPropagation();
                                                                 handleDirectEdit(originalIdx, e);
                                                             }}
-                                                            className="p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all"
+                                                            className="p-1.5 sm:p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all"
                                                             title="Editar conexión"
                                                         >
                                                             <Settings className="h-4 w-4" />
@@ -1262,50 +1308,58 @@ export const SheetSearchModule: React.FC = () => {
                                                                 e.stopPropagation();
                                                                 handleDirectDelete(originalIdx, e);
                                                             }}
-                                                            className="p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 transition-all"
+                                                            className="p-1.5 sm:p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 transition-all"
                                                             title="Eliminar conexión"
                                                         >
                                                             <Trash2 className="h-4 w-4" />
                                                         </button>
                                                     </div>
 
-                                                    <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                                                    <div className="w-12 h-12 shrink-0 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center sm:mb-4 group-hover:bg-teal-600 group-hover:text-white transition-colors">
                                                         <Building2 className="h-6 w-6" />
                                                     </div>
-                                                    <h3 className="text-lg font-black text-gray-900 mb-2 group-hover:text-teal-700 transition-colors uppercase tracking-tight">{config.name}</h3>
                                                     
-                                                    {/* Resumen de establecimientos por tipo */}
-                                                    {allUngetSummaries[originalIdx] && (
-                                                        <div className="flex flex-wrap gap-1 mb-4">
-                                                            {allUngetSummaries[originalIdx].cs > 0 && (
-                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 uppercase" title="Centros de Salud">
-                                                                    C.S: {allUngetSummaries[originalIdx].cs}
-                                                                </span>
-                                                            )}
-                                                            {allUngetSummaries[originalIdx].ps > 0 && (
-                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-100 uppercase" title="Puestos de Salud">
-                                                                    P.S: {allUngetSummaries[originalIdx].ps}
-                                                                </span>
-                                                            )}
-                                                            {allUngetSummaries[originalIdx].alm > 0 && (
-                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-100 uppercase" title="Almacenes">
-                                                                    ALM: {allUngetSummaries[originalIdx].alm}
-                                                                </span>
-                                                            )}
-                                                            {allUngetSummaries[originalIdx].hosp > 0 && (
-                                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100 uppercase" title="Hospitales">
-                                                                    HOSP: {allUngetSummaries[originalIdx].hosp}
-                                                                </span>
-                                                            )}
+                                                    <div className="flex-1 min-w-0 pr-16 sm:pr-0">
+                                                        <h3 className="text-sm sm:text-lg font-black text-gray-900 sm:mb-2 group-hover:text-teal-700 transition-colors uppercase tracking-tight truncate sm:whitespace-normal">{config.name}</h3>
+                                                        
+                                                        <div className="sm:hidden text-[10px] sm:text-xs font-bold text-gray-500 mt-0.5 mb-1.5">
+                                                            {sources.filter(s => s.urlIndex === originalIdx).length} Estab.
                                                         </div>
-                                                    )}
 
-                                                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-auto">
-                                                        <LinkIcon className="h-3 w-3" />
-                                                        <span className="truncate max-w-[150px]">{config.url}</span>
+                                                        {/* Resumen de establecimientos por tipo */}
+                                                        {allUngetSummaries[originalIdx] && (
+                                                            <div className="flex flex-wrap gap-1 mb-2 sm:mb-4">
+                                                                {allUngetSummaries[originalIdx].cs > 0 && (
+                                                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 uppercase" title="Centros de Salud">
+                                                                        C.S: {allUngetSummaries[originalIdx].cs}
+                                                                    </span>
+                                                                )}
+                                                                {allUngetSummaries[originalIdx].ps > 0 && (
+                                                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-100 uppercase" title="Puestos de Salud">
+                                                                        P.S: {allUngetSummaries[originalIdx].ps}
+                                                                    </span>
+                                                                )}
+                                                                {allUngetSummaries[originalIdx].alm > 0 && (
+                                                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-100 uppercase" title="Almacenes">
+                                                                        ALM: {allUngetSummaries[originalIdx].alm}
+                                                                    </span>
+                                                                )}
+                                                                {allUngetSummaries[originalIdx].hosp > 0 && (
+                                                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100 uppercase" title="Hospitales">
+                                                                        HOSP: {allUngetSummaries[originalIdx].hosp}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        <div className="flex items-center gap-1.5 text-[9px] sm:text-xs text-gray-400 mt-auto">
+                                                            <LinkIcon className="h-3 w-3 shrink-0" />
+                                                            <span className="truncate max-w-[120px] sm:max-w-[150px]">{config.url}</span>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
-                                                        <span className="text-xs font-bold text-gray-500">
+
+                                                    <div className="hidden sm:flex items-center justify-between w-full mt-4 pt-4 border-t border-gray-50">
+                                                        <span className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                             {sources.filter(s => s.urlIndex === originalIdx).length} Establecimientos
                                                         </span>
                                                         <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
@@ -1328,10 +1382,10 @@ export const SheetSearchModule: React.FC = () => {
                             {/* LEVEL 2: SHEET CARDS */}
                             {viewLevel === 'sheets' && (
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                                    <div className="flex items-center justify-between mb-6">
-                                        <h3 className="text-lg font-black text-gray-900 uppercase">Seleccione un establecimiento</h3>
+                                    <div className="flex items-center justify-between mb-4 sm:mb-6">
+                                        <h3 className="text-sm sm:text-lg font-black text-gray-900 uppercase">Seleccione un establecimiento</h3>
                                     </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                                         {sources.filter(s => {
                                             if (s.urlIndex !== selectedUngetIndex) return false;
                                             if (!sheetSearchTerm) return true;
@@ -1350,9 +1404,9 @@ export const SheetSearchModule: React.FC = () => {
                                             <button
                                                 key={sheet.id}
                                                 onClick={() => handleSelectSheet(sheet.id)}
-                                                className="group relative bg-white border border-gray-200 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col h-full"
+                                                className="group relative bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full"
                                             >
-                                                <div className="absolute top-4 right-4 flex flex-col gap-2 items-end z-10">
+                                                <div className="hidden sm:flex absolute top-4 right-4 flex-col gap-2 items-end z-10">
                                                     {expiredCount > 0 && (
                                                         <div className="flex items-center gap-1.5 bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm" title="Vencido en stock">
                                                             <AlertTriangle className="h-3 w-3" />
@@ -1366,14 +1420,14 @@ export const SheetSearchModule: React.FC = () => {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
+                                                <div className="w-12 h-12 shrink-0 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center sm:mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
                                                     <FileSpreadsheet className="h-6 w-6" />
                                                     <div 
                                                         className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`}
                                                         title={getUpdateStatus(sheet.lastUpdateTime).label}
                                                     />
                                                 </div>
-                                                <div className="flex-1 mb-4">
+                                                <div className="flex-1 sm:mb-4 min-w-0">
                                                     {(() => {
                                                         const lastDash = sheet.name.lastIndexOf('-');
                                                         const description = lastDash === -1 ? sheet.name.replace(/^FARM\s*-\s*/i, '') : sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
@@ -1381,23 +1435,48 @@ export const SheetSearchModule: React.FC = () => {
                                                         
                                                         return (
                                                             <>
-                                                                {code && <p className="text-xs font-bold text-teal-600 mb-0.5">{code}</p>}
-                                                                <h3 className="text-lg font-black text-gray-900 leading-tight mb-1" title={description}>{description}</h3>
-                                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Establecimiento</p>
+                                                                {code && <p className="text-[10px] sm:text-xs font-bold text-teal-600 mb-0.5">{code}</p>}
+                                                                <h3 className="text-sm sm:text-lg font-black text-gray-900 leading-tight mb-1 truncate sm:whitespace-normal" title={description}>{description}</h3>
                                                             </>
                                                         );
                                                     })()}
                                                     
+                                                    {/* Mobile alerts right below the title */}
+                                                    <div className="sm:hidden flex items-center gap-2 mt-1.5 flex-wrap">
+                                                        {expiredCount > 0 && (
+                                                            <div className="flex items-center gap-1 bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold" title="Vencido en stock">
+                                                                <AlertTriangle className="h-2.5 w-2.5" />
+                                                                <span>{expiredCount}</span>
+                                                            </div>
+                                                        )}
+                                                        {expiringThisMonthCount > 0 && (
+                                                            <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold" title="Vence este mes">
+                                                                <Clock className="h-2.5 w-2.5" />
+                                                                <span>{expiringThisMonthCount}</span>
+                                                            </div>
+                                                        )}
+                                                        {sheet.lastUpdateTime && (
+                                                            <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-gray-500">
+                                                                <RefreshCw className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                                                <span className="hidden sm:inline">Act:</span> {formatFullDate(sheet.lastUpdateTime).split(' ')[0]}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Desktop last updated */}
                                                     {sheet.lastUpdateTime && (
-                                                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 mt-2">
+                                                        <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-gray-500 mt-2">
                                                             <RefreshCw className="h-3 w-3" />
                                                             <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
+                                                <div className="hidden sm:flex items-center justify-between w-full mt-auto pt-4 border-t border-gray-50">
                                                     <span className="text-[10px] font-black text-teal-600 uppercase">Consultar Stock</span>
                                                     <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
+                                                </div>
+                                                <div className="sm:hidden ml-auto">
+                                                    <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all shrink-0" />
                                                 </div>
                                             </button>
                                         );
@@ -1408,10 +1487,10 @@ export const SheetSearchModule: React.FC = () => {
 
                             {/* LEVEL 3: DATA TABLE */}
                             {viewLevel === 'data' && (
-                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 -mx-4 md:-mx-6 -mt-4 md:-mt-6">
-                                    <div className="bg-white border-t border-gray-100 max-h-[600px] overflow-y-auto custom-scrollbar">
-                                        <table className="min-w-full divide-y divide-gray-200">
-                                            <thead className="bg-gray-50/80 sticky top-0 z-10 backdrop-blur-sm">
+                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 -mx-4 md:-mx-6 -mt-4 md:-mt-6 font-sans">
+                                    <div className="bg-transparent sm:bg-white sm:border-t border-gray-100 overflow-x-auto custom-scrollbar pb-40 sm:pb-0 px-4 sm:px-0 pt-4 sm:pt-0">
+                                        <table className="min-w-full block sm:table">
+                                            <thead className="hidden sm:table-header-group bg-gray-50/80 sticky top-0 z-10 backdrop-blur-sm">
                                                 <tr>
                                                     <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Cód. SISMED / SIGA</th>
                                                     <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider min-w-[250px]">Descripción del Producto</th>
@@ -1421,44 +1500,74 @@ export const SheetSearchModule: React.FC = () => {
                                                     <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">F. Finan.</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="bg-white divide-y divide-gray-100">
+                                            <tbody className="block sm:table-row-group bg-transparent sm:bg-white">
                                                 {filteredData.length > 0 ? filteredData.map((row, i) => (
                                                     <tr 
                                                         key={i} 
                                                         onClick={() => setSelectedRecord(row)}
-                                                        className="hover:bg-teal-50/50 transition-colors cursor-pointer group"
+                                                        className="block sm:table-row bg-white rounded-xl sm:rounded-none shadow-sm sm:shadow-none border border-gray-200 sm:border-0 border-b-gray-100 p-4 sm:p-0 hover:bg-teal-50/50 transition-colors cursor-pointer group mb-3 sm:mb-0 relative"
                                                     >
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono group-hover:text-teal-700">
+                                                        {/* Mobile Card Layout */}
+                                                        <td className="block sm:hidden">
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-xs font-black text-teal-700 bg-teal-50 px-2 py-0.5 rounded w-fit mb-1 border border-teal-100">{row.ID_Producto || '-'}</span>
+                                                                    <span className="text-[10px] text-gray-400 font-bold">{row.CODIGO_SIG || '-'}</span>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <span className="text-[10px] text-gray-400 font-black uppercase block mb-0.5">Saldo</span>
+                                                                    <span className="text-xl font-black text-teal-600 leading-none">{(!isNaN(parseInt(String(row.Saldo), 10))) ? parseInt(String(row.Saldo), 10) : 0}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-sm font-bold text-gray-900 mb-2 leading-snug">
+                                                                {row.Nombre || '-'}
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-[10px]">
+                                                                <div className="flex flex-col gap-0.5 w-full">
+                                                                    <span className="text-gray-500 font-mono"><span className="font-bold text-gray-400">Lote:</span> {row.Lote || '-'}</span>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="text-gray-500 font-mono"><span className="font-bold text-gray-400">Vence:</span> {formatDate(row.Fec_Vencim) || '-'}</span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 font-bold uppercase truncate max-w-[80px]" title={row.TIPSUM}>{row.TIPSUM || '-'}</span>
+                                                                            <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded border border-amber-100 font-bold uppercase truncate max-w-[80px]" title={row.FFINAN}>{row.FFINAN || '-'}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        
+                                                        {/* Desktop Table Cells */}
+                                                        <td className="hidden sm:table-cell px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono group-hover:text-teal-700">
                                                             <div className="font-bold">{row.ID_Producto || '-'}</div>
                                                             <div className="text-[10px] text-gray-400 mt-0.5">{row.CODIGO_SIG || '-'}</div>
                                                         </td>
-                                                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                                                        <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-900 font-medium">
                                                             {row.Nombre || '-'}
                                                             <div className="text-[10px] text-gray-400 font-normal mt-0.5 max-w-sm truncate" title={row.Reg_Sanitario}>
                                                                 RS: {row.Reg_Sanitario || 'S/N'}
                                                             </div>
                                                         </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                                                        <td className="hidden sm:table-cell px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
                                                             {(!isNaN(parseInt(String(row.Saldo), 10))) ? parseInt(String(row.Saldo), 10) : 0}
                                                         </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                        <td className="hidden sm:table-cell px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                                             <span className="font-mono text-gray-700">{row.Lote || '-'}</span>
                                                             <div className="text-[10px] mt-0.5">Vence: {formatDate(row.Fec_Vencim) || '-'}</div>
                                                         </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                        <td className="hidden sm:table-cell px-4 py-3 whitespace-nowrap text-sm">
                                                             <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase" title={row.DESC_TIPSUM}>
                                                                 {row.TIPSUM || '-'}
                                                             </span>
                                                         </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                        <td className="hidden sm:table-cell px-4 py-3 whitespace-nowrap text-sm">
                                                             <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 uppercase" title={row.DESC_FFINAN}>
                                                                 {row.FFINAN || '-'}
                                                             </span>
                                                         </td>
                                                     </tr>
                                                 )) : (
-                                                    <tr>
-                                                        <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-500">
+                                                    <tr className="block sm:table-row">
+                                                        <td colSpan={6} className="block sm:table-cell px-4 py-12 text-center text-sm text-gray-500">
                                                             No se encontraron coincidencias para su búsqueda.
                                                         </td>
                                                     </tr>
@@ -1481,40 +1590,40 @@ export const SheetSearchModule: React.FC = () => {
                         onClick={e => e.stopPropagation()}
                     >
                         {/* Header Minimalista y Elegante */}
-                        <div className="px-8 pt-8 pb-6 bg-gradient-to-b from-teal-50/50 to-white flex justify-between items-start relative border-b border-gray-100">
+                        <div className="px-5 sm:px-8 pt-6 sm:pt-8 pb-5 sm:pb-6 bg-gradient-to-b from-teal-50/50 to-white flex justify-between items-start relative border-b border-gray-100">
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 to-blue-500"></div>
-                            <div className="pr-12">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <span className="inline-flex items-center justify-center h-8 px-3 rounded-full text-xs font-black bg-teal-100 text-teal-800 shadow-sm border border-teal-200/50">
-                                        COD. SISMED: {selectedRecord.ID_Producto || 'S/ID'}
+                            <div className="pr-10 sm:pr-12 w-full">
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                                    <span className="inline-flex items-center justify-center h-7 sm:h-8 px-3 rounded-full text-[10px] sm:text-xs font-black bg-teal-100 text-teal-800 shadow-sm border border-teal-200/50 whitespace-nowrap">
+                                        COD: {selectedRecord.ID_Producto || 'S/ID'}
                                     </span>
-                                    <span className="text-[11px] font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-full uppercase tracking-wider">
+                                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
                                         SIGA: {selectedRecord.CODIGO_SIG || '-'}
                                     </span>
                                 </div>
-                                <h3 className="text-2xl font-black text-gray-900 leading-tight tracking-tight">
+                                <h3 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight tracking-tight break-words">
                                     {selectedRecord.Nombre || 'Sin Descripción'}
                                 </h3>
                             </div>
                             <button 
                                 onClick={() => setSelectedRecord(null)}
-                                className="absolute top-6 right-6 text-gray-400 hover:text-gray-900 hover:bg-gray-100 p-2.5 rounded-full transition-all"
+                                className="absolute top-4 sm:top-6 right-4 sm:right-6 text-gray-400 hover:text-gray-900 hover:bg-gray-100 p-2 sm:p-2.5 rounded-full transition-all"
                             >
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
                         
-                        <div className="px-8 pb-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mt-6">
+                        <div className="px-5 sm:px-8 pb-5 sm:pb-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mt-5 sm:mt-6">
                                 {/* Estado y Ubicación - Destacado */}
-                                <div className="col-span-full bg-gray-50/80 rounded-2xl p-5 border border-gray-100/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                    <div>
+                                <div className="col-span-full bg-gray-50/80 rounded-2xl p-4 sm:p-5 border border-gray-100/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+                                    <div className="w-full sm:w-auto">
                                         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-black mb-1">Establecimiento</p>
-                                        <p className="text-sm font-bold text-gray-900">{(selectedRecord.DESC_ALM || '-').replace(/^FARM\s*-\s*/i, '')} <span className="text-gray-400 font-medium">({formatAlmCode(selectedRecord.ALMCOD)})</span></p>
+                                        <p className="text-sm border-b border-gray-100/50 pb-2 sm:border-0 sm:pb-0 font-bold text-gray-900 leading-snug">{(selectedRecord.DESC_ALM || '-').replace(/^FARM\s*-\s*/i, '')} <span className="text-gray-400 font-medium whitespace-nowrap">({formatAlmCode(selectedRecord.ALMCOD)})</span></p>
                                     </div>
-                                    <div className="flex flex-col sm:items-end w-full sm:w-auto bg-white sm:bg-transparent p-3 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-gray-100">
-                                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-black mb-1">Saldo Actual</p>
-                                        <p className={`text-3xl font-black leading-none ${parseFloat(String(selectedRecord.Saldo || '0').replace(/,/g, '')) <= 0 ? 'text-red-500' : 'text-teal-600'}`}>
+                                    <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start w-full sm:w-auto bg-white sm:bg-transparent p-3 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-gray-100 mt-2 sm:mt-0">
+                                        <p className="text-[10px] sm:text-[10px] text-gray-500 uppercase tracking-widest font-black mb-0 sm:mb-1">Saldo Actual</p>
+                                        <p className={`text-2xl sm:text-3xl font-black leading-none ${parseFloat(String(selectedRecord.Saldo || '0').replace(/,/g, '')) <= 0 ? 'text-red-500' : 'text-teal-600'}`}>
                                             {(!isNaN(parseInt(String(selectedRecord.Saldo), 10))) ? parseInt(String(selectedRecord.Saldo), 10) : 0}
                                         </p>
                                     </div>

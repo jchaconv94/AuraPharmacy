@@ -9,6 +9,7 @@ import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle,
 // NEW IMPORTS
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Sidebar } from './components/Sidebar';
+import { MobileNav } from './components/MobileNav'; // Nuevo import
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from 'sonner';
 
@@ -96,18 +97,20 @@ const AuthenticatedApp: React.FC = () => {
 
     // --- RENDER MAIN LAYOUT ---
     return (
-        <div className="flex h-screen bg-gray-50/50 overflow-hidden">
-            <Sidebar 
-                currentView={currentView}
-                setCurrentView={setCurrentView}
-                isCollapsed={isSidebarCollapsed}
-                setIsCollapsed={setIsSidebarCollapsed}
-                user={user}
-                logout={logout}
-                hasPermission={hasPermission}
-            />
+        <div className="flex h-[100dvh] bg-gray-50/50 overflow-hidden">
+            <div className="hidden md:flex">
+                <Sidebar 
+                    currentView={currentView}
+                    setCurrentView={setCurrentView}
+                    isCollapsed={isSidebarCollapsed}
+                    setIsCollapsed={setIsSidebarCollapsed}
+                    user={user}
+                    logout={logout}
+                    hasPermission={hasPermission}
+                />
+            </div>
 
-            <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+            <div className="flex-1 flex flex-col h-[100dvh] overflow-hidden relative">
                 {/* Simplified Header for context */}
                 <header className="bg-white/80 border-b border-gray-200 sticky top-0 z-[1000] backdrop-blur-sm shadow-sm h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 transition-all duration-300 shrink-0">
                      <div className="flex items-center gap-3">
@@ -126,7 +129,7 @@ const AuthenticatedApp: React.FC = () => {
                 </header>
 
                 {/* CONTENT AREA SWITCHER */}
-                <main className="flex-1 overflow-y-auto w-full p-4 2xl:p-6 pb-20">
+                <main className="flex-1 overflow-y-auto w-full p-4 2xl:p-6 pb-24 md:pb-6">
                     <div className="mx-auto max-w-[1600px] h-full">
                         <ErrorBoundary>
                             <Suspense fallback={<SuspenseFallback />}>
@@ -139,6 +142,13 @@ const AuthenticatedApp: React.FC = () => {
                         </ErrorBoundary>
                     </div>
                 </main>
+
+                <MobileNav 
+                    currentView={currentView} 
+                    setCurrentView={setCurrentView} 
+                    hasPermission={hasPermission} 
+                />
+
                 <Suspense fallback={null}>
                     {showWelcome && user && <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />}
                 </Suspense>

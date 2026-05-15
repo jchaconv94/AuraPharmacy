@@ -45,6 +45,14 @@
         scrollbar-width: thin;
         scrollbar-color: rgba(0, 0, 0, 0.08) transparent;
       }
+      
+      .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .hide-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
     </style>
   <script type="importmap">
 {
