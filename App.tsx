@@ -1,28 +1,39 @@
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, Suspense, lazy } from 'react';
 import { InputSection } from './components/InputSection';
-import { Dashboard } from './components/Dashboard';
-import { AnalysisTable } from './components/AnalysisTable';
 import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppModule, QuickFilterOption } from './types';
 import { analyzeInventoryWithAura } from './services/auraService';
 import { generateFullReportPDF } from './services/pdfService';
-import { ReportOptionsModal } from './components/ReportOptionsModal';
-import { ReviewWarningModal } from './components/ReviewWarningModal';
-import { ManualEntryModal } from './components/ManualEntryModal';
-import { SuccessModal } from './components/SuccessModal';
 import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle, LogOut, Settings, BarChart2, LayoutGrid, ChevronDown, ArrowRightLeft } from 'lucide-react';
 
 // NEW IMPORTS
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { LoginScreen } from './components/LoginScreen';
-import { AdminPanel } from './components/AdminPanel';
-import { UserProfile } from './components/UserProfile';
-import { WelcomeModal } from './components/WelcomeModal'; // Importar Modal
-import { RedistributionModule } from './components/RedistributionModule';
-import { SheetSearchModule } from './components/SheetSearchModule';
-import { Sidebar } from './components/Sidebar'; // Nuevo Import
+import { Sidebar } from './components/Sidebar';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from 'sonner';
+
+// Lazy loaded components para optimizar el bundle inicial
+const Dashboard = lazy(() => import('./components/Dashboard').then(m => ({ default: m.Dashboard })));
+const AnalysisTable = lazy(() => import('./components/AnalysisTable').then(m => ({ default: m.AnalysisTable })));
+const ReportOptionsModal = lazy(() => import('./components/ReportOptionsModal').then(m => ({ default: m.ReportOptionsModal })));
+const ReviewWarningModal = lazy(() => import('./components/ReviewWarningModal').then(m => ({ default: m.ReviewWarningModal })));
+const ManualEntryModal = lazy(() => import('./components/ManualEntryModal').then(m => ({ default: m.ManualEntryModal })));
+const SuccessModal = lazy(() => import('./components/SuccessModal').then(m => ({ default: m.SuccessModal })));
+const LoginScreen = lazy(() => import('./components/LoginScreen').then(m => ({ default: m.LoginScreen })));
+const AdminPanel = lazy(() => import('./components/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const UserProfile = lazy(() => import('./components/UserProfile').then(m => ({ default: m.UserProfile })));
+const WelcomeModal = lazy(() => import('./components/WelcomeModal').then(m => ({ default: m.WelcomeModal })));
+const RedistributionModule = lazy(() => import('./components/RedistributionModule').then(m => ({ default: m.RedistributionModule })));
+const SheetSearchModule = lazy(() => import('./components/SheetSearchModule').then(m => ({ default: m.SheetSearchModule })));
+
+const SuspenseFallback = () => (
+    <div className="flex-1 flex h-full w-full items-center justify-center p-8 bg-gray-50/50">
+        <div className="flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-600"></div>
+            <p className="text-gray-500 font-medium text-sm animate-pulse">Cargando módulo...</p>
+        </div>
+    </div>
+);
 
 const STORAGE_KEY = 'aura_data_v1';
 const REVIEW_KEY = 'aura_reviews_v1';
@@ -72,7 +83,15 @@ const AuthenticatedApp: React.FC = () => {
 
     // If not authenticated, show Login
     if (!isAuthenticated) {
-        return <LoginScreen />;
+        return (
+            <Suspense fallback={
+                <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+                </div>
+            }>
+                <LoginScreen />
+            </Suspense>
+        );
     }
 
     // --- RENDER MAIN LAYOUT ---
@@ -108,17 +127,21 @@ const AuthenticatedApp: React.FC = () => {
 
                 {/* CONTENT AREA SWITCHER */}
                 <main className="flex-1 overflow-y-auto w-full p-4 2xl:p-6 pb-20">
-                    <div className="mx-auto max-w-[1600px]">
+                    <div className="mx-auto max-w-[1600px] h-full">
                         <ErrorBoundary>
-                            {currentView === 'DASHBOARD' && <AnalysisModule />}
-                            {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
-                            {currentView === 'SIG_SEARCH' && <SheetSearchModule />}
-                            {(currentView === 'ADMIN_USERS' || currentView === 'ADMIN_ROLES') && <AdminPanel />}
-                            {currentView === 'PROFILE' && <UserProfile />}
+                            <Suspense fallback={<SuspenseFallback />}>
+                                {currentView === 'DASHBOARD' && <AnalysisModule />}
+                                {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
+                                {currentView === 'SIG_SEARCH' && <SheetSearchModule />}
+                                {(currentView === 'ADMIN_USERS' || currentView === 'ADMIN_ROLES') && <AdminPanel />}
+                                {currentView === 'PROFILE' && <UserProfile />}
+                            </Suspense>
                         </ErrorBoundary>
                     </div>
                 </main>
-                {showWelcome && user && <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />}
+                <Suspense fallback={null}>
+                    {showWelcome && user && <WelcomeModal user={user} onClose={() => setShowWelcome(false)} />}
+                </Suspense>
             </div>
         </div>
     );
@@ -579,10 +602,12 @@ const AnalysisModule: React.FC = () => {
           </div>
         )}
 
-        <ReportOptionsModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} onConfirm={handleGenerateReport} totalItems={filteredMedications.length} vaccinesAlreadyExcluded={result?.analysisConfig?.vaccinesExcluded ?? false} />
-        <ReviewWarningModal isOpen={showReviewWarning} onClose={() => setShowReviewWarning(false)} progress={reviewProgress} />
-        <SuccessModal isOpen={showSuccessModal} onClose={() => setShowSuccessModal(false)} onDownload={handleDownloadClick} />
-        <ManualEntryModal isOpen={isManualEntryModalOpen} onClose={() => setIsManualEntryModalOpen(false)} items={additionalItems} onAdd={handleAddAdditionalItem} onRemove={handleRemoveAdditionalItem} />
+        <Suspense fallback={null}>
+            <ReportOptionsModal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} onConfirm={handleGenerateReport} totalItems={filteredMedications.length} vaccinesAlreadyExcluded={result?.analysisConfig?.vaccinesExcluded ?? false} />
+            <ReviewWarningModal isOpen={showReviewWarning} onClose={() => setShowReviewWarning(false)} progress={reviewProgress} />
+            <SuccessModal isOpen={showSuccessModal} onClose={() => setShowSuccessModal(false)} onDownload={handleDownloadClick} />
+            <ManualEntryModal isOpen={isManualEntryModalOpen} onClose={() => setIsManualEntryModalOpen(false)} items={additionalItems} onAdd={handleAddAdditionalItem} onRemove={handleRemoveAdditionalItem} />
+        </Suspense>
     </div>
   );
 };
