@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft, ChevronDown } from 'lucide-react';
+import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft, ChevronDown, LayoutGrid, List, Grid } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
@@ -213,7 +213,7 @@ export const SheetSearchModule: React.FC = () => {
     const [viewLevel, setViewLevel] = useState<'ungets' | 'sheets' | 'data'>('ungets');
     const [selectedUngetIndex, setSelectedUngetIndex] = useState<number | null>(null);
     const [selectedSourceId, setSelectedSourceId] = useState<string>(''); 
-    
+    const [sheetsViewMode, setSheetsViewMode] = useState<'grid' | 'list' | 'compact'>('grid');
     // Modal & Config
     const [isConfigOpen, setIsConfigOpen] = useState(false);
     
@@ -1693,122 +1693,324 @@ export const SheetSearchModule: React.FC = () => {
                             {/* LEVEL 2: SHEET CARDS */}
                             {viewLevel === 'sheets' && (
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                                    <div className="flex items-center justify-between mb-4 sm:mb-6">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
                                         <h3 className="text-sm sm:text-lg font-black text-gray-900 uppercase">Seleccione un establecimiento</h3>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                                        {filteredAndSortedSources.length === 0 ? (
-                                            <div className="col-span-full py-16 text-center bg-white border border-gray-100 rounded-2xl shadow-sm p-8">
-                                                <div className="w-16 h-16 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                    <Filter className="h-8 w-8 text-teal-500 animate-pulse" />
-                                                </div>
-                                                <h3 className="text-base font-bold text-gray-900">No hay establecimientos con estos filtros</h3>
-                                                <p className="text-gray-500 mt-1 max-w-sm mx-auto text-xs font-medium">Pruebe cambiando o limpiando los filtros avanzados para encontrar su establecimiento.</p>
-                                                <button
-                                                    onClick={() => {
-                                                        setFilter_CS(true);
-                                                        setFilter_PS(true);
-                                                        setFilter_ALM(true);
-                                                        setFilter_HOSP(true);
-                                                        setFilter_OTRO(true);
-                                                        setFilter_emerald(true);
-                                                        setFilter_amber(true);
-                                                        setFilter_red(true);
-                                                        setFilter_gray(true);
-                                                        setFilterSortOrder('name_asc');
-                                                        setFilterHasPendingExpirations(false);
-                                                        setFilterDateLimit('all');
-                                                    }}
-                                                    className="mt-4 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm"
-                                                >
-                                                    Limpiar todos los filtros
-                                                </button>
-                                            </div>
-                                        ) : filteredAndSortedSources.map((sheet) => {
-                                            const sheetData = data.filter(r => r.sourceId === sheet.id);
-                                            const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
-
-                                            return (
+                                        
+                                        {/* Selector de tipo de Visualización */}
+                                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl self-end sm:self-auto border border-slate-200/65 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] shrink-0">
                                             <button
-                                                key={sheet.id}
-                                                onClick={() => handleSelectSheet(sheet.id)}
-                                                className="group relative bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full"
+                                                type="button"
+                                                onClick={() => setSheetsViewMode('grid')}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10.5px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                                                    sheetsViewMode === 'grid'
+                                                        ? 'bg-white text-teal-950 font-black shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-200/30'
+                                                        : 'text-slate-500 hover:text-slate-850 hover:bg-white/30 border border-transparent'
+                                                }`}
+                                                title="Vista Cuadrícula"
                                             >
-                                                <div className="hidden sm:flex absolute top-4 right-4 flex-col gap-2 items-end z-10">
-                                                    {expiredCount > 0 && (
-                                                        <div className="flex items-center gap-1.5 bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm" title="Vencido en stock">
-                                                            <AlertTriangle className="h-3 w-3" />
-                                                            <span>{expiredCount} vencido{expiredCount !== 1 ? 's' : ''}</span>
-                                                        </div>
-                                                    )}
-                                                    {expiringThisMonthCount > 0 && (
-                                                        <div className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm" title="Vence este mes">
-                                                            <Clock className="h-3 w-3" />
-                                                            <span>{expiringThisMonthCount} por vencer</span>
-                                                        </div>
-                                                    )}
+                                                <LayoutGrid className="h-3.5 w-3.5 text-slate-500" />
+                                                <span className="hidden xs:inline">Cuadrícula</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSheetsViewMode('list')}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10.5px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                                                    sheetsViewMode === 'list'
+                                                        ? 'bg-white text-teal-950 font-black shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-200/30'
+                                                        : 'text-slate-500 hover:text-slate-850 hover:bg-white/30 border border-transparent'
+                                                }`}
+                                                title="Vista Lista"
+                                            >
+                                                <List className="h-3.5 w-3.5 text-slate-500" />
+                                                <span className="hidden xs:inline">Lista</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSheetsViewMode('compact')}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10.5px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                                                    sheetsViewMode === 'compact'
+                                                        ? 'bg-white text-teal-950 font-black shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-200/30'
+                                                        : 'text-slate-500 hover:text-slate-850 hover:bg-white/30 border border-transparent'
+                                                }`}
+                                                title="Vista Compacta"
+                                            >
+                                                <Grid className="h-3.5 w-3.5 text-slate-500" />
+                                                <span className="hidden xs:inline">Compacto</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {filteredAndSortedSources.length === 0 ? (
+                                        <div className="py-16 text-center bg-white border border-gray-100 rounded-2xl shadow-sm p-8">
+                                            <div className="w-16 h-16 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Filter className="h-8 w-8 text-teal-500 animate-pulse" />
+                                            </div>
+                                            <h3 className="text-base font-bold text-gray-900">No hay establecimientos con estos filtros</h3>
+                                            <p className="text-gray-500 mt-1 max-w-sm mx-auto text-xs font-medium">Pruebe cambiando o limpiando los filtros avanzados para encontrar su establecimiento.</p>
+                                            <button
+                                                onClick={() => {
+                                                    setFilter_CS(true);
+                                                    setFilter_PS(true);
+                                                    setFilter_ALM(true);
+                                                    setFilter_HOSP(true);
+                                                    setFilter_OTRO(true);
+                                                    setFilter_emerald(true);
+                                                    setFilter_amber(true);
+                                                    setFilter_red(true);
+                                                    setFilter_gray(true);
+                                                    setFilterSortOrder('name_asc');
+                                                    setFilterHasPendingExpirations(false);
+                                                    setFilterDateLimit('all');
+                                                }}
+                                                className="mt-4 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm"
+                                            >
+                                                Limpiar todos los filtros
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* 1) GRID LAYOUT */}
+                                            {sheetsViewMode === 'grid' && (
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 animate-in fade-in duration-200">
+                                                    {filteredAndSortedSources.map((sheet) => {
+                                                        const sheetData = data.filter(r => r.sourceId === sheet.id);
+                                                        const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
+
+                                                        return (
+                                                            <button
+                                                                key={sheet.id}
+                                                                onClick={() => handleSelectSheet(sheet.id)}
+                                                                className="group relative bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer"
+                                                            >
+                                                                <div className="hidden sm:flex absolute top-4 right-4 flex-col gap-2 items-end z-10">
+                                                                    {expiredCount > 0 && (
+                                                                        <div className="flex items-center gap-1.5 bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm" title="Vencido en stock">
+                                                                            <AlertTriangle className="h-3 w-3" />
+                                                                            <span>{expiredCount} vencido{expiredCount !== 1 ? 's' : ''}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {expiringThisMonthCount > 0 && (
+                                                                        <div className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm" title="Vence este mes">
+                                                                            <Clock className="h-3 w-3" />
+                                                                            <span>{expiringThisMonthCount} por vencer</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="w-12 h-12 shrink-0 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center sm:mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
+                                                                    <FileSpreadsheet className="h-6 w-6" />
+                                                                    <div 
+                                                                        className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`}
+                                                                        title={getUpdateStatus(sheet.lastUpdateTime).label}
+                                                                    />
+                                                                </div>
+                                                                <div className="flex-1 sm:mb-4 min-w-0">
+                                                                    {(() => {
+                                                                        const lastDash = sheet.name.lastIndexOf('-');
+                                                                        const description = lastDash === -1 ? sheet.name.replace(/^FARM\s*-\s*/i, '') : sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                                                        const code = getAlmCodeForSheet(sheet.id, data);
+                                                                        
+                                                                        return (
+                                                                            <>
+                                                                                {code && <p className="text-[10px] sm:text-xs font-bold text-teal-600 mb-0.5">{code}</p>}
+                                                                                <h3 className="text-sm sm:text-lg font-black text-gray-900 leading-tight mb-1 truncate sm:whitespace-normal" title={description}>{description}</h3>
+                                                                            </>
+                                                                        );
+                                                                    })()}
+                                                                    
+                                                                    {/* Mobile alerts right below the title */}
+                                                                    <div className="sm:hidden flex items-center gap-2 mt-1.5 flex-wrap">
+                                                                        {expiredCount > 0 && (
+                                                                            <div className="flex items-center gap-1 bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold" title="Vencido en stock">
+                                                                                <AlertTriangle className="h-2.5 w-2.5" />
+                                                                                <span>{expiredCount}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        {expiringThisMonthCount > 0 && (
+                                                                            <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold" title="Vence este mes">
+                                                                                <Clock className="h-2.5 w-2.5" />
+                                                                                <span>{expiringThisMonthCount}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        {sheet.lastUpdateTime && (
+                                                                            <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-gray-500">
+                                                                                <RefreshCw className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                                                                <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Desktop last updated */}
+                                                                    {sheet.lastUpdateTime && (
+                                                                        <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-gray-500 mt-2">
+                                                                            <RefreshCw className="h-3 w-3" />
+                                                                            <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="hidden sm:flex items-center justify-between w-full mt-auto pt-4 border-t border-gray-50">
+                                                                    <span className="text-[10px] font-black text-teal-600 uppercase">Consultar Stock</span>
+                                                                    <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
+                                                                </div>
+                                                                <div className="sm:hidden ml-auto">
+                                                                    <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all shrink-0" />
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
-                                                <div className="w-12 h-12 shrink-0 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center sm:mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
-                                                    <FileSpreadsheet className="h-6 w-6" />
-                                                    <div 
-                                                        className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`}
-                                                        title={getUpdateStatus(sheet.lastUpdateTime).label}
-                                                    />
-                                                </div>
-                                                <div className="flex-1 sm:mb-4 min-w-0">
-                                                    {(() => {
+                                            )}
+
+                                            {/* 2) LIST LAYOUT */}
+                                            {sheetsViewMode === 'list' && (
+                                                <div className="flex flex-col gap-3.5 animate-in fade-in duration-200">
+                                                    {filteredAndSortedSources.map((sheet) => {
+                                                        const sheetData = data.filter(r => r.sourceId === sheet.id);
+                                                        const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
                                                         const lastDash = sheet.name.lastIndexOf('-');
                                                         const description = lastDash === -1 ? sheet.name.replace(/^FARM\s*-\s*/i, '') : sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
                                                         const code = getAlmCodeForSheet(sheet.id, data);
-                                                        
-                                                        return (
-                                                            <>
-                                                                {code && <p className="text-[10px] sm:text-xs font-bold text-teal-600 mb-0.5">{code}</p>}
-                                                                <h3 className="text-sm sm:text-lg font-black text-gray-900 leading-tight mb-1 truncate sm:whitespace-normal" title={description}>{description}</h3>
-                                                            </>
-                                                        );
-                                                    })()}
-                                                    
-                                                    {/* Mobile alerts right below the title */}
-                                                    <div className="sm:hidden flex items-center gap-2 mt-1.5 flex-wrap">
-                                                        {expiredCount > 0 && (
-                                                            <div className="flex items-center gap-1 bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold" title="Vencido en stock">
-                                                                <AlertTriangle className="h-2.5 w-2.5" />
-                                                                <span>{expiredCount}</span>
-                                                            </div>
-                                                        )}
-                                                        {expiringThisMonthCount > 0 && (
-                                                            <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold" title="Vence este mes">
-                                                                <Clock className="h-2.5 w-2.5" />
-                                                                <span>{expiringThisMonthCount}</span>
-                                                            </div>
-                                                        )}
-                                                        {sheet.lastUpdateTime && (
-                                                            <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-gray-500">
-                                                                <RefreshCw className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                                                <span className="hidden sm:inline">Act:</span> {formatFullDate(sheet.lastUpdateTime).split(' ')[0]}
-                                                            </div>
-                                                        )}
-                                                    </div>
 
-                                                    {/* Desktop last updated */}
-                                                    {sheet.lastUpdateTime && (
-                                                        <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-gray-500 mt-2">
-                                                            <RefreshCw className="h-3 w-3" />
-                                                            <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
-                                                        </div>
-                                                    )}
+                                                        return (
+                                                            <button
+                                                                key={sheet.id}
+                                                                onClick={() => handleSelectSheet(sheet.id)}
+                                                                className="group relative bg-white border border-gray-200 p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left flex items-center justify-between gap-4 w-full cursor-pointer cursor-pointer"
+                                                            >
+                                                                {/* Left: Icon and Title */}
+                                                                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                                                                    <div className="w-10 h-10 shrink-0 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
+                                                                        <FileSpreadsheet className="h-5.5 w-5.5" />
+                                                                        <div 
+                                                                            className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`}
+                                                                            title={getUpdateStatus(sheet.lastUpdateTime).label}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            {code && <span className="text-[10px] font-extrabold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md shrink-0">{code}</span>}
+                                                                            {sheet.lastUpdateTime && (
+                                                                                <span className="text-[9px] sm:text-[9.5px] font-extrabold text-slate-400" title="Última actualización">
+                                                                                    Act: {formatFullDate(sheet.lastUpdateTime)}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <h3 className="text-sm font-black text-slate-900 leading-snug mt-1 truncate" title={description}>
+                                                                            {description}
+                                                                        </h3>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Right: Badges, Sync state and consult CTA */}
+                                                                <div className="flex items-center gap-3.5 shrink-0">
+                                                                    {/* Expirations badges for Desktop */}
+                                                                    <div className="hidden sm:flex items-center gap-2">
+                                                                        {expiredCount > 0 && (
+                                                                            <div className="flex items-center gap-1.5 bg-red-50 text-red-700 px-2.5 py-1 rounded-lg text-[10px] font-black border border-red-100 shadow-sm" title="Vencido en stock">
+                                                                                <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                                                                                <span>{expiredCount} vencido{expiredCount !== 1 ? 's' : ''}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        {expiringThisMonthCount > 0 && (
+                                                                            <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg text-[10px] font-black border border-amber-100 shadow-sm" title="Vence este mes">
+                                                                                <Clock className="h-3.5 w-3.5 text-amber-500" />
+                                                                                <span>{expiringThisMonthCount} por vencer</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Expirations badges for Mobile */}
+                                                                    <div className="sm:hidden flex items-center gap-1">
+                                                                        {expiredCount > 0 && (
+                                                                            <div className="w-6 h-6 bg-red-100 text-red-700 rounded-lg flex items-center justify-center font-black text-xs" title="Vencidos">
+                                                                                {expiredCount}
+                                                                            </div>
+                                                                        )}
+                                                                        {expiringThisMonthCount > 0 && (
+                                                                            <div className="w-6 h-6 bg-amber-100 text-amber-700 rounded-lg flex items-center justify-center font-black text-xs" title="Por vencer">
+                                                                                {expiringThisMonthCount}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Consult Button / Indicator */}
+                                                                    <div className="flex items-center gap-1.5 pl-2 border-l border-slate-100 h-8">
+                                                                        <span className="hidden lg:inline text-[10px] font-black text-teal-600 uppercase tracking-wider group-hover:text-teal-755">Ver Stock</span>
+                                                                        <ChevronRight className="h-4.5 w-4.5 text-slate-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
-                                                <div className="hidden sm:flex items-center justify-between w-full mt-auto pt-4 border-t border-gray-50">
-                                                    <span className="text-[10px] font-black text-teal-600 uppercase">Consultar Stock</span>
-                                                    <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
+                                            )}
+
+                                            {/* 3) COMPACT LAYOUT */}
+                                            {sheetsViewMode === 'compact' && (
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 animate-in fade-in duration-200">
+                                                    {filteredAndSortedSources.map((sheet) => {
+                                                        const sheetData = data.filter(r => r.sourceId === sheet.id);
+                                                        const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
+                                                        const lastDash = sheet.name.lastIndexOf('-');
+                                                        const description = lastDash === -1 ? sheet.name.replace(/^FARM\s*-\s*/i, '') : sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                                        const code = getAlmCodeForSheet(sheet.id, data);
+
+                                                        return (
+                                                            <button
+                                                                key={sheet.id}
+                                                                onClick={() => handleSelectSheet(sheet.id)}
+                                                                className="group relative bg-white border border-gray-200 p-3.5 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.015)] hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col justify-between h-full min-h-[140px] cursor-pointer"
+                                                            >
+                                                                <div>
+                                                                    {/* Compact Top Row: Tiny status indicator and SISMED code */}
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <div 
+                                                                                className={`w-2.5 h-2.5 rounded-full ${getUpdateStatus(sheet.lastUpdateTime).color}`} 
+                                                                                title={getUpdateStatus(sheet.lastUpdateTime).label}
+                                                                            />
+                                                                            {code && <span className="text-[9px] font-black text-teal-600 tracking-tight">{code}</span>}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Description: Tighter text */}
+                                                                    <h3 className="text-xs font-black text-slate-800 leading-snug line-clamp-2 mb-1 group-hover:text-teal-905 transition-colors" title={description}>
+                                                                        {description}
+                                                                    </h3>
+
+                                                                    {sheet.lastUpdateTime && (
+                                                                        <div className="text-[9px] font-extrabold text-slate-400 mt-1 flex items-center gap-1" title="Última actualización">
+                                                                            <RefreshCw className="h-2.5 w-2.5 text-slate-400/80" />
+                                                                            <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Expirations and Ver Stock mini row */}
+                                                                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-50 gap-1.5">
+                                                                    <div className="flex items-center gap-1">
+                                                                        {expiredCount > 0 && (
+                                                                            <div className="flex items-center gap-0.5 bg-red-50 text-red-700 px-1.5 py-0.5 rounded text-[8px] font-black border border-red-100" title="Vencido">
+                                                                                <span>{expiredCount}v</span>
+                                                                            </div>
+                                                                        )}
+                                                                        {expiringThisMonthCount > 0 && (
+                                                                            <div className="flex items-center gap-0.5 bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded text-[8px] font-black border border-amber-100" title="Por vencer">
+                                                                                <span>{expiringThisMonthCount}pv</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    
+                                                                    <div className="flex items-center gap-0.5 text-[8.5px] font-black text-teal-600 uppercase tracking-wider group-hover:text-teal-700 transition-all shrink-0">
+                                                                        <span>Ver stock</span>
+                                                                        <ChevronRight className="h-3 w-3 text-teal-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
-                                                <div className="sm:hidden ml-auto">
-                                                    <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all shrink-0" />
-                                                </div>
-                                            </button>
-                                        )})}
-                                    </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                             )}
 
