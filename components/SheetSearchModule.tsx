@@ -1509,7 +1509,7 @@ export const SheetSearchModule: React.FC = () => {
                                     <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-teal-700 text-[10px] sm:text-[11px] font-black border border-teal-100 shadow-sm whitespace-nowrap">
                                         ALM: {establishmentSummary.alm}
                                     </div>
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-red-700 text-[10px] sm:text-[11px] font-black border border-red-100 shadow-sm whitespace-nowrap">
+                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-violet-700 text-[10px] sm:text-[11px] font-black border border-violet-100 shadow-sm whitespace-nowrap">
                                         HOSP: {establishmentSummary.hosp}
                                     </div>
                                 </div>
@@ -1536,7 +1536,7 @@ export const SheetSearchModule: React.FC = () => {
                                         <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-teal-700 text-[10px] sm:text-[11px] font-black border border-teal-100 shadow-sm whitespace-nowrap">
                                             ALM: {globalUngetSummary.alm}
                                         </div>
-                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-red-700 text-[10px] sm:text-[11px] font-black border border-red-100 shadow-sm whitespace-nowrap">
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-violet-700 text-[10px] sm:text-[11px] font-black border border-violet-100 shadow-sm whitespace-nowrap">
                                             HOSP: {globalUngetSummary.hosp}
                                         </div>
                                     </div>
@@ -1656,7 +1656,7 @@ export const SheetSearchModule: React.FC = () => {
                                                                     </span>
                                                                 )}
                                                                 {allUngetSummaries[originalIdx].hosp > 0 && (
-                                                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100 uppercase" title="Hospitales">
+                                                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100 uppercase" title="Hospitales">
                                                                         HOSP: {allUngetSummaries[originalIdx].hosp}
                                                                     </span>
                                                                 )}
@@ -2475,7 +2475,7 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* HOSP */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_HOSP 
-                                            ? 'bg-red-50/40 border-red-200 text-red-900 shadow-[0_3px_10px_-2px_rgba(239,68,68,0.08)]' 
+                                            ? 'bg-violet-50/40 border-violet-200 text-violet-900 shadow-[0_3px_10px_-2px_rgba(139,92,246,0.08)]' 
                                             : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
                                     }`}>
                                         <input
@@ -2486,16 +2486,16 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             filter_HOSP 
-                                                ? 'bg-red-600 border-red-600 text-white scale-100' 
+                                                ? 'bg-violet-600 border-violet-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className={`text-xs font-extrabold transition-colors ${filter_HOSP ? 'text-red-950 font-black' : 'text-slate-700 font-bold'}`}>Hospital (HOSP)</span>
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_HOSP ? 'text-violet-950 font-black' : 'text-slate-700 font-bold'}`}>Hospital (HOSP)</span>
                                             <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
                                                 filter_HOSP 
-                                                    ? 'bg-red-600/10 text-red-700 border-red-200/55 shadow-xs' 
+                                                    ? 'bg-violet-600/10 text-violet-700 border-violet-200/55 shadow-xs' 
                                                     : 'bg-slate-50 text-slate-500 border-slate-100'
                                             }`}>
                                                 HOSP {establishmentSummary?.hosp ?? 0}
@@ -3012,7 +3012,7 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* HOSP */}
                                     <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                         exportHOSP 
-                                            ? 'bg-red-50/40 border-red-200 text-red-900 shadow-[0_3px_10px_-2px_rgba(239,68,68,0.08)]' 
+                                            ? 'bg-violet-50/40 border-violet-200 text-violet-900 shadow-[0_3px_10px_-2px_rgba(139,92,246,0.08)]' 
                                             : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
                                     }`}>
                                         <input
@@ -3021,10 +3021,10 @@ export const SheetSearchModule: React.FC = () => {
                                             onChange={(e) => setExportHOSP(e.target.checked)}
                                             className="sr-only"
                                         />
-                                        <span className={`text-xs font-extrabold transition-colors ${exportHOSP ? 'text-red-950 font-black' : 'text-slate-700 font-bold'}`}>Hospital (HOSP)</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportHOSP ? 'text-violet-950 font-black' : 'text-slate-700 font-bold'}`}>Hospital (HOSP)</span>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportHOSP 
-                                                ? 'bg-red-600 border-red-600 text-white scale-100' 
+                                                ? 'bg-violet-600 border-violet-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
