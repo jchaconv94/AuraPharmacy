@@ -1,9 +1,4 @@
-import{c as e}from"./index-CD1BgAit.js";/**
- * @license lucide-react v0.460.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */const n=e("ChevronDown",[["path",{d:"m6 9 6 6 6-6",key:"qrunsl"}]]);/**
+import{c as e}from"./index-sPg-8oTV.js";/**
  * @license lucide-react v0.460.0 - ISC
  *
  * This source code is licensed under the ISC license.
@@ -13,4 +8,4 @@ import{c as e}from"./index-CD1BgAit.js";/**
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
- */const a=e("TrendingUp",[["polyline",{points:"22 7 13.5 15.5 8.5 10.5 2 17",key:"126l90"}],["polyline",{points:"16 7 22 7 22 13",key:"kwv8wd"}]]);export{n as C,t as M,a as T};
+ */const a=e("TrendingUp",[["polyline",{points:"22 7 13.5 15.5 8.5 10.5 2 17",key:"126l90"}],["polyline",{points:"16 7 22 7 22 13",key:"kwv8wd"}]]);export{t as M,a as T};
