@@ -80,6 +80,15 @@ const getUpdateStatus = (timestamp?: number) => {
     return { color: 'bg-red-500', label: 'Más de 1 día sin actualizar' };
 };
 
+const getSheetType = (name: string): 'CS' | 'PS' | 'ALM' | 'HOSP' | 'OTRO' => {
+    const u = name.toUpperCase();
+    if (u.includes('C.S.') || u.includes('CENTRO DE SALUD')) return 'CS';
+    if (u.includes('P.S.') || u.includes('PUESTO DE SALUD')) return 'PS';
+    if (u.includes('ALM') || u.includes('ALMACEN')) return 'ALM';
+    if (u.includes('HOSP') || u.includes('HOSPITAL')) return 'HOSP';
+    return 'OTRO';
+};
+
 const formatDate = (dateValue: any): string => {
     if (!dateValue) return '';
     const str = String(dateValue).trim();
@@ -178,6 +187,23 @@ export const SheetSearchModule: React.FC = () => {
     const [ungetSearchTerm, setUngetSearchTerm] = useState('');
     const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
     
+    // Filtros Avanzados (Sidebar Derecha)
+    const [isAdvancedFiltersSidebarOpen, setIsAdvancedFiltersSidebarOpen] = useState(false);
+    const [filter_CS, setFilter_CS] = useState(true);
+    const [filter_PS, setFilter_PS] = useState(true);
+    const [filter_ALM, setFilter_ALM] = useState(true);
+    const [filter_HOSP, setFilter_HOSP] = useState(true);
+    const [filter_OTRO, setFilter_OTRO] = useState(true);
+
+    const [filter_emerald, setFilter_emerald] = useState(true);
+    const [filter_amber, setFilter_amber] = useState(true);
+    const [filter_red, setFilter_red] = useState(true);
+    const [filter_gray, setFilter_gray] = useState(true);
+
+    const [filterSortOrder, setFilterSortOrder] = useState<'name_asc' | 'name_desc' | 'date_newest' | 'date_oldest' | 'expired_highest'>('name_asc');
+    const [filterHasPendingExpirations, setFilterHasPendingExpirations] = useState<boolean>(false);
+    const [filterDateLimit, setFilterDateLimit] = useState<'all' | '1h' | '12h' | '24h' | '3d' | '7d'>('all');
+    
     // Navigation hierarchy
     const [viewLevel, setViewLevel] = useState<'ungets' | 'sheets' | 'data'>('ungets');
     const [selectedUngetIndex, setSelectedUngetIndex] = useState<number | null>(null);
@@ -185,6 +211,23 @@ export const SheetSearchModule: React.FC = () => {
     
     // Modal & Config
     const [isConfigOpen, setIsConfigOpen] = useState(false);
+    
+    // States for Export Options Modal
+    const [isExportOptionsModalOpen, setIsExportOptionsModalOpen] = useState(false);
+    const [exportCS, setExportCS] = useState(true);
+    const [exportPS, setExportPS] = useState(true);
+    const [exportALM, setExportALM] = useState(true);
+    const [exportHOSP, setExportHOSP] = useState(true);
+    const [exportOTRO, setExportOTRO] = useState(true);
+
+    const [exportEmerald, setExportEmerald] = useState(true);
+    const [exportAmber, setExportAmber] = useState(true);
+    const [exportRed, setExportRed] = useState(true);
+    const [exportGray, setExportGray] = useState(true);
+
+    const [exportDateLimit, setExportDateLimit] = useState<'all' | '1h' | '12h' | '24h' | '3d' | '7d'>('all');
+    const [exportHasPendingExpirations, setExportHasPendingExpirations] = useState<boolean>(false);
+    const [exportScope, setExportScope] = useState<'single' | 'all'>('single');
     const [editingIndex, setEditingIndex] = useState<number | null>(null); // Nuevo: índice que se está editando
     const [tempUrls, setTempUrls] = useState<UngetConfig[]>([]);
     const [newUrlInput, setNewUrlInput] = useState('');
@@ -590,44 +633,138 @@ export const SheetSearchModule: React.FC = () => {
 
     const exportAllEstablishmentsToExcel = () => {
         if (selectedUngetIndex === null) return;
-        
-        const ungetData = data.filter(r => {
-            const source = sources.find(s => s.id === r.sourceId);
-            return source && source.urlIndex === selectedUngetIndex;
-        });
+        setExportScope('single');
+        // Pre-populate modal filters with the currently active advanced sidebar filters
+        setExportCS(filter_CS);
+        setExportPS(filter_PS);
+        setExportALM(filter_ALM);
+        setExportHOSP(filter_HOSP);
+        setExportOTRO(filter_OTRO);
 
-        const dataToExport = ungetData.map(r => {
-            const sheetInfo = sources.find(s => s.id === r.sourceId);
-            return {
-                'ALMCOD': r.ALMCOD || '',
-                'DESC_ALM': r.DESC_ALM || (sheetInfo ? sheetInfo.name : ''),
-                'ID_Producto': r.ID_Producto || '',
-                'CODIGO_SIG': r.CODIGO_SIG || r.SIGA || '',
-                'Nombre': r.Nombre || r.DESC_ITEM || '',
-                'Lote': r.Lote || r.LOTE || '',
-                'Fec_Vencim': r.Fec_Vencim || r.VENCIMIENTO || '',
-                'Reg_Sanitario': r.Reg_Sanitario || r.REG_SANITARIO || '',
-                'TIPSUM': r.TIPSUM || '',
-                'DESC_TIPSUM': r.DESC_TIPSUM || r.TIPO_SUMINISTRO || '',
-                'FFINAN': r.FFINAN || '',
-                'DESC_FFINAN': r.DESC_FFINAN || r.FF || '',
-                'Saldo': r.Saldo !== undefined ? r.Saldo : (r.SALDO !== undefined ? r.SALDO : ''),
-                'Precio_Det': r.Precio_Det || r.PRECIO_COMPRA || '',
-                'Precio_Cab': r.Precio_Cab || r.PRECIO_REF || ''
-            };
-        });
+        setExportEmerald(filter_emerald);
+        setExportAmber(filter_amber);
+        setExportRed(filter_red);
+        setExportGray(filter_gray);
 
-        const ungetName = scriptUrls[selectedUngetIndex]?.name || 'UNGET';
-        const ws = XLSX.utils.json_to_sheet(dataToExport);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Stock Consolidado");
-        XLSX.writeFile(wb, `Stock_Consolidado_${ungetName}_${new Date().toISOString().split('T')[0]}.xlsx`.replace(/\s+/g, '_'));
+        setExportHasPendingExpirations(filterHasPendingExpirations);
+        setExportDateLimit(filterDateLimit);
+
+        setIsExportOptionsModalOpen(true);
     };
 
-    const exportAllUngetsToExcel = () => {
-        if (data.length === 0) return;
+    const filteredExportSourcesCount = useMemo(() => {
+        if (exportScope === 'single' && selectedUngetIndex === null) return 0;
+        return sources.filter(s => {
+            if (exportScope === 'single' && s.urlIndex !== selectedUngetIndex) return false;
+            
+            // Type filter
+            const typeValue = getSheetType(s.name);
+            if (typeValue === 'CS' && !exportCS) return false;
+            if (typeValue === 'PS' && !exportPS) return false;
+            if (typeValue === 'ALM' && !exportALM) return false;
+            if (typeValue === 'HOSP' && !exportHOSP) return false;
+            if (typeValue === 'OTRO' && !exportOTRO) return false;
+
+            // Color status Filter
+            const colorValue = getUpdateStatus(s.lastUpdateTime).color;
+            if (colorValue === 'bg-emerald-500' && !exportEmerald) return false;
+            if (colorValue === 'bg-amber-500' && !exportAmber) return false;
+            if (colorValue === 'bg-red-500' && !exportRed) return false;
+            if (colorValue === 'bg-gray-400' && !exportGray) return false;
+
+            // Date limit filter
+            if (exportDateLimit !== 'all') {
+                if (!s.lastUpdateTime) return false;
+                const now = new Date().getTime();
+                const diffMs = now - s.lastUpdateTime;
+                const diffHours = diffMs / (1000 * 60 * 60);
+
+                if (exportDateLimit === '1h' && diffHours > 1) return false;
+                if (exportDateLimit === '12h' && diffHours > 12) return false;
+                if (exportDateLimit === '24h' && diffHours > 24) return false;
+                if (exportDateLimit === '3d' && diffHours > 72) return false;
+                if (exportDateLimit === '7d' && diffHours > 168) return false;
+            }
+
+            return true;
+        }).length;
+    }, [
+        sources,
+        selectedUngetIndex,
+        exportScope,
+        exportCS,
+        exportPS,
+        exportALM,
+        exportHOSP,
+        exportOTRO,
+        exportEmerald,
+        exportAmber,
+        exportRed,
+        exportGray,
+        exportDateLimit
+    ]);
+
+    const executeExportAllEstablishmentsToExcel = () => {
+        if (exportScope === 'single' && selectedUngetIndex === null) return;
         
-        const dataToExport = data.map(r => {
+        // Filter sources based on conditions configured in the export modal
+        const filteredSources = sources.filter(s => {
+            if (exportScope === 'single' && s.urlIndex !== selectedUngetIndex) return false;
+            
+            // Type filter
+            const typeValue = getSheetType(s.name);
+            if (typeValue === 'CS' && !exportCS) return false;
+            if (typeValue === 'PS' && !exportPS) return false;
+            if (typeValue === 'ALM' && !exportALM) return false;
+            if (typeValue === 'HOSP' && !exportHOSP) return false;
+            if (typeValue === 'OTRO' && !exportOTRO) return false;
+
+            // Color status Filter
+            const colorValue = getUpdateStatus(s.lastUpdateTime).color;
+            if (colorValue === 'bg-emerald-500' && !exportEmerald) return false;
+            if (colorValue === 'bg-amber-500' && !exportAmber) return false;
+            if (colorValue === 'bg-red-500' && !exportRed) return false;
+            if (colorValue === 'bg-gray-400' && !exportGray) return false;
+
+            // Date limit filter
+            if (exportDateLimit !== 'all') {
+                if (!s.lastUpdateTime) return false;
+                
+                const now = new Date().getTime();
+                const diffMs = now - s.lastUpdateTime;
+                const diffHours = diffMs / (1000 * 60 * 60);
+
+                if (exportDateLimit === '1h' && diffHours > 1) return false;
+                if (exportDateLimit === '12h' && diffHours > 12) return false;
+                if (exportDateLimit === '24h' && diffHours > 24) return false;
+                if (exportDateLimit === '3d' && diffHours > 72) return false;
+                if (exportDateLimit === '7d' && diffHours > 168) return false;
+            }
+
+            return true;
+        });
+
+        const filteredSourceIds = new Set(filteredSources.map(s => s.id));
+
+        // Filter data items belonging to the filtered sources
+        const ungetData = data.filter(r => {
+            if (!r.sourceId || !filteredSourceIds.has(r.sourceId)) return false;
+
+            // Expiration filter
+            if (exportHasPendingExpirations) {
+                const { expiredCount, expiringThisMonthCount } = getExpirationStats([r]);
+                if (expiredCount === 0 && expiringThisMonthCount === 0) return false;
+            }
+            
+            return true;
+        });
+
+        if (ungetData.length === 0) {
+            alert('No hay registros de stock que coincidan con los filtros seleccionados para exportar.');
+            return;
+        }
+
+        const dataToExport = ungetData.map(r => {
             const sheetInfo = sources.find(s => s.id === r.sourceId);
             const ungetInfo = sheetInfo ? scriptUrls[sheetInfo.urlIndex] : null;
             return {
@@ -650,10 +787,39 @@ export const SheetSearchModule: React.FC = () => {
             };
         });
 
+        const ungetName = (exportScope === 'single' && selectedUngetIndex !== null) ? (scriptUrls[selectedUngetIndex]?.name || 'UNGET') : 'Regional';
         const ws = XLSX.utils.json_to_sheet(dataToExport);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Consolidado Nacional");
-        XLSX.writeFile(wb, `Stock_Consolidado_Regional_${new Date().toISOString().split('T')[0]}.xlsx`.replace(/\s+/g, '_'));
+        XLSX.utils.book_append_sheet(wb, ws, "Stock Consolidado");
+        
+        if (exportScope === 'single') {
+            XLSX.writeFile(wb, `Stock_Consolidado_${ungetName}_${new Date().toISOString().split('T')[0]}.xlsx`.replace(/\s+/g, '_'));
+        } else {
+            XLSX.writeFile(wb, `Stock_Consolidado_Regional_${new Date().toISOString().split('T')[0]}.xlsx`.replace(/\s+/g, '_'));
+        }
+        
+        setIsExportOptionsModalOpen(false);
+    };
+
+    const exportAllUngetsToExcel = () => {
+        if (data.length === 0) return;
+        setExportScope('all');
+        // Pre-populate modal filters with the currently active advanced sidebar filters
+        setExportCS(filter_CS);
+        setExportPS(filter_PS);
+        setExportALM(filter_ALM);
+        setExportHOSP(filter_HOSP);
+        setExportOTRO(filter_OTRO);
+
+        setExportEmerald(filter_emerald);
+        setExportAmber(filter_amber);
+        setExportRed(filter_red);
+        setExportGray(filter_gray);
+
+        setExportHasPendingExpirations(filterHasPendingExpirations);
+        setExportDateLimit(filterDateLimit);
+
+        setIsExportOptionsModalOpen(true);
     };
 
     const copyScript = () => {
@@ -765,6 +931,117 @@ export const SheetSearchModule: React.FC = () => {
         });
         return counts;
     }, [sources]);
+
+    const filteredAndSortedSources = useMemo(() => {
+        if (selectedUngetIndex === null) return [];
+
+        const matching = sources.filter(s => {
+            if (s.urlIndex !== selectedUngetIndex) return false;
+            
+            // Search term filter
+            if (sheetSearchTerm) {
+                const term = sheetSearchTerm.toLowerCase();
+                const lastDash = s.name.lastIndexOf('-');
+                const description = lastDash === -1 ? s.name.replace(/^FARM\s*-\s*/i, '') : s.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                const code = getAlmCodeForSheet(s.id, data);
+                if (!description.toLowerCase().includes(term) && !code.toLowerCase().includes(term)) {
+                    return false;
+                }
+            }
+
+            // Type filter
+            const typeValue = getSheetType(s.name);
+            if (typeValue === 'CS' && !filter_CS) return false;
+            if (typeValue === 'PS' && !filter_PS) return false;
+            if (typeValue === 'ALM' && !filter_ALM) return false;
+            if (typeValue === 'HOSP' && !filter_HOSP) return false;
+            if (typeValue === 'OTRO' && !filter_OTRO) return false;
+
+            // Color status Filter
+            const colorValue = getUpdateStatus(s.lastUpdateTime).color;
+            if (colorValue === 'bg-emerald-500' && !filter_emerald) return false;
+            if (colorValue === 'bg-amber-500' && !filter_amber) return false;
+            if (colorValue === 'bg-red-500' && !filter_red) return false;
+            if (colorValue === 'bg-gray-400' && !filter_gray) return false;
+
+            // Date limit filter
+            if (filterDateLimit !== 'all') {
+                if (!s.lastUpdateTime) return false;
+                const now = new Date().getTime();
+                const diffMs = now - s.lastUpdateTime;
+                const diffHours = diffMs / (1000 * 60 * 60);
+
+                if (filterDateLimit === '1h' && diffHours > 1) return false;
+                if (filterDateLimit === '12h' && diffHours > 12) return false;
+                if (filterDateLimit === '24h' && diffHours > 24) return false;
+                if (filterDateLimit === '3d' && diffHours > 72) return false;
+                if (filterDateLimit === '7d' && diffHours > 168) return false;
+            }
+
+            // Expiration filter
+            if (filterHasPendingExpirations) {
+                const sheetData = data.filter(r => r.sourceId === s.id);
+                const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
+                if (expiredCount === 0 && expiringThisMonthCount === 0) return false;
+            }
+
+            return true;
+        });
+
+        // Sorting
+        return [...matching].sort((s1, s2) => {
+            if (filterSortOrder === 'name_asc') {
+                return s1.name.localeCompare(s2.name);
+            }
+            if (filterSortOrder === 'name_desc') {
+                return s2.name.localeCompare(s1.name);
+            }
+            if (filterSortOrder === 'date_newest') {
+                const t1 = s1.lastUpdateTime || 0;
+                const t2 = s2.lastUpdateTime || 0;
+                return t2 - t1;
+            }
+            if (filterSortOrder === 'date_oldest') {
+                const t1 = s1.lastUpdateTime || 0;
+                const t2 = s2.lastUpdateTime || 100000000000000; // Put very old/unset at the back/bottom
+                const t1_val = t1 === 0 ? 100000000000001 : t1;
+                const t2_val = t2 === 0 ? 100000000000001 : t2;
+                return t1_val - t2_val;
+            }
+            if (filterSortOrder === 'expired_highest') {
+                const sheetData1 = data.filter(r => r.sourceId === s1.id);
+                const stats1 = getExpirationStats(sheetData1);
+                const expInd1 = stats1.expiredCount * 10 + stats1.expiringThisMonthCount;
+
+                const sheetData2 = data.filter(r => r.sourceId === s2.id);
+                const stats2 = getExpirationStats(sheetData2);
+                const expInd2 = stats2.expiredCount * 10 + stats2.expiringThisMonthCount;
+
+                if (expInd2 !== expInd1) {
+                    return expInd2 - expInd1;
+                }
+                return s1.name.localeCompare(s2.name);
+            }
+            return 0;
+        });
+    }, [
+        sources,
+        selectedUngetIndex,
+        sheetSearchTerm,
+        data,
+        filter_CS,
+        filter_PS,
+        filter_ALM,
+        filter_HOSP,
+        filter_OTRO,
+        filter_emerald,
+        filter_amber,
+        filter_red,
+        filter_gray,
+        filterSortOrder,
+        filterHasPendingExpirations,
+        filterDateLimit
+    ]);
 
     const establishmentSummary = useMemo(() => {
         if (viewLevel !== 'sheets' || selectedUngetIndex === null) return null;
@@ -1177,14 +1454,29 @@ export const SheetSearchModule: React.FC = () => {
                             )}
                             
                             {viewLevel === 'sheets' && (
-                                <button
-                                    onClick={exportAllEstablishmentsToExcel}
-                                    className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold shrink-0 transition-colors"
-                                    title="Descargar Excel de Todos los Establecimientos"
-                                >
-                                    <Download className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Exportar Todos</span>
-                                </button>
+                                <>
+                                    <button
+                                        onClick={exportAllEstablishmentsToExcel}
+                                        className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold shrink-0 transition-colors"
+                                        title="Descargar Excel de Todos los Establecimientos"
+                                    >
+                                        <Download className="h-4 w-4" />
+                                        <span className="hidden sm:inline">Exportar Todos</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setIsAdvancedFiltersSidebarOpen(true)}
+                                        className="flex items-center gap-1.5 bg-teal-50 hover:bg-teal-100/80 text-teal-700 px-3 py-2 rounded-xl border border-teal-200 shadow-sm text-xs font-bold shrink-0 transition-colors relative"
+                                        title="Filtros Avanzados"
+                                    >
+                                        <Filter className="h-4 w-4" />
+                                        <span>Filtros Avanzados</span>
+                                        {/* Indicador de filtros activos */}
+                                        {(!filter_CS || !filter_PS || !filter_ALM || !filter_HOSP || !filter_OTRO || !filter_emerald || !filter_amber || !filter_red || !filter_gray || filterSortOrder !== 'name_asc' || filterHasPendingExpirations) && (
+                                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-teal-500 rounded-full border border-white animate-pulse" />
+                                        )}
+                                    </button>
+                                </>
                             )}
 
                             {viewLevel === 'sheets' && establishmentSummary && (
@@ -1386,17 +1678,34 @@ export const SheetSearchModule: React.FC = () => {
                                         <h3 className="text-sm sm:text-lg font-black text-gray-900 uppercase">Seleccione un establecimiento</h3>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                                        {sources.filter(s => {
-                                            if (s.urlIndex !== selectedUngetIndex) return false;
-                                            if (!sheetSearchTerm) return true;
-                                            
-                                            const term = sheetSearchTerm.toLowerCase();
-                                            const lastDash = s.name.lastIndexOf('-');
-                                            const description = lastDash === -1 ? s.name.replace(/^FARM\s*-\s*/i, '') : s.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
-                                            const code = getAlmCodeForSheet(s.id, data);
-                                            
-                                            return description.toLowerCase().includes(term) || code.toLowerCase().includes(term);
-                                        }).map((sheet) => {
+                                        {filteredAndSortedSources.length === 0 ? (
+                                            <div className="col-span-full py-16 text-center bg-white border border-gray-100 rounded-2xl shadow-sm p-8">
+                                                <div className="w-16 h-16 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                    <Filter className="h-8 w-8 text-teal-500 animate-pulse" />
+                                                </div>
+                                                <h3 className="text-base font-bold text-gray-900">No hay establecimientos con estos filtros</h3>
+                                                <p className="text-gray-500 mt-1 max-w-sm mx-auto text-xs font-medium">Pruebe cambiando o limpiando los filtros avanzados para encontrar su establecimiento.</p>
+                                                <button
+                                                    onClick={() => {
+                                                        setFilter_CS(true);
+                                                        setFilter_PS(true);
+                                                        setFilter_ALM(true);
+                                                        setFilter_HOSP(true);
+                                                        setFilter_OTRO(true);
+                                                        setFilter_emerald(true);
+                                                        setFilter_amber(true);
+                                                        setFilter_red(true);
+                                                        setFilter_gray(true);
+                                                        setFilterSortOrder('name_asc');
+                                                        setFilterHasPendingExpirations(false);
+                                                        setFilterDateLimit('all');
+                                                    }}
+                                                    className="mt-4 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm"
+                                                >
+                                                    Limpiar todos los filtros
+                                                </button>
+                                            </div>
+                                        ) : filteredAndSortedSources.map((sheet) => {
                                             const sheetData = data.filter(r => r.sourceId === sheet.id);
                                             const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
 
@@ -1479,8 +1788,7 @@ export const SheetSearchModule: React.FC = () => {
                                                     <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all shrink-0" />
                                                 </div>
                                             </button>
-                                        );
-                                        })}
+                                        )})}
                                     </div>
                                 </div>
                             )}
@@ -1777,6 +2085,541 @@ export const SheetSearchModule: React.FC = () => {
                                     No hay registros para mostrar.
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SIDEBAR DE FILTROS AVANZADOS (DERECHA) */}
+            {isAdvancedFiltersSidebarOpen && (
+                <div className="fixed inset-0 z-[10000] flex justify-end bg-black/45 backdrop-blur-xs animate-in fade-in duration-200">
+                    {/* Backdrop Click Dismiss */}
+                    <div className="absolute inset-0" onClick={() => setIsAdvancedFiltersSidebarOpen(false)} />
+                    
+                    {/* Sidebar Container */}
+                    <div className="relative w-full max-w-sm sm:max-w-md bg-white h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col border-l border-gray-100">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10 shrink-0">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 bg-teal-50 rounded-lg flex items-center justify-center text-teal-600">
+                                    <Filter className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-gray-950 text-base uppercase">Filtros Avanzados</h3>
+                                    <p className="text-[10px] text-gray-500 font-bold tracking-wider">Establecimientos de Salud</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsAdvancedFiltersSidebarOpen(false)}
+                                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-900"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                            {/* Filter Section: Type */}
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tipo de Establecimiento</h4>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={filter_CS}
+                                            onChange={(e) => setFilter_CS(e.target.checked)}
+                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex justify-between items-center w-full">
+                                            <span className="text-xs font-bold text-gray-700">Centro de Salud (C.S.)</span>
+                                            <span className="text-[10px] bg-blue-50 text-blue-700 font-extrabold px-1.5 py-0.5 rounded-md border border-blue-100">
+                                                C.S. {establishmentSummary?.cs ?? 0}
+                                            </span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={filter_PS}
+                                            onChange={(e) => setFilter_PS(e.target.checked)}
+                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex justify-between items-center w-full">
+                                            <span className="text-xs font-bold text-gray-700">Puesto de Salud (P.S.)</span>
+                                            <span className="text-[10px] bg-amber-50 text-amber-700 font-extrabold px-1.5 py-0.5 rounded-md border border-amber-100">
+                                                P.S. {establishmentSummary?.ps ?? 0}
+                                            </span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={filter_ALM}
+                                            onChange={(e) => setFilter_ALM(e.target.checked)}
+                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex justify-between items-center w-full">
+                                            <span className="text-xs font-bold text-gray-700">Almacén (ALM)</span>
+                                            <span className="text-[10px] bg-teal-50 text-teal-700 font-extrabold px-1.5 py-0.5 rounded-md border border-teal-100">
+                                                ALM {establishmentSummary?.alm ?? 0}
+                                            </span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={filter_HOSP}
+                                            onChange={(e) => setFilter_HOSP(e.target.checked)}
+                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex justify-between items-center w-full">
+                                            <span className="text-xs font-bold text-gray-700">Hospital (HOSP)</span>
+                                            <span className="text-[10px] bg-red-50 text-red-700 font-extrabold px-1.5 py-0.5 rounded-md border border-red-100">
+                                                HOSP {establishmentSummary?.hosp ?? 0}
+                                            </span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={filter_OTRO}
+                                            onChange={(e) => setFilter_OTRO(e.target.checked)}
+                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex justify-between items-center w-full">
+                                            <span className="text-xs font-bold text-gray-700">Otros</span>
+                                            <span className="text-[10px] bg-gray-100 text-gray-600 font-extrabold px-1.5 py-0.5 rounded-md border border-gray-200">
+                                                Otro {
+                                                    sources && selectedUngetIndex !== null ? (
+                                                        sources.filter(s => s.urlIndex === selectedUngetIndex).length 
+                                                        - ((establishmentSummary?.cs ?? 0) + (establishmentSummary?.ps ?? 0) + (establishmentSummary?.alm ?? 0) + (establishmentSummary?.hosp ?? 0))
+                                                    ) : 0
+                                                }
+                                            </span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Filter Section: Last Update Status (Color) */}
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Estado de Actualización (Color)</h4>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={filter_emerald}
+                                            onChange={(e) => setFilter_emerald(e.target.checked)}
+                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 border border-white shrink-0 shadow-sm animate-pulse" />
+                                            <span className="text-xs font-bold text-gray-700 font-medium">Al día (&lt;1 hora sin actualizar)</span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={filter_amber}
+                                            onChange={(e) => setFilter_amber(e.target.checked)}
+                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3.5 h-3.5 rounded-full bg-amber-500 border border-white shrink-0 shadow-sm" />
+                                            <span className="text-xs font-bold text-gray-700 font-medium col-span-3">Pendiente (&gt;1 hora sin actualizar)</span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={filter_red}
+                                            onChange={(e) => setFilter_red(e.target.checked)}
+                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3.5 h-3.5 rounded-full bg-red-500 border border-white shrink-0 shadow-sm" />
+                                            <span className="text-xs font-bold text-gray-700 font-medium">Crítico (&gt;24 horas)</span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={filter_gray}
+                                            onChange={(e) => setFilter_gray(e.target.checked)}
+                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3.5 h-3.5 rounded-full bg-gray-400 border border-white shrink-0 shadow-sm" />
+                                            <span className="text-xs font-bold text-gray-700 font-medium">Sin Datos / Desconectado</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Filter Section: Update Date Limit */}
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Antigüedad de Sincronización</h4>
+                                <select
+                                    value={filterDateLimit}
+                                    onChange={(e) => setFilterDateLimit(e.target.value as any)}
+                                    className="block w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
+                                >
+                                    <option value="all">Sincronizados en cualquier fecha (Todos)</option>
+                                    <option value="1h">Sincronizado hace menos de 1 hora</option>
+                                    <option value="12h">Sincronizado en las últimas 12 horas</option>
+                                    <option value="24h">Sincronizado en las últimas 24 horas (Hoy)</option>
+                                    <option value="3d">Sincronizado en los últimos 3 días</option>
+                                    <option value="7d">Sincronizado en los últimos 7 días</option>
+                                </select>
+                            </div>
+
+                            {/* Filter Section: Expirations */}
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Alertas y Vencimientos</h4>
+                                <label className="flex items-center gap-3 p-3 bg-red-50/50 hover:bg-red-50/75 border border-red-100 rounded-xl cursor-pointer transition-all select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={filterHasPendingExpirations}
+                                        onChange={(e) => setFilterHasPendingExpirations(e.target.checked)}
+                                        className="h-4 w-4 rounded text-red-600 border-red-300 focus:ring-red-500 cursor-pointer"
+                                    />
+                                    <div className="flex items-center gap-2 text-red-800">
+                                        <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                                        <span className="text-xs font-bold">Mostrar sólo establecimientos con productos por vencer / vencidos</span>
+                                    </div>
+                                </label>
+                            </div>
+
+                            {/* Filter Section: Sorting */}
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Ordenamiento</h4>
+                                <div className="space-y-1">
+                                    <select
+                                        value={filterSortOrder}
+                                        onChange={(e) => setFilterSortOrder(e.target.value as any)}
+                                        className="block w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
+                                    >
+                                        <option value="name_asc">Nombre del Establecimiento (A-Z)</option>
+                                        <option value="name_desc">Nombre del Establecimiento (Z-A)</option>
+                                        <option value="date_newest">Sincronización más reciente primero</option>
+                                        <option value="date_oldest">Sincronización más antigua primero</option>
+                                        <option value="expired_highest">Mayor número de productos vencidos</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer Buttons */}
+                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3 sticky bottom-0 z-10 shrink-0">
+                            <button
+                                onClick={() => {
+                                    setFilter_CS(true);
+                                    setFilter_PS(true);
+                                    setFilter_ALM(true);
+                                    setFilter_HOSP(true);
+                                    setFilter_OTRO(true);
+                                    setFilter_emerald(true);
+                                    setFilter_amber(true);
+                                    setFilter_red(true);
+                                    setFilter_gray(true);
+                                    setFilterSortOrder('name_asc');
+                                    setFilterHasPendingExpirations(false);
+                                    setFilterDateLimit('all');
+                                }}
+                                className="px-4 py-2 bg-white text-gray-600 hover:text-gray-900 font-bold text-xs rounded-xl border border-gray-200 shadow-xs transition-all shrink-0 hover:bg-gray-50"
+                            >
+                                Reestablecer
+                            </button>
+                            <button
+                                onClick={() => setIsAdvancedFiltersSidebarOpen(false)}
+                                className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors text-center"
+                            >
+                                Aplicar ({filteredAndSortedSources.length} Est.)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE OPCIONES DE EXPORTACIÓN (CENTRADITO) */}
+            {isExportOptionsModalOpen && (
+                <div className="fixed inset-0 z-[10005] flex items-center justify-center bg-black/45 backdrop-blur-xs animate-in fade-in duration-200 p-4">
+                    {/* Backdrop Click Dismiss */}
+                    <div className="absolute inset-0" onClick={() => setIsExportOptionsModalOpen(false)} />
+                    
+                    {/* Modal Card */}
+                    <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col border border-gray-100 overflow-hidden">
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-teal-50/50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center text-teal-700 shadow-xs">
+                                    <FileSpreadsheet className="h-5.5 w-5.5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-gray-950 text-base uppercase">Opciones de Exportación</h3>
+                                    <p className="text-[11px] text-gray-500 font-bold tracking-wide">
+                                        Consolidado: {exportScope === 'single' && selectedUngetIndex !== null ? scriptUrls[selectedUngetIndex]?.name : 'TODAS LAS UNGETs (REGIONAL)'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsExportOptionsModalOpen(false)}
+                                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-900"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+                            
+                            {/* Quick Match Sync Button */}
+                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-200/80">
+                                <div className="text-left animate-pulse">
+                                    <p className="text-xs font-black text-teal-800">¿Sincronizar con vista actual?</p>
+                                    <p className="text-[10px] text-gray-500 font-semibold">Usa la configuración de filtros activos en tu pantalla.</p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setExportCS(filter_CS);
+                                        setExportPS(filter_PS);
+                                        setExportALM(filter_ALM);
+                                        setExportHOSP(filter_HOSP);
+                                        setExportOTRO(filter_OTRO);
+                                        setExportEmerald(filter_emerald);
+                                        setExportAmber(filter_amber);
+                                        setExportRed(filter_red);
+                                        setExportGray(filter_gray);
+                                        setExportHasPendingExpirations(filterHasPendingExpirations);
+                                        setExportDateLimit(filterDateLimit);
+                                    }}
+                                    className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black rounded-lg transition-colors shadow-xs uppercase tracking-wider"
+                                >
+                                    Sincronizar filtros
+                                </button>
+                            </div>
+
+                            {/* Section: Establishment Type */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Tipo de Establecimiento</h4>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => { setExportCS(true); setExportPS(true); setExportALM(true); setExportHOSP(true); setExportOTRO(true); }}
+                                            className="text-[10px] text-teal-600 hover:text-teal-800 font-bold"
+                                        >
+                                            Todos
+                                        </button>
+                                        <span className="text-gray-300 text-xs">|</span>
+                                        <button 
+                                            onClick={() => { setExportCS(false); setExportPS(false); setExportALM(false); setExportHOSP(false); setExportOTRO(false); }}
+                                            className="text-[10px] text-gray-500 hover:text-gray-700 font-bold"
+                                        >
+                                            Ninguno
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-2">
+                                    <label className="flex items-center gap-2.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={exportCS}
+                                            onChange={(e) => setExportCS(e.target.checked)}
+                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <span className="text-xs font-bold text-gray-700 col-span-2">C. S. (Centro de Salud)</span>
+                                    </label>
+                                    
+                                    <label className="flex items-center gap-2.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={exportPS}
+                                            onChange={(e) => setExportPS(e.target.checked)}
+                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <span className="text-xs font-bold text-gray-700">P. S. (Puesto de Salud)</span>
+                                    </label>
+
+                                    <label className="flex items-center gap-2.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={exportALM}
+                                            onChange={(e) => setExportALM(e.target.checked)}
+                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <span className="text-xs font-bold text-gray-700">Almacén (ALM)</span>
+                                    </label>
+
+                                    <label className="flex items-center gap-2.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={exportHOSP}
+                                            onChange={(e) => setExportHOSP(e.target.checked)}
+                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <span className="text-xs font-bold text-gray-700">Hospital (HOSP)</span>
+                                    </label>
+
+                                    <label className="flex items-center gap-2.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer col-span-2 transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={exportOTRO}
+                                            onChange={(e) => setExportOTRO(e.target.checked)}
+                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <span className="text-xs font-bold text-gray-700">Otros / Sin Clasificar</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Section: Status Update (Color) */}
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Estado de Actualización (Colores)</h4>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => { setExportEmerald(true); setExportAmber(true); setExportRed(true); setExportGray(true); }}
+                                            className="text-[10px] text-teal-600 hover:text-teal-800 font-bold"
+                                        >
+                                            Todos
+                                        </button>
+                                        <span className="text-gray-300 text-xs">|</span>
+                                        <button 
+                                            onClick={() => { setExportEmerald(false); setExportAmber(false); setExportRed(false); setExportGray(false); }}
+                                            className="text-[10px] text-gray-500 hover:text-gray-700 font-bold"
+                                        >
+                                            Ninguno
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    <label className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={exportEmerald}
+                                            onChange={(e) => setExportEmerald(e.target.checked)}
+                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 border border-white shrink-0 shadow-sm animate-pulse" />
+                                            <span className="text-xs font-bold text-gray-700 font-medium">Al día (&lt;1 hora sin actualizar)</span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={exportAmber}
+                                            onChange={(e) => setExportAmber(e.target.checked)}
+                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3.5 h-3.5 rounded-full bg-amber-500 border border-white shrink-0 shadow-sm" />
+                                            <span className="text-xs font-bold text-gray-700 font-medium">Pendiente (&gt;1 hora sin actualizar)</span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={exportRed}
+                                            onChange={(e) => setExportRed(e.target.checked)}
+                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3.5 h-3.5 rounded-full bg-red-500 border border-white shrink-0 shadow-sm" />
+                                            <span className="text-xs font-bold text-gray-700 font-medium col-span-3">Crítico (&gt;24 horas)</span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={exportGray}
+                                            onChange={(e) => setExportGray(e.target.checked)}
+                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3.5 h-3.5 rounded-full bg-gray-400 border border-white shrink-0 shadow-sm" />
+                                            <span className="text-xs font-bold text-gray-700 font-medium">Sin Datos / Desconectado</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Section: Update Date Limit */}
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Antigüedad de Sincronización</h4>
+                                <select
+                                    value={exportDateLimit}
+                                    onChange={(e) => setExportDateLimit(e.target.value as any)}
+                                    className="block w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
+                                >
+                                    <option value="all">Sincronizados en cualquier fecha (Todos)</option>
+                                    <option value="1h">Sincronizado hace menos de 1 hora</option>
+                                    <option value="12h">Sincronizado en las últimas 12 horas</option>
+                                    <option value="24h">Sincronizado en las últimas 24 horas (Hoy)</option>
+                                    <option value="3d">Sincronizado en los últimos 3 días</option>
+                                    <option value="7d">Sincronizado en los últimos 7 días</option>
+                                </select>
+                            </div>
+
+                            {/* Section: Expirations filter */}
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Medicamentos y Filtros adicionales</h4>
+                                <label className="flex items-center gap-3 p-3 bg-red-50/40 hover:bg-red-50/70 border border-red-100/80 rounded-xl cursor-pointer transition-all select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={exportHasPendingExpirations}
+                                        onChange={(e) => setExportHasPendingExpirations(e.target.checked)}
+                                        className="h-4 w-4 rounded text-red-600 border-red-300 focus:ring-red-500 cursor-pointer"
+                                    />
+                                    <div className="flex items-center gap-2 text-red-900">
+                                        <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 animate-bounce" />
+                                        <span className="text-xs font-black">Exportar únicamente medicamentos vencidos o por vencer</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Footer Details & Buttons */}
+                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row items-center sm:justify-between gap-4 sticky bottom-0 z-10 shrink-0">
+                            <div className="text-center sm:text-left">
+                                <p className="text-[10px] text-gray-500 font-black uppercase tracking-wider">Total Seleccionado</p>
+                                <p className="text-sm font-black text-teal-800">
+                                    {filteredExportSourcesCount} {filteredExportSourcesCount === 1 ? 'establecimiento' : 'establecimientos'}
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <button
+                                    onClick={() => setIsExportOptionsModalOpen(false)}
+                                    className="flex-1 sm:flex-none px-4 py-2 bg-white text-gray-600 hover:text-gray-900 font-bold text-xs rounded-xl border border-gray-200 shadow-xs transition-colors hover:bg-gray-50"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={executeExportAllEstablishmentsToExcel}
+                                    disabled={filteredExportSourcesCount === 0}
+                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2 text-white font-extrabold text-xs rounded-xl shadow-md transition-all ${
+                                        filteredExportSourcesCount === 0 
+                                        ? 'bg-gray-300 cursor-not-allowed shadow-none' 
+                                        : 'bg-teal-600 hover:bg-teal-700 hover:shadow-lg'
+                                    }`}
+                                >
+                                    <Download className="h-4 w-4 shrink-0" />
+                                    <span>Exportar Excel</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
