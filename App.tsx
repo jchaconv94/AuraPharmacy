@@ -59,8 +59,27 @@ const AuthenticatedApp: React.FC = () => {
     const [currentView, setCurrentView] = useState<AppModule>('DASHBOARD');
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     
+    const wasSidebarCollapsedRef = React.useRef(false);
+
     // Welcome Modal State
     const [showWelcome, setShowWelcome] = useState(false);
+
+    // Listen for advanced filters toggled event to collapse/restore sidebar menu
+    useEffect(() => {
+        const handleAdvFiltersToggle = (e: any) => {
+            const isOpen = e.detail?.open;
+            if (isOpen) {
+                wasSidebarCollapsedRef.current = isSidebarCollapsed;
+                setIsSidebarCollapsed(true);
+            } else {
+                setIsSidebarCollapsed(wasSidebarCollapsedRef.current);
+            }
+        };
+        window.addEventListener('toggle-advanced-filters', handleAdvFiltersToggle);
+        return () => {
+            window.removeEventListener('toggle-advanced-filters', handleAdvFiltersToggle);
+        };
+    }, [isSidebarCollapsed]);
 
     // Effect to trigger welcome modal ONCE per session
     useEffect(() => {

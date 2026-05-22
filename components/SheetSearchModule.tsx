@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft } from 'lucide-react';
+import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
@@ -204,6 +204,11 @@ export const SheetSearchModule: React.FC = () => {
     const [filterHasPendingExpirations, setFilterHasPendingExpirations] = useState<boolean>(false);
     const [filterDateLimit, setFilterDateLimit] = useState<'all' | '1h' | '12h' | '24h' | '3d' | '7d'>('all');
     
+    // Estados para dropdowns de filtros personalizados
+    const [isDateLimitDropdownOpen, setIsDateLimitDropdownOpen] = useState(false);
+    const [isSortOrderDropdownOpen, setIsSortOrderDropdownOpen] = useState(false);
+    const [isExportDateLimitDropdownOpen, setIsExportDateLimitDropdownOpen] = useState(false);
+    
     // Navigation hierarchy
     const [viewLevel, setViewLevel] = useState<'ungets' | 'sheets' | 'data'>('ungets');
     const [selectedUngetIndex, setSelectedUngetIndex] = useState<number | null>(null);
@@ -240,6 +245,20 @@ export const SheetSearchModule: React.FC = () => {
     const [expirationModalType, setExpirationModalType] = useState<'expired' | 'expiring' | null>(null);
 
     const maxUrlsAllowed = user?.maxUrlsAllowed;
+
+    // Publicar evento al cambiar el estado de los filtros avanzados para contraer el sidebar de App.tsx
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('toggle-advanced-filters', {
+            detail: { open: isAdvancedFiltersSidebarOpen }
+        }));
+    }, [isAdvancedFiltersSidebarOpen]);
+
+    // Cerrar automáticamente los filtros avanzados si se sale del nivel de sheets/establecimientos
+    useEffect(() => {
+        if (viewLevel !== 'sheets') {
+            setIsAdvancedFiltersSidebarOpen(false);
+        }
+    }, [viewLevel]);
 
     // Initialize from server
     useEffect(() => {
@@ -1071,7 +1090,7 @@ export const SheetSearchModule: React.FC = () => {
     }, [viewLevel, selectedUngetIndex, sources, sheetSearchTerm, data]);
 
     return (
-        <div className="flex flex-col h-full bg-gray-50/50 sm:p-4 2xl:p-6 pb-20 max-w-7xl mx-auto w-full">
+        <div className={`flex flex-col h-full bg-gray-50/50 sm:p-4 2xl:p-6 pb-20 max-w-7xl mx-auto w-full transition-all duration-300 ${isAdvancedFiltersSidebarOpen && viewLevel === 'sheets' ? 'md:pr-[380px] xl:pr-[420px]' : ''}`}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3 sm:gap-4 border-b border-gray-200 pb-4 px-4 pt-4 sm:px-0 sm:pt-0">
                 <div className="w-full sm:w-auto">
                     <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
@@ -2092,28 +2111,29 @@ export const SheetSearchModule: React.FC = () => {
 
             {/* SIDEBAR DE FILTROS AVANZADOS (DERECHA) */}
             {isAdvancedFiltersSidebarOpen && (
-                <div className="fixed inset-0 z-[10000] flex justify-end bg-black/45 backdrop-blur-xs animate-in fade-in duration-200">
-                    {/* Backdrop Click Dismiss */}
-                    <div className="absolute inset-0" onClick={() => setIsAdvancedFiltersSidebarOpen(false)} />
+                <div className="fixed inset-0 z-[10000] flex justify-end pointer-events-none">
+                    {/* Backdrop Click Dismiss (Solo en móvil para no bloquear interacción de fondo en escritorio) */}
+                    <div className="absolute inset-0 bg-black/45 backdrop-blur-xs pointer-events-auto md:hidden" onClick={() => setIsAdvancedFiltersSidebarOpen(false)} />
                     
                     {/* Sidebar Container */}
-                    <div className="relative w-full max-w-sm sm:max-w-md bg-white h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col border-l border-gray-100">
+                    <div className="relative w-full max-w-sm sm:max-w-md md:w-[380px] xl:w-[420px] md:max-w-none bg-slate-50 h-full shadow-[-12px_0_40px_rgba(0,0,0,0.1),-1px_0_4px_rgba(0,0,0,0.02)] border-l border-slate-200 pointer-events-auto animate-in slide-in-from-right duration-350 flex flex-col">
                         {/* Header */}
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10 shrink-0">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 bg-teal-50 rounded-lg flex items-center justify-center text-teal-600">
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] z-10 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 shadow-sm border border-teal-100/50">
                                     <Filter className="h-5 w-5" />
                                 </div>
                                 <div>
-                                    <h3 className="font-black text-gray-950 text-base uppercase">Filtros Avanzados</h3>
-                                    <p className="text-[10px] text-gray-500 font-bold tracking-wider">Establecimientos de Salud</p>
+                                    <h3 className="font-black text-slate-900 text-base tracking-tight uppercase">Filtros Avanzados</h3>
+                                    <p className="text-[10px] text-teal-600 font-extrabold tracking-widest uppercase">Establecimientos de Salud</p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setIsAdvancedFiltersSidebarOpen(false)}
-                                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-900"
+                                className="p-2 hover:bg-slate-100 active:scale-95 rounded-xl transition-all text-slate-400 hover:text-slate-900 shadow-sm border border-slate-100 hover:border-slate-200 bg-white"
+                                title="Cerrar filtros"
                             >
-                                <X className="h-5 w-5" />
+                                <X className="h-4.5 w-4.5" />
                             </button>
                         </div>
 
@@ -2121,78 +2141,192 @@ export const SheetSearchModule: React.FC = () => {
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
                             {/* Filter Section: Type */}
                             <div className="space-y-3">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tipo de Establecimiento</h4>
-                                <div className="grid grid-cols-1 gap-2">
-                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                <div className="flex items-center justify-between items-center w-full">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                        <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Tipo de Establecimiento</h4>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFilter_CS(true);
+                                                setFilter_PS(true);
+                                                setFilter_ALM(true);
+                                                setFilter_HOSP(true);
+                                                setFilter_OTRO(true);
+                                            }}
+                                            className="text-teal-600 hover:text-teal-700 font-black hover:underline cursor-pointer active:scale-95 transition-all"
+                                        >
+                                            Todos
+                                        </button>
+                                        <span className="text-slate-300 select-none">|</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFilter_CS(false);
+                                                setFilter_PS(false);
+                                                setFilter_ALM(false);
+                                                setFilter_HOSP(false);
+                                                setFilter_OTRO(false);
+                                            }}
+                                            className="text-slate-500 hover:text-slate-700 hover:underline cursor-pointer active:scale-95 transition-all"
+                                        >
+                                            Ninguno
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 gap-2.5">
+                                    {/* C.S. */}
+                                    <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        filter_CS 
+                                            ? 'bg-blue-50/40 border-blue-200 text-blue-900 shadow-[0_3px_10px_-2px_rgba(59,130,246,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={filter_CS}
                                             onChange={(e) => setFilter_CS(e.target.checked)}
-                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            filter_CS 
+                                                ? 'bg-blue-600 border-blue-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className="text-xs font-bold text-gray-700">Centro de Salud (C.S.)</span>
-                                            <span className="text-[10px] bg-blue-50 text-blue-700 font-extrabold px-1.5 py-0.5 rounded-md border border-blue-100">
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_CS ? 'text-blue-950 font-black' : 'text-slate-700 font-bold'}`}>Centro de Salud (C.S.)</span>
+                                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
+                                                filter_CS 
+                                                    ? 'bg-blue-600/10 text-blue-700 border-blue-200/55 shadow-xs' 
+                                                    : 'bg-slate-50 text-slate-500 border-slate-100'
+                                            }`}>
                                                 C.S. {establishmentSummary?.cs ?? 0}
                                             </span>
                                         </div>
                                     </label>
 
-                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                    {/* P.S. */}
+                                    <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        filter_PS 
+                                            ? 'bg-amber-50/40 border-amber-200 text-amber-900 shadow-[0_3px_10px_-2px_rgba(245,158,11,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={filter_PS}
                                             onChange={(e) => setFilter_PS(e.target.checked)}
-                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            filter_PS 
+                                                ? 'bg-amber-600 border-amber-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className="text-xs font-bold text-gray-700">Puesto de Salud (P.S.)</span>
-                                            <span className="text-[10px] bg-amber-50 text-amber-700 font-extrabold px-1.5 py-0.5 rounded-md border border-amber-100">
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_PS ? 'text-amber-950 font-black' : 'text-slate-700 font-bold'}`}>Puesto de Salud (P.S.)</span>
+                                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
+                                                filter_PS 
+                                                    ? 'bg-amber-600/10 text-amber-700 border-amber-200/55 shadow-xs' 
+                                                    : 'bg-slate-50 text-slate-500 border-slate-100'
+                                            }`}>
                                                 P.S. {establishmentSummary?.ps ?? 0}
                                             </span>
                                         </div>
                                     </label>
 
-                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                    {/* ALM */}
+                                    <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        filter_ALM 
+                                            ? 'bg-teal-50/40 border-teal-200 text-teal-900 shadow-[0_3px_10px_-2px_rgba(20,184,166,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={filter_ALM}
                                             onChange={(e) => setFilter_ALM(e.target.checked)}
-                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            filter_ALM 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className="text-xs font-bold text-gray-700">Almacén (ALM)</span>
-                                            <span className="text-[10px] bg-teal-50 text-teal-700 font-extrabold px-1.5 py-0.5 rounded-md border border-teal-100">
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_ALM ? 'text-teal-950 font-black' : 'text-slate-700 font-bold'}`}>Almacén (ALM)</span>
+                                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
+                                                filter_ALM 
+                                                    ? 'bg-teal-600/10 text-teal-700 border-teal-200/55 shadow-xs' 
+                                                    : 'bg-slate-50 text-slate-500 border-slate-100'
+                                            }`}>
                                                 ALM {establishmentSummary?.alm ?? 0}
                                             </span>
                                         </div>
                                     </label>
 
-                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                    {/* HOSP */}
+                                    <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        filter_HOSP 
+                                            ? 'bg-red-50/40 border-red-200 text-red-900 shadow-[0_3px_10px_-2px_rgba(239,68,68,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={filter_HOSP}
                                             onChange={(e) => setFilter_HOSP(e.target.checked)}
-                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            filter_HOSP 
+                                                ? 'bg-red-600 border-red-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className="text-xs font-bold text-gray-700">Hospital (HOSP)</span>
-                                            <span className="text-[10px] bg-red-50 text-red-700 font-extrabold px-1.5 py-0.5 rounded-md border border-red-100">
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_HOSP ? 'text-red-950 font-black' : 'text-slate-700 font-bold'}`}>Hospital (HOSP)</span>
+                                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
+                                                filter_HOSP 
+                                                    ? 'bg-red-600/10 text-red-700 border-red-200/55 shadow-xs' 
+                                                    : 'bg-slate-50 text-slate-500 border-slate-100'
+                                            }`}>
                                                 HOSP {establishmentSummary?.hosp ?? 0}
                                             </span>
                                         </div>
                                     </label>
 
-                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                    {/* Otros */}
+                                    <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        filter_OTRO 
+                                            ? 'bg-slate-200 border-slate-300 text-slate-900 shadow-[0_3px_10px_-2px_rgba(100,116,139,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={filter_OTRO}
                                             onChange={(e) => setFilter_OTRO(e.target.checked)}
-                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            filter_OTRO 
+                                                ? 'bg-slate-700 border-slate-700 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className="text-xs font-bold text-gray-700">Otros</span>
-                                            <span className="text-[10px] bg-gray-100 text-gray-600 font-extrabold px-1.5 py-0.5 rounded-md border border-gray-200">
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_OTRO ? 'text-slate-950 font-black' : 'text-slate-700 font-bold'}`}>Otros</span>
+                                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
+                                                filter_OTRO 
+                                                    ? 'bg-slate-700/10 text-slate-700 border-slate-300 shadow-xs' 
+                                                    : 'bg-slate-50 text-slate-500 border-slate-100'
+                                            }`}>
                                                 Otro {
                                                     sources && selectedUngetIndex !== null ? (
                                                         sources.filter(s => s.urlIndex === selectedUngetIndex).length 
@@ -2207,57 +2341,146 @@ export const SheetSearchModule: React.FC = () => {
 
                             {/* Filter Section: Last Update Status (Color) */}
                             <div className="space-y-3">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Estado de Actualización (Color)</h4>
-                                <div className="grid grid-cols-1 gap-2">
-                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                <div className="flex items-center justify-between items-center w-full">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                        <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Estado de Actualización</h4>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFilter_emerald(true);
+                                                setFilter_amber(true);
+                                                setFilter_red(true);
+                                                setFilter_gray(true);
+                                            }}
+                                            className="text-teal-600 hover:text-teal-700 font-black hover:underline cursor-pointer active:scale-95 transition-all"
+                                        >
+                                            Todos
+                                        </button>
+                                        <span className="text-slate-300 select-none">|</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFilter_emerald(false);
+                                                setFilter_amber(false);
+                                                setFilter_red(false);
+                                                setFilter_gray(false);
+                                            }}
+                                            className="text-slate-500 hover:text-slate-700 hover:underline cursor-pointer active:scale-95 transition-all"
+                                        >
+                                            Ninguno
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 gap-2.5">
+                                    {/* Al día */}
+                                    <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        filter_emerald 
+                                            ? 'bg-emerald-50/40 border-emerald-200 text-emerald-950 shadow-[0_3px_10px_-2px_rgba(16,185,129,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={filter_emerald}
                                             onChange={(e) => setFilter_emerald(e.target.checked)}
-                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 border border-white shrink-0 shadow-sm animate-pulse" />
-                                            <span className="text-xs font-bold text-gray-700 font-medium">Al día (&lt;1 hora sin actualizar)</span>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            filter_emerald 
+                                                ? 'bg-emerald-600 border-emerald-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
+                                        <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white shrink-0 shadow-sm animate-pulse" />
+                                                <span className={`text-xs font-extrabold transition-colors ${filter_emerald ? 'text-emerald-950 font-black' : 'text-slate-700 font-bold'}`}>Al día</span>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-bold">&lt;1 hora sin actualizar</span>
                                         </div>
                                     </label>
 
-                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                    {/* Pendiente */}
+                                    <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        filter_amber 
+                                            ? 'bg-amber-50/40 border-amber-200 text-amber-950 shadow-[0_3px_10px_-2px_rgba(245,158,11,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={filter_amber}
                                             onChange={(e) => setFilter_amber(e.target.checked)}
-                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-3.5 h-3.5 rounded-full bg-amber-500 border border-white shrink-0 shadow-sm" />
-                                            <span className="text-xs font-bold text-gray-700 font-medium col-span-3">Pendiente (&gt;1 hora sin actualizar)</span>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            filter_amber 
+                                                ? 'bg-amber-600 border-amber-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
+                                        <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 border border-white shrink-0 shadow-sm" />
+                                                <span className={`text-xs font-extrabold transition-colors ${filter_amber ? 'text-amber-950 font-black' : 'text-slate-700 font-bold'}`}>Pendiente</span>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-bold">&gt;1 hora sin actualizar</span>
                                         </div>
                                     </label>
 
-                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                    {/* Crítico */}
+                                    <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        filter_red 
+                                            ? 'bg-red-50/40 border-red-200 text-red-950 shadow-[0_3px_10px_-2px_rgba(239,68,68,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={filter_red}
                                             onChange={(e) => setFilter_red(e.target.checked)}
-                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-3.5 h-3.5 rounded-full bg-red-500 border border-white shrink-0 shadow-sm" />
-                                            <span className="text-xs font-bold text-gray-700 font-medium">Crítico (&gt;24 horas)</span>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            filter_red 
+                                                ? 'bg-red-600 border-red-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
+                                        <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-red-500 border border-white shrink-0 shadow-sm" />
+                                                <span className={`text-xs font-extrabold transition-colors ${filter_red ? 'text-red-950 font-black' : 'text-slate-700 font-bold'}`}>Crítico</span>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-bold">&gt;24 horas</span>
                                         </div>
                                     </label>
 
-                                    <label className="flex items-center gap-3 p-2.5 bg-gray-50 hover:bg-gray-100/70 border border-gray-200/80 rounded-xl cursor-pointer transition-all select-none">
+                                    {/* Sin Datos / Desconectado */}
+                                    <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        filter_gray 
+                                            ? 'bg-slate-100 border-slate-300 text-slate-950 shadow-[0_3px_10px_-2px_rgba(100,116,139,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={filter_gray}
                                             onChange={(e) => setFilter_gray(e.target.checked)}
-                                            className="h-4 w-4 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            filter_gray 
+                                                ? 'bg-slate-700 border-slate-700 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                         <div className="flex items-center gap-2">
-                                            <span className="w-3.5 h-3.5 rounded-full bg-gray-400 border border-white shrink-0 shadow-sm" />
-                                            <span className="text-xs font-bold text-gray-700 font-medium">Sin Datos / Desconectado</span>
+                                            <span className="w-2.5 h-2.5 rounded-full bg-slate-400 border border-white shrink-0 shadow-sm" />
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_gray ? 'text-slate-950 font-black' : 'text-slate-700 font-bold'}`}>Sin Datos / Desconectado</span>
                                         </div>
                                     </label>
                                 </div>
@@ -2265,59 +2488,170 @@ export const SheetSearchModule: React.FC = () => {
 
                             {/* Filter Section: Update Date Limit */}
                             <div className="space-y-3">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Antigüedad de Sincronización</h4>
-                                <select
-                                    value={filterDateLimit}
-                                    onChange={(e) => setFilterDateLimit(e.target.value as any)}
-                                    className="block w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
-                                >
-                                    <option value="all">Sincronizados en cualquier fecha (Todos)</option>
-                                    <option value="1h">Sincronizado hace menos de 1 hora</option>
-                                    <option value="12h">Sincronizado en las últimas 12 horas</option>
-                                    <option value="24h">Sincronizado en las últimas 24 horas (Hoy)</option>
-                                    <option value="3d">Sincronizado en los últimos 3 días</option>
-                                    <option value="7d">Sincronizado en los últimos 7 días</option>
-                                </select>
-                            </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Antigüedad de Sincronización</h4>
+                                </div>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsDateLimitDropdownOpen(!isDateLimitDropdownOpen);
+                                            setIsSortOrderDropdownOpen(false);
+                                        }}
+                                        className="flex items-center justify-between w-full px-4 py-3 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500/15"
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            <Clock className="h-4 w-4 text-slate-400 shrink-0" />
+                                            <span className="text-xs font-extrabold text-slate-700">
+                                                {filterDateLimit === 'all' && 'Sincronizados en cualquier fecha (Todos)'}
+                                                {filterDateLimit === '1h' && 'Sincronizado hace menos de 1 hora'}
+                                                {filterDateLimit === '12h' && 'Sincronizado en las últimas 12 horas'}
+                                                {filterDateLimit === '24h' && 'Sincronizado en las últimas 24 horas (Hoy)'}
+                                                {filterDateLimit === '3d' && 'Sincronizado en los últimos 3 días'}
+                                                {filterDateLimit === '7d' && 'Sincronizado en los últimos 7 días'}
+                                            </span>
+                                        </div>
+                                        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-250 ${isDateLimitDropdownOpen ? 'rotate-180 text-teal-600' : ''}`} />
+                                    </button>
 
-                            {/* Filter Section: Expirations */}
-                            <div className="space-y-3">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Alertas y Vencimientos</h4>
-                                <label className="flex items-center gap-3 p-3 bg-red-50/50 hover:bg-red-50/75 border border-red-100 rounded-xl cursor-pointer transition-all select-none">
-                                    <input
-                                        type="checkbox"
-                                        checked={filterHasPendingExpirations}
-                                        onChange={(e) => setFilterHasPendingExpirations(e.target.checked)}
-                                        className="h-4 w-4 rounded text-red-600 border-red-300 focus:ring-red-500 cursor-pointer"
-                                    />
-                                    <div className="flex items-center gap-2 text-red-800">
-                                        <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
-                                        <span className="text-xs font-bold">Mostrar sólo establecimientos con productos por vencer / vencidos</span>
-                                    </div>
-                                </label>
+                                    {isDateLimitDropdownOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-30" onClick={() => setIsDateLimitDropdownOpen(false)} />
+                                            <div className="absolute left-0 right-0 bottom-full mb-2 bg-white border border-slate-100 rounded-2xl shadow-[0_-12px_30px_rgba(0,0,0,0.08)] z-40 overflow-hidden divide-y divide-slate-50 py-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                {[
+                                                    { value: 'all', label: 'Sincronizados en cualquier fecha (Todos)' },
+                                                    { value: '1h', label: 'Sincronizado hace menos de 1 hora' },
+                                                    { value: '12h', label: 'Sincronizado en las últimas 12 horas' },
+                                                    { value: '24h', label: 'Sincronizado en las últimas 24 horas (Hoy)' },
+                                                    { value: '3d', label: 'Sincronizado en los últimos 3 días' },
+                                                    { value: '7d', label: 'Sincronizado en los últimos 7 días' },
+                                                ].map((option) => (
+                                                    <button
+                                                        key={option.value}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFilterDateLimit(option.value as any);
+                                                            setIsDateLimitDropdownOpen(false);
+                                                        }}
+                                                        className={`flex items-center justify-between w-full px-4 py-3 text-left text-xs font-extrabold transition-all cursor-pointer ${
+                                                            filterDateLimit === option.value
+                                                                ? 'bg-teal-50/65 text-teal-950 font-black'
+                                                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                        }`}
+                                                    >
+                                                        <span>{option.label}</span>
+                                                        {filterDateLimit === option.value && (
+                                                            <Check className="h-3.5 w-3.5 text-teal-600 stroke-[3]" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Filter Section: Sorting */}
                             <div className="space-y-3">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Ordenamiento</h4>
-                                <div className="space-y-1">
-                                    <select
-                                        value={filterSortOrder}
-                                        onChange={(e) => setFilterSortOrder(e.target.value as any)}
-                                        className="block w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
-                                    >
-                                        <option value="name_asc">Nombre del Establecimiento (A-Z)</option>
-                                        <option value="name_desc">Nombre del Establecimiento (Z-A)</option>
-                                        <option value="date_newest">Sincronización más reciente primero</option>
-                                        <option value="date_oldest">Sincronización más antigua primero</option>
-                                        <option value="expired_highest">Mayor número de productos vencidos</option>
-                                    </select>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Ordenamiento</h4>
                                 </div>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsSortOrderDropdownOpen(!isSortOrderDropdownOpen);
+                                            setIsDateLimitDropdownOpen(false);
+                                        }}
+                                        className="flex items-center justify-between w-full px-4 py-3 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500/15"
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            <Settings className="h-4 w-4 text-slate-400 shrink-0" />
+                                            <span className="text-xs font-extrabold text-slate-700">
+                                                {filterSortOrder === 'name_asc' && 'Nombre del Establecimiento (A-Z)'}
+                                                {filterSortOrder === 'name_desc' && 'Nombre del Establecimiento (Z-A)'}
+                                                {filterSortOrder === 'date_newest' && 'Sincronización más reciente primero'}
+                                                {filterSortOrder === 'date_oldest' && 'Sincronización más antigua primero'}
+                                                {filterSortOrder === 'expired_highest' && 'Mayor número de productos vencidos'}
+                                            </span>
+                                        </div>
+                                        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-250 ${isSortOrderDropdownOpen ? 'rotate-180 text-teal-600' : ''}`} />
+                                    </button>
+
+                                    {isSortOrderDropdownOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-30" onClick={() => setIsSortOrderDropdownOpen(false)} />
+                                            <div className="absolute left-0 right-0 bottom-full mb-2 bg-white border border-slate-100 rounded-2xl shadow-[0_-12px_30px_rgba(0,0,0,0.08)] z-40 overflow-hidden divide-y divide-slate-50 py-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                {[
+                                                    { value: 'name_asc', label: 'Nombre del Establecimiento (A-Z)' },
+                                                    { value: 'name_desc', label: 'Nombre del Establecimiento (Z-A)' },
+                                                    { value: 'date_newest', label: 'Sincronización más reciente primero' },
+                                                    { value: 'date_oldest', label: 'Sincronización más antigua primero' },
+                                                    { value: 'expired_highest', label: 'Mayor número de productos vencidos' },
+                                                ].map((option) => (
+                                                    <button
+                                                        key={option.value}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFilterSortOrder(option.value as any);
+                                                            setIsSortOrderDropdownOpen(false);
+                                                        }}
+                                                        className={`flex items-center justify-between w-full px-4 py-3 text-left text-xs font-extrabold transition-all cursor-pointer ${
+                                                            filterSortOrder === option.value
+                                                                ? 'bg-teal-50/65 text-teal-950 font-black'
+                                                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                        }`}
+                                                    >
+                                                        <span>{option.label}</span>
+                                                        {filterSortOrder === option.value && (
+                                                            <Check className="h-3.5 w-3.5 text-teal-600 stroke-[3]" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Filter Section: Expirations */}
+                            <div className="space-y-3 pb-8">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Alertas y Vencimientos</h4>
+                                </div>
+                                <label className={`group flex items-center gap-3.5 p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
+                                    filterHasPendingExpirations 
+                                        ? 'bg-red-500 text-white border-red-500 shadow-[0_4px_15px_rgba(239,68,68,0.25)]' 
+                                        : 'bg-white border-slate-100 hover:bg-slate-50 hover:border-red-200'
+                                }`}>
+                                    <input
+                                        type="checkbox"
+                                        checked={filterHasPendingExpirations}
+                                        onChange={(e) => setFilterHasPendingExpirations(e.target.checked)}
+                                        className="sr-only"
+                                    />
+                                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                        filterHasPendingExpirations 
+                                            ? 'bg-white text-red-600 border-white scale-100' 
+                                            : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                    }`}>
+                                        <Check className="h-3 w-3 stroke-[3]" />
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        <AlertTriangle className={`h-4.5 w-4.5 shrink-0 ${filterHasPendingExpirations ? 'text-white' : 'text-red-500'}`} />
+                                        <span className={`text-xs font-black leading-tight ${filterHasPendingExpirations ? 'text-white' : 'text-slate-700 group-hover:text-red-700'}`}>
+                                            Mostrar sólo establecimientos con productos por vencer / vencidos
+                                        </span>
+                                    </div>
+                                </label>
                             </div>
                         </div>
 
                         {/* Footer Buttons */}
-                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3 sticky bottom-0 z-10 shrink-0">
+                        <div className="px-6 py-5 border-t border-slate-100 bg-white/95 backdrop-blur-md flex items-center justify-between gap-3 sticky bottom-0 z-10 shrink-0 shadow-[0_-4px_15px_rgba(0,0,0,0.03)]">
                             <button
                                 onClick={() => {
                                     setFilter_CS(true);
@@ -2333,13 +2667,13 @@ export const SheetSearchModule: React.FC = () => {
                                     setFilterHasPendingExpirations(false);
                                     setFilterDateLimit('all');
                                 }}
-                                className="px-4 py-2 bg-white text-gray-600 hover:text-gray-900 font-bold text-xs rounded-xl border border-gray-200 shadow-xs transition-all shrink-0 hover:bg-gray-50"
+                                className="px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 font-extrabold text-[11px] uppercase tracking-wider rounded-xl border border-slate-200 shadow-sm transition-all shrink-0 active:scale-95"
                             >
                                 Reestablecer
                             </button>
                             <button
                                 onClick={() => setIsAdvancedFiltersSidebarOpen(false)}
-                                className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-sm transition-colors text-center"
+                                className="flex-1 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-black text-[11px] uppercase tracking-widest rounded-xl shadow-lg shadow-teal-600/15 hover:shadow-teal-600/25 transition-all text-center active:scale-95"
                             >
                                 Aplicar ({filteredAndSortedSources.length} Est.)
                             </button>
@@ -2355,268 +2689,419 @@ export const SheetSearchModule: React.FC = () => {
                     <div className="absolute inset-0" onClick={() => setIsExportOptionsModalOpen(false)} />
                     
                     {/* Modal Card */}
-                    <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col border border-gray-100 overflow-hidden">
+                    <div className="relative w-full max-w-lg bg-slate-50 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col border border-slate-200 overflow-hidden">
                         {/* Header */}
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-teal-50/50">
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] shrink-0">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center text-teal-700 shadow-xs">
+                                <div className="w-11 h-11 bg-teal-50 rounded-2xl flex items-center justify-center text-teal-600 border border-teal-100 shadow-[0_4px_12px_rgba(13,148,136,0.08)]">
                                     <FileSpreadsheet className="h-5.5 w-5.5" />
                                 </div>
                                 <div>
-                                    <h3 className="font-black text-gray-950 text-base uppercase">Opciones de Exportación</h3>
-                                    <p className="text-[11px] text-gray-500 font-bold tracking-wide">
+                                    <h3 className="font-black text-slate-900 text-base tracking-tight uppercase">Opciones de Exportación</h3>
+                                    <p className="text-[10px] text-teal-600 font-extrabold tracking-widest uppercase">
                                         Consolidado: {exportScope === 'single' && selectedUngetIndex !== null ? scriptUrls[selectedUngetIndex]?.name : 'TODAS LAS UNGETs (REGIONAL)'}
                                     </p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setIsExportOptionsModalOpen(false)}
-                                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-900"
+                                className="p-2 hover:bg-slate-100 active:scale-95 rounded-xl transition-all text-slate-400 hover:text-slate-900 border border-slate-100 hover:border-slate-200 bg-white shadow-sm"
                             >
-                                <X className="h-5 w-5" />
+                                <X className="h-4.5 w-4.5" />
                             </button>
                         </div>
 
                         {/* Content */}
-                        <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+                        <div className="p-6 space-y-6 overflow-y-auto max-h-[65vh]">
                             
-                            {/* Quick Match Sync Button */}
-                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-200/80">
-                                <div className="text-left animate-pulse">
-                                    <p className="text-xs font-black text-teal-800">¿Sincronizar con vista actual?</p>
-                                    <p className="text-[10px] text-gray-500 font-semibold">Usa la configuración de filtros activos en tu pantalla.</p>
-                                </div>
-                                <button
-                                    onClick={() => {
-                                        setExportCS(filter_CS);
-                                        setExportPS(filter_PS);
-                                        setExportALM(filter_ALM);
-                                        setExportHOSP(filter_HOSP);
-                                        setExportOTRO(filter_OTRO);
-                                        setExportEmerald(filter_emerald);
-                                        setExportAmber(filter_amber);
-                                        setExportRed(filter_red);
-                                        setExportGray(filter_gray);
-                                        setExportHasPendingExpirations(filterHasPendingExpirations);
-                                        setExportDateLimit(filterDateLimit);
-                                    }}
-                                    className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black rounded-lg transition-colors shadow-xs uppercase tracking-wider"
-                                >
-                                    Sincronizar filtros
-                                </button>
-                            </div>
-
                             {/* Section: Establishment Type */}
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Tipo de Establecimiento</h4>
-                                    <div className="flex gap-2">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                        <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Tipo de Establecimiento</h4>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[11px] font-bold">
                                         <button 
+                                            type="button"
                                             onClick={() => { setExportCS(true); setExportPS(true); setExportALM(true); setExportHOSP(true); setExportOTRO(true); }}
-                                            className="text-[10px] text-teal-600 hover:text-teal-800 font-bold"
+                                            className="text-teal-600 hover:text-teal-700 font-black hover:underline cursor-pointer active:scale-95 transition-all"
                                         >
                                             Todos
                                         </button>
-                                        <span className="text-gray-300 text-xs">|</span>
+                                        <span className="text-slate-300 select-none">|</span>
                                         <button 
+                                            type="button"
                                             onClick={() => { setExportCS(false); setExportPS(false); setExportALM(false); setExportHOSP(false); setExportOTRO(false); }}
-                                            className="text-[10px] text-gray-500 hover:text-gray-700 font-bold"
+                                            className="text-slate-500 hover:text-slate-700 hover:underline cursor-pointer active:scale-95 transition-all"
                                         >
                                             Ninguno
                                         </button>
                                     </div>
                                 </div>
                                 
-                                <div className="grid grid-cols-2 gap-2">
-                                    <label className="flex items-center gap-2.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                <div className="grid grid-cols-2 gap-2.5">
+                                    {/* C.S. */}
+                                    <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        exportCS 
+                                            ? 'bg-blue-50/40 border-blue-200 text-blue-900 shadow-[0_3px_10px_-2px_rgba(59,130,246,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={exportCS}
                                             onChange={(e) => setExportCS(e.target.checked)}
-                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <span className="text-xs font-bold text-gray-700 col-span-2">C. S. (Centro de Salud)</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportCS ? 'text-blue-950 font-black' : 'text-slate-700 font-bold'}`}>Centro de Salud (C.S.)</span>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            exportCS 
+                                                ? 'bg-blue-600 border-blue-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                     </label>
                                     
-                                    <label className="flex items-center gap-2.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                    {/* P.S. */}
+                                    <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        exportPS 
+                                            ? 'bg-amber-50/40 border-amber-200 text-amber-900 shadow-[0_3px_10px_-2px_rgba(245,158,11,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={exportPS}
                                             onChange={(e) => setExportPS(e.target.checked)}
-                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <span className="text-xs font-bold text-gray-700">P. S. (Puesto de Salud)</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportPS ? 'text-amber-950 font-black' : 'text-slate-700 font-bold'}`}>Puesto de Salud (P.S.)</span>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            exportPS 
+                                                ? 'bg-amber-600 border-amber-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                     </label>
 
-                                    <label className="flex items-center gap-2.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                    {/* ALM */}
+                                    <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        exportALM 
+                                            ? 'bg-teal-50/40 border-teal-200 text-teal-900 shadow-[0_3px_10px_-2px_rgba(20,184,166,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={exportALM}
                                             onChange={(e) => setExportALM(e.target.checked)}
-                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <span className="text-xs font-bold text-gray-700">Almacén (ALM)</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportALM ? 'text-teal-950 font-black' : 'text-slate-700 font-bold'}`}>Almacén (ALM)</span>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            exportALM 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                     </label>
 
-                                    <label className="flex items-center gap-2.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                    {/* HOSP */}
+                                    <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        exportHOSP 
+                                            ? 'bg-red-50/40 border-red-200 text-red-900 shadow-[0_3px_10px_-2px_rgba(239,68,68,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={exportHOSP}
                                             onChange={(e) => setExportHOSP(e.target.checked)}
-                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <span className="text-xs font-bold text-gray-700">Hospital (HOSP)</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportHOSP ? 'text-red-950 font-black' : 'text-slate-700 font-bold'}`}>Hospital (HOSP)</span>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            exportHOSP 
+                                                ? 'bg-red-600 border-red-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                     </label>
 
-                                    <label className="flex items-center gap-2.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer col-span-2 transition-all select-none">
+                                    {/* OTRO */}
+                                    <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer col-span-2 transition-all border select-none ${
+                                        exportOTRO 
+                                            ? 'bg-slate-100 border-slate-300 text-slate-900 shadow-[0_3px_10px_-2px_rgba(100,116,139,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={exportOTRO}
                                             onChange={(e) => setExportOTRO(e.target.checked)}
-                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <span className="text-xs font-bold text-gray-700">Otros / Sin Clasificar</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportOTRO ? 'text-slate-950 font-black' : 'text-slate-700 font-bold'}`}>Otros / Sin Clasificar</span>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            exportOTRO 
+                                                ? 'bg-slate-700 border-slate-700 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                        </div>
                                     </label>
                                 </div>
                             </div>
 
                             {/* Section: Status Update (Color) */}
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Estado de Actualización (Colores)</h4>
-                                    <div className="flex gap-2">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                        <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Estado de Actualización</h4>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[11px] font-bold">
                                         <button 
+                                            type="button"
                                             onClick={() => { setExportEmerald(true); setExportAmber(true); setExportRed(true); setExportGray(true); }}
-                                            className="text-[10px] text-teal-600 hover:text-teal-800 font-bold"
+                                            className="text-teal-600 hover:text-teal-700 font-black hover:underline cursor-pointer active:scale-95 transition-all"
                                         >
                                             Todos
                                         </button>
-                                        <span className="text-gray-300 text-xs">|</span>
+                                        <span className="text-slate-300 select-none">|</span>
                                         <button 
+                                            type="button"
                                             onClick={() => { setExportEmerald(false); setExportAmber(false); setExportRed(false); setExportGray(false); }}
-                                            className="text-[10px] text-gray-500 hover:text-gray-700 font-bold"
+                                            className="text-slate-500 hover:text-slate-700 hover:underline cursor-pointer active:scale-95 transition-all"
                                         >
                                             Ninguno
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-2">
-                                    <label className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                <div className="grid grid-cols-2 gap-2.5">
+                                    {/* Emerald */}
+                                    <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        exportEmerald 
+                                            ? 'bg-emerald-50/40 border-emerald-200 text-emerald-950 shadow-[0_3px_10px_-2px_rgba(16,185,129,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={exportEmerald}
                                             onChange={(e) => setExportEmerald(e.target.checked)}
-                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 border border-white shrink-0 shadow-sm animate-pulse" />
-                                            <span className="text-xs font-bold text-gray-700 font-medium">Al día (&lt;1 hora sin actualizar)</span>
+                                        <div className="flex items-center gap-2 font-extrabold text-xs">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                                            <span className={exportEmerald ? 'text-emerald-950 font-black' : 'text-slate-700 font-bold'}>Al día (&lt;1h)</span>
+                                        </div>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            exportEmerald 
+                                                ? 'bg-emerald-600 border-emerald-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                     </label>
 
-                                    <label className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                    {/* Amber */}
+                                    <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        exportAmber 
+                                            ? 'bg-amber-50/40 border-amber-200 text-amber-950 shadow-[0_3px_10px_-2px_rgba(245,158,11,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={exportAmber}
                                             onChange={(e) => setExportAmber(e.target.checked)}
-                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-3.5 h-3.5 rounded-full bg-amber-500 border border-white shrink-0 shadow-sm" />
-                                            <span className="text-xs font-bold text-gray-700 font-medium">Pendiente (&gt;1 hora sin actualizar)</span>
+                                        <div className="flex items-center gap-2 font-extrabold text-xs">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                                            <span className={exportAmber ? 'text-amber-950 font-black' : 'text-slate-700 font-bold'}>Pendiente (&gt;1h)</span>
+                                        </div>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            exportAmber 
+                                                ? 'bg-amber-600 border-amber-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                     </label>
 
-                                    <label className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                    {/* Red */}
+                                    <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        exportRed 
+                                            ? 'bg-red-50/40 border-red-200 text-red-950 shadow-[0_3px_10px_-2px_rgba(239,68,68,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={exportRed}
                                             onChange={(e) => setExportRed(e.target.checked)}
-                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-3.5 h-3.5 rounded-full bg-red-500 border border-white shrink-0 shadow-sm" />
-                                            <span className="text-xs font-bold text-gray-700 font-medium col-span-3">Crítico (&gt;24 horas)</span>
+                                        <div className="flex items-center gap-2 font-extrabold text-xs">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
+                                            <span className={exportRed ? 'text-red-950 font-black' : 'text-slate-700 font-bold'}>Crítico (&gt;24h)</span>
+                                        </div>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            exportRed 
+                                                ? 'bg-red-600 border-red-600 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                     </label>
 
-                                    <label className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg cursor-pointer transition-all select-none">
+                                    {/* Gray */}
+                                    <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
+                                        exportGray 
+                                            ? 'bg-slate-100 border-slate-300 text-slate-900 shadow-[0_3px_10px_-2px_rgba(100,116,139,0.08)]' 
+                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                    }`}>
                                         <input
                                             type="checkbox"
                                             checked={exportGray}
                                             onChange={(e) => setExportGray(e.target.checked)}
-                                            className="h-3.5 w-3.5 rounded text-teal-600 border-gray-300 focus:ring-teal-500 cursor-pointer"
+                                            className="sr-only"
                                         />
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-3.5 h-3.5 rounded-full bg-gray-400 border border-white shrink-0 shadow-sm" />
-                                            <span className="text-xs font-bold text-gray-700 font-medium">Sin Datos / Desconectado</span>
+                                        <div className="flex items-center gap-2 font-extrabold text-xs">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0" />
+                                            <span className={exportGray ? 'text-slate-950 font-black' : 'text-slate-700 font-bold'}>Sin Datos</span>
+                                        </div>
+                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                            exportGray 
+                                                ? 'bg-slate-700 border-slate-700 text-white scale-100' 
+                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                        }`}>
+                                            <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                     </label>
                                 </div>
                             </div>
 
                             {/* Section: Update Date Limit */}
-                            <div className="space-y-2">
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Antigüedad de Sincronización</h4>
-                                <select
-                                    value={exportDateLimit}
-                                    onChange={(e) => setExportDateLimit(e.target.value as any)}
-                                    className="block w-full px-3 py-2 border border-gray-200 rounded-xl bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
-                                >
-                                    <option value="all">Sincronizados en cualquier fecha (Todos)</option>
-                                    <option value="1h">Sincronizado hace menos de 1 hora</option>
-                                    <option value="12h">Sincronizado en las últimas 12 horas</option>
-                                    <option value="24h">Sincronizado en las últimas 24 horas (Hoy)</option>
-                                    <option value="3d">Sincronizado en los últimos 3 días</option>
-                                    <option value="7d">Sincronizado en los últimos 7 días</option>
-                                </select>
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Antigüedad de Sincronización</h4>
+                                </div>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setIsExportDateLimitDropdownOpen(!isExportDateLimitDropdownOpen);
+                                        }}
+                                        className="flex items-center justify-between w-full px-4 py-3 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500/15"
+                                    >
+                                        <div className="flex items-center gap-2.5">
+                                            <Clock className="h-4 w-4 text-slate-400 shrink-0" />
+                                            <span className="text-xs font-extrabold text-slate-700">
+                                                {exportDateLimit === 'all' && 'Sincronizados en cualquier fecha (Todos)'}
+                                                {exportDateLimit === '1h' && 'Sincronizado hace menos de 1 hora'}
+                                                {exportDateLimit === '12h' && 'Sincronizado en las últimas 12 horas'}
+                                                {exportDateLimit === '24h' && 'Sincronizado en las últimas 24 horas (Hoy)'}
+                                                {exportDateLimit === '3d' && 'Sincronizado en los últimos 3 días'}
+                                                {exportDateLimit === '7d' && 'Sincronizado en los últimos 7 días'}
+                                            </span>
+                                        </div>
+                                        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-250 ${isExportDateLimitDropdownOpen ? 'rotate-180 text-teal-600' : ''}`} />
+                                    </button>
+
+                                    {isExportDateLimitDropdownOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-30" onClick={() => setIsExportDateLimitDropdownOpen(false)} />
+                                            <div className="absolute left-0 right-0 bottom-full mb-2 bg-white border border-slate-100 rounded-2xl shadow-[0_-12px_30px_rgba(0,0,0,0.08)] z-40 overflow-hidden divide-y divide-slate-50 py-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                {[
+                                                    { value: 'all', label: 'Sincronizados en cualquier fecha (Todos)' },
+                                                    { value: '1h', label: 'Sincronizado hace menos de 1 hora' },
+                                                    { value: '12h', label: 'Sincronizado en las últimas 12 horas' },
+                                                    { value: '24h', label: 'Sincronizado en las últimas 24 horas (Hoy)' },
+                                                    { value: '3d', label: 'Sincronizado en los últimos 3 días' },
+                                                    { value: '7d', label: 'Sincronizado en los últimos 7 días' },
+                                                ].map((option) => (
+                                                    <button
+                                                        key={option.value}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setExportDateLimit(option.value as any);
+                                                            setIsExportDateLimitDropdownOpen(false);
+                                                        }}
+                                                        className={`flex items-center justify-between w-full px-4 py-3 text-left text-xs font-extrabold transition-all cursor-pointer ${
+                                                            exportDateLimit === option.value
+                                                                ? 'bg-teal-50/65 text-teal-950 font-black'
+                                                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                        }`}
+                                                    >
+                                                        <span>{option.label}</span>
+                                                        {exportDateLimit === option.value && (
+                                                            <Check className="h-3.5 w-3.5 text-teal-600 stroke-[3]" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Section: Expirations filter */}
-                            <div className="space-y-2">
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Medicamentos y Filtros adicionales</h4>
-                                <label className="flex items-center gap-3 p-3 bg-red-50/40 hover:bg-red-50/70 border border-red-100/80 rounded-xl cursor-pointer transition-all select-none">
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Medicamentos y Filtros adicionales</h4>
+                                </div>
+                                <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
+                                    exportHasPendingExpirations 
+                                        ? 'bg-red-500 text-white border-red-500 shadow-[0_4px_15px_rgba(239,68,68,0.25)]' 
+                                        : 'bg-white border-slate-100 hover:bg-slate-50 hover:border-red-200'
+                                }`}>
                                     <input
                                         type="checkbox"
                                         checked={exportHasPendingExpirations}
                                         onChange={(e) => setExportHasPendingExpirations(e.target.checked)}
-                                        className="h-4 w-4 rounded text-red-600 border-red-300 focus:ring-red-500 cursor-pointer"
+                                        className="sr-only"
                                     />
-                                    <div className="flex items-center gap-2 text-red-900">
-                                        <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 animate-bounce" />
-                                        <span className="text-xs font-black">Exportar únicamente medicamentos vencidos o por vencer</span>
+                                    <div className="flex items-center gap-3.5">
+                                        <AlertTriangle className={`h-4.5 w-4.5 shrink-0 ${exportHasPendingExpirations ? 'text-white' : 'text-red-500 animate-pulse'}`} />
+                                        <span className={`text-xs font-black leading-tight ${exportHasPendingExpirations ? 'text-white' : 'text-slate-700 group-hover:text-red-700'}`}>
+                                            Exportar únicamente medicamentos vencidos o por vencer
+                                        </span>
+                                    </div>
+                                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                        exportHasPendingExpirations 
+                                            ? 'bg-white text-red-600 border-white scale-100' 
+                                            : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                    }`}>
+                                        <Check className="h-3 w-3 stroke-[3]" />
                                     </div>
                                 </label>
                             </div>
                         </div>
 
                         {/* Footer Details & Buttons */}
-                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex flex-col sm:flex-row items-center sm:justify-between gap-4 sticky bottom-0 z-10 shrink-0">
+                        <div className="px-6 py-5 border-t border-slate-100 bg-white/95 backdrop-blur-md flex flex-col sm:flex-row items-center sm:justify-between gap-4 sticky bottom-0 z-10 shrink-0 shadow-[0_-4px_15px_rgba(0,0,0,0.03)]">
                             <div className="text-center sm:text-left">
-                                <p className="text-[10px] text-gray-500 font-black uppercase tracking-wider">Total Seleccionado</p>
-                                <p className="text-sm font-black text-teal-800">
+                                <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest leading-none">Total Seleccionado</p>
+                                <p className="text-sm font-black text-teal-950 mt-1">
                                     {filteredExportSourcesCount} {filteredExportSourcesCount === 1 ? 'establecimiento' : 'establecimientos'}
                                 </p>
                             </div>
 
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <button
-                                    onClick={() => setIsExportOptionsModalOpen(false)}
-                                    className="flex-1 sm:flex-none px-4 py-2 bg-white text-gray-600 hover:text-gray-900 font-bold text-xs rounded-xl border border-gray-200 shadow-xs transition-colors hover:bg-gray-50"
-                                >
-                                    Cancelar
-                                </button>
+                            <div className="w-full sm:w-auto">
                                 <button
                                     onClick={executeExportAllEstablishmentsToExcel}
                                     disabled={filteredExportSourcesCount === 0}
-                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2 text-white font-extrabold text-xs rounded-xl shadow-md transition-all ${
+                                    className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-white font-black text-[11px] uppercase tracking-widest rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer ${
                                         filteredExportSourcesCount === 0 
-                                        ? 'bg-gray-300 cursor-not-allowed shadow-none' 
-                                        : 'bg-teal-600 hover:bg-teal-700 hover:shadow-lg'
+                                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none border border-slate-200' 
+                                        : 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/15 hover:shadow-teal-600/25 border border-teal-600/10'
                                     }`}
+                                    type="button"
                                 >
-                                    <Download className="h-4 w-4 shrink-0" />
+                                    <Download className="h-4.5 w-4.5 shrink-0" />
                                     <span>Exportar Excel</span>
                                 </button>
                             </div>
