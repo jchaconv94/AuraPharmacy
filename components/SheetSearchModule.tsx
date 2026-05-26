@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft, ChevronDown, LayoutGrid, List, Grid } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft, ChevronDown, LayoutGrid, List, Grid, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
 
@@ -72,12 +74,39 @@ const getUpdateStatus = (timestamp?: number) => {
     
     const now = new Date().getTime();
     const diffMs = now - timestamp;
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
     const diffHours = diffMs / (1000 * 60 * 60);
 
-    if (diffHours < 0) return { color: 'bg-emerald-500', label: 'Fecha en el futuro' };
-    if (diffHours < 1) return { color: 'bg-emerald-500', label: 'Actualizado recientemente' };
-    if (diffHours < 24) return { color: 'bg-amber-500', label: 'Más de 1 hora sin actualizar' };
-    return { color: 'bg-red-500', label: 'Más de 1 día sin actualizar' };
+    if (diffMs < 0) {
+        return { color: 'bg-emerald-500', label: 'Actualizado recientemente' };
+    }
+    
+    // Dentro de la hora (<= 1 hora): Verde
+    if (diffHours <= 1) {
+        const minLabel = diffMinutes <= 0 ? 'menos de 1 min' : `${diffMinutes} min`;
+        return { 
+            color: 'bg-emerald-500', 
+            label: `Hace ${minLabel}` 
+        };
+    }
+    
+    // Entre 1 y 24 horas: Amarillo
+    if (diffHours <= 24) {
+        const hrs = Math.floor(diffHours);
+        const mins = diffMinutes % 60;
+        return { 
+            color: 'bg-amber-500', 
+            label: `Hace ${hrs} ${hrs === 1 ? 'hora' : 'horas'} con ${mins} min`
+        };
+    }
+    
+    // Más de 24 horas: Rojo
+    const days = Math.floor(diffHours / 24);
+    const hrs = Math.floor(diffHours) % 24;
+    return { 
+        color: 'bg-red-500', 
+        label: `Hace ${days} ${days === 1 ? 'día' : 'días'} con ${hrs} h`
+    };
 };
 
 const getSheetType = (name: string): 'CS' | 'PS' | 'ALM' | 'HOSP' | 'OTRO' => {
@@ -134,9 +163,12 @@ const getExpirationStats = (records: SIGData[]) => {
     today.setHours(0, 0, 0, 0);
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
+    const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
+    const nextMonthYear = currentMonth === 11 ? currentYear + 1 : currentYear;
     
     const expired: SIGData[] = [];
     const expiringThisMonth: SIGData[] = [];
+    const expiringNextMonth: SIGData[] = [];
     
     records.forEach(r => {
         const stock = parseFloat(String(r.Saldo || '0').replace(/,/g, ''));
@@ -145,16 +177,61 @@ const getExpirationStats = (records: SIGData[]) => {
         
         const parts = r.Fec_Vencim.split(/[\/\-]/);
         if (parts.length === 3) {
-            const day = parseInt(parts[0], 10);
-            const month = parseInt(parts[1], 10) - 1;
-            const year = parseInt(parts[2], 10);
+            const p0 = parseInt(parts[0], 10);
+            const p1 = parseInt(parts[1], 10);
+            const p2 = parseInt(parts[2], 10);
+
+            let day = 1, month = 0, year = 2000;
+
+            if (p0 > 1000) {
+                // format YYYY-MM-DD
+                year = p0;
+                month = p1 - 1;
+                day = p2;
+            } else if (p2 > 1000 || p2 < 100) {
+                // format DD/MM/YYYY or MM/DD/YYYY
+                year = p2 < 100 ? p2 + 2000 : p2;
+                if (p0 > 12) {
+                    day = p0;
+                    month = p1 - 1;
+                } else if (p1 > 12) {
+                    month = p0 - 1;
+                    day = p1;
+                } else {
+                    // Default to DD/MM/YYYY
+                    day = p0;
+                    month = p1 - 1;
+                }
+            }
+
             if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-                const fullYear = year < 100 ? year + 2000 : year;
-                const expDate = new Date(fullYear, month, day);
+                const expDate = new Date(year, month, day);
+                // Consider expired strictly if end of the day passed
+                expDate.setHours(23, 59, 59, 999);
+                
                 if (expDate < today) {
                     expired.push(r);
-                } else if (month === currentMonth && fullYear === currentYear) {
+                } else if (month === currentMonth && year === currentYear) {
                     expiringThisMonth.push(r);
+                } else if (month === nextMonth && year === nextMonthYear) {
+                    expiringNextMonth.push(r);
+                }
+            }
+        } else if (parts.length === 2) {
+            // MM/YYYY or MM/YY
+            const p0 = parseInt(parts[0], 10);
+            const p1 = parseInt(parts[1], 10);
+            if (!isNaN(p0) && !isNaN(p1)) {
+                const month = p0 - 1;
+                const year = p1 < 100 ? p1 + 2000 : p1;
+                // Expiry is end of the month
+                const expDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+                if (expDate < today) {
+                    expired.push(r);
+                } else if (month === currentMonth && year === currentYear) {
+                    expiringThisMonth.push(r);
+                } else if (month === nextMonth && year === nextMonthYear) {
+                    expiringNextMonth.push(r);
                 }
             }
         }
@@ -163,8 +240,10 @@ const getExpirationStats = (records: SIGData[]) => {
     return { 
         expired, 
         expiringThisMonth,
+        expiringNextMonth,
         expiredCount: expired.length, 
-        expiringThisMonthCount: expiringThisMonth.length 
+        expiringThisMonthCount: expiringThisMonth.length,
+        expiringNextMonthCount: expiringNextMonth.length
     };
 };
 
@@ -216,6 +295,155 @@ export const SheetSearchModule: React.FC = () => {
     const [sheetsViewMode, setSheetsViewMode] = useState<'grid' | 'list' | 'compact'>('grid');
     // Modal & Config
     const [isConfigOpen, setIsConfigOpen] = useState(false);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reportSort, setReportSort] = useState<{ field: 'name' | 'status' | 'date', order: 'asc' | 'desc' }>({ field: 'date', order: 'asc' });
+    const reportTableRef = useRef<HTMLDivElement>(null);
+
+    const exportReportToExcel = async () => {
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('Reporte de Actualización', {
+            views: [{ showGridLines: true }]
+        });
+
+        // Generar fecha actual formateada
+        const today = new Date();
+        const day = String(today.getDate()).padStart(2, '0');
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const year = today.getFullYear();
+        const currentDateStr = `${day}-${month}-${year}`;
+
+        // Fila 1: Título del Reporte
+        ws.addRow([`Reporte de actualización de Stock detallado SISMED ${currentDateStr}`]);
+        ws.mergeCells('A1:G1');
+        const titleCell = ws.getCell('A1');
+        titleCell.font = {
+            name: 'Calibri',
+            size: 16,
+            bold: true,
+            color: { argb: '000000' }
+        };
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(1).height = 40;
+
+        // Fila 2: En blanco para espaciado
+        ws.addRow([]);
+        ws.getRow(2).height = 12;
+
+        // Fila 3: Encabezados de Columnas
+        const headers = [
+            'COD. SISMED',
+            'ESTABLECIMIENTO',
+            'ESTADO DE ACTUALIZACION',
+            'ULTIMA ACTUALIZACION',
+            'VENCIDOS',
+            'VENCEN ESTE MES',
+            'VENCEN PROX. MES'
+        ];
+
+        ws.addRow(headers);
+        
+        ws.getRow(3).eachCell(cell => {
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: '002060' }
+            };
+            cell.font = {
+                color: { argb: 'FFFFFF' },
+                bold: true,
+                name: 'Calibri',
+                size: 11
+            };
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FFFFFF' } },
+                left: { style: 'thin', color: { argb: 'FFFFFF' } },
+                bottom: { style: 'thin', color: { argb: 'FFFFFF' } },
+                right: { style: 'thin', color: { argb: 'FFFFFF' } }
+            };
+        });
+        ws.getRow(3).height = 25;
+
+        // Rellenar Datos (Fila 4 en adelante)
+        sortedReportSources.forEach((sheet, idx) => {
+            const lastDash = sheet.name.lastIndexOf('-');
+            const description = lastDash === -1 ? sheet.name.replace(/^FARM\s*-\s*/i, '') : sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+            const code = getAlmCodeForSheet(sheet.id, data);
+            const status = getUpdateStatus(sheet.lastUpdateTime);
+            
+            const sheetData = data.filter(r => r.sourceId === sheet.id);
+            const { expiredCount, expiringThisMonthCount, expiringNextMonthCount } = getExpirationStats(sheetData);
+
+            let bgArgb = 'FFFFFF';
+            let fontArgb = '000000';
+            
+            if (status.color === 'bg-red-500') {
+                bgArgb = 'FF8080'; // Rojo suave / agradable
+                fontArgb = '000000';
+            } else if (status.color === 'bg-amber-500') {
+                bgArgb = 'FFC000'; // Amarillo/Ambar
+                fontArgb = '000000';
+            } else if (status.color === 'bg-emerald-500') {
+                bgArgb = '92D050'; // Verde
+                fontArgb = '000000';
+            } else if (status.color === 'bg-gray-400') {
+                bgArgb = 'D9D9D9'; // Gris
+                fontArgb = '595959';
+            }
+
+            const codeStr = code ? String(code).trim() : '';
+
+            const row = ws.addRow([
+                codeStr,
+                description,
+                status.label,
+                sheet.lastUpdateTime ? formatFullDate(sheet.lastUpdateTime) : 'No sincronizado',
+                expiredCount,
+                expiringThisMonthCount,
+                expiringNextMonthCount
+            ]);
+
+            row.eachCell((cell, colNumber) => {
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: bgArgb }
+                };
+                cell.font = {
+                    color: { argb: fontArgb },
+                    name: 'Calibri',
+                    size: 11
+                };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFFFFF' } },
+                    left: { style: 'thin', color: { argb: 'FFFFFF' } },
+                    bottom: { style: 'thin', color: { argb: 'FFFFFF' } },
+                    right: { style: 'thin', color: { argb: 'FFFFFF' } }
+                };
+                
+                if (colNumber === 1) {
+                    cell.numFmt = '@'; // Forzar formato texto para preservar ceros a la izquierda
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                } else if (colNumber === 2) {
+                    cell.alignment = { horizontal: 'left', vertical: 'middle' };
+                } else {
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                }
+            });
+            row.height = 20;
+        });
+
+        ws.getColumn(1).width = 15;
+        ws.getColumn(2).width = 35;
+        ws.getColumn(3).width = 32;
+        ws.getColumn(4).width = 25;
+        ws.getColumn(5).width = 15;
+        ws.getColumn(6).width = 20;
+        ws.getColumn(7).width = 20;
+
+        const buffer = await wb.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `Reporte_General_Stock_${formatFullDate(Date.now()).replace(/[:/ ]/g, '_')}.xlsx`);
+    };
     
     // States for Export Options Modal
     const [isExportOptionsModalOpen, setIsExportOptionsModalOpen] = useState(false);
@@ -1089,6 +1317,30 @@ export const SheetSearchModule: React.FC = () => {
         return counts;
     }, [viewLevel, selectedUngetIndex, sources, sheetSearchTerm, data]);
 
+    const sortedReportSources = useMemo(() => {
+        return [...filteredAndSortedSources].sort((a, b) => {
+            const orderMult = reportSort.order === 'asc' ? 1 : -1;
+            if (reportSort.field === 'name') {
+                return a.name.localeCompare(b.name) * orderMult;
+            } else if (reportSort.field === 'date') {
+                const dateA = a.lastUpdateTime || 0;
+                const dateB = b.lastUpdateTime || 0;
+                return (dateA - dateB) * orderMult;
+            } else if (reportSort.field === 'status') {
+                const statusOrder = { 'bg-emerald-500': 1, 'bg-amber-500': 2, 'bg-red-500': 3, 'bg-gray-400': 4 };
+                const colorA = getUpdateStatus(a.lastUpdateTime).color;
+                const colorB = getUpdateStatus(b.lastUpdateTime).color;
+                const statusA = (statusOrder as any)[colorA] || 5;
+                const statusB = (statusOrder as any)[colorB] || 5;
+                if (statusA !== statusB) {
+                    return (statusA - statusB) * orderMult;
+                }
+                return ((a.lastUpdateTime || 0) - (b.lastUpdateTime || 0)) * orderMult;
+            }
+            return 0;
+        });
+    }, [filteredAndSortedSources, reportSort]);
+
     return (
         <div className={`flex flex-col h-full bg-gray-50/50 sm:p-4 2xl:p-6 pb-20 max-w-7xl mx-auto w-full transition-all duration-300 ${isAdvancedFiltersSidebarOpen && viewLevel === 'sheets' ? 'md:pr-[380px] xl:pr-[420px]' : ''}`}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3 sm:gap-4 border-b border-gray-200 pb-4 px-4 pt-4 sm:px-0 sm:pt-0">
@@ -1309,256 +1561,265 @@ export const SheetSearchModule: React.FC = () => {
 
             <div className="bg-white sm:rounded-2xl border-y sm:border border-gray-200 shadow-sm flex-1 flex flex-col min-h-[600px] overflow-hidden">
                 {/* BREADCRUMBS & SEARCH */}
-                <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4">
-                    {/* BREADCRUMBS */}
-                    {/* Mobile Breadcrumb (Back button + Current state) */}
-                    <div className="flex sm:hidden items-center gap-2 text-sm">
-                        {viewLevel === 'sheets' && (
+                <div className="p-4 sm:p-5 border-b border-gray-150 bg-slate-50/50 flex flex-col gap-4 font-sans">
+                    {/* BREADCRUMBS Y ESTADÍSTICAS RÁPIDAS */}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between w-full pb-1">
+                        {/* Mobile Breadcrumb (Back button + Current state) */}
+                        <div className="flex sm:hidden items-center gap-2 text-sm">
+                            {viewLevel === 'sheets' && (
+                                <button 
+                                    onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
+                                    className="p-1.5 -ml-1 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
+                                >
+                                    <ArrowLeft className="h-5 w-5" />
+                                </button>
+                            )}
+                            {viewLevel === 'data' && (
+                                 <button 
+                                    onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
+                                    className="p-1.5 -ml-1 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
+                                >
+                                    <ArrowLeft className="h-5 w-5" />
+                                </button>       
+                            )}
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-100 text-teal-800 shrink-0 min-w-0 font-bold text-xs">
+                                 {viewLevel === 'ungets' && (
+                                    <>
+                                        <Building2 className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="whitespace-nowrap font-black">UNGETs</span>
+                                    </>
+                                 )}
+                                 {viewLevel === 'sheets' && (
+                                    <>
+                                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="whitespace-nowrap font-black truncate max-w-[130px]">{scriptUrls[selectedUngetIndex!]?.name || 'Documento'}</span>
+                                    </>
+                                 )}
+                                 {viewLevel === 'data' && (
+                                    <>
+                                        <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="whitespace-nowrap font-black truncate max-w-[130px]">{(() => {
+                                            const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
+                                            const lastDash = name.lastIndexOf('-');
+                                            const desc = lastDash === -1 ? name.replace(/^FARM\s*-\s*/i, '') : name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                            const code = selectedSourceId ? getAlmCodeForSheet(selectedSourceId, data) : '';
+                                            return code ? `${desc} (${code})` : desc;
+                                        })()}</span>
+                                    </>
+                                 )}
+                            </div>
+                        </div>
+
+                        {/* Desktop Breadcrumbs */}
+                        <nav className="hidden sm:flex items-center gap-2 text-xs font-semibold overflow-x-auto hide-scrollbar">
                             <button 
                                 onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
-                                className="p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all shrink-0 ${viewLevel === 'ungets' ? 'bg-teal-500/10 text-teal-800 border border-teal-100' : 'text-gray-500 hover:text-slate-800 hover:bg-gray-100'}`}
                             >
-                                <ArrowLeft className="h-5 w-5" />
+                                <Building2 className="scale-90" />
+                                <span className="whitespace-nowrap">PANEL REGIONAL</span>
                             </button>
+                            
+                            {selectedUngetIndex !== null && (
+                                <>
+                                    <ChevronRight className="h-3.5 w-3.5 text-gray-300 shrink-0" />
+                                    <button 
+                                        onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all shrink-0 ${viewLevel === 'sheets' ? 'bg-teal-500/10 text-teal-800 border border-teal-100' : 'text-gray-500 hover:text-slate-800 hover:bg-gray-100'}`}
+                                    >
+                                        <MapPin className="scale-90" />
+                                        <span className="whitespace-nowrap truncate max-w-[200px] sm:max-w-none">{scriptUrls[selectedUngetIndex]?.name || 'Documento'}</span>
+                                    </button>
+                                </>
+                            )}
+
+                            {selectedSourceId && (
+                                <>
+                                    <ChevronRight className="h-3.5 w-3.5 text-gray-300 shrink-0" />
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-800 border border-teal-100 font-bold shrink-0">
+                                        <FileSpreadsheet className="scale-90" />
+                                        <span className="whitespace-nowrap truncate max-w-[200px] sm:max-w-none">{(() => {
+                                            const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
+                                            const lastDash = name.lastIndexOf('-');
+                                            const desc = lastDash === -1 ? name.replace(/^FARM\s*-\s*/i, '') : name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                            const code = selectedSourceId ? getAlmCodeForSheet(selectedSourceId, data) : '';
+                                            return code ? `${desc} (${code})` : desc;
+                                        })()}</span>
+                                    </div>
+                                </>
+                            )}
+                        </nav>
+
+                        {/* Indicadores rápidos de tipo (Estadísticas alineadas a la derecha) */}
+                        {viewLevel === 'sheets' && establishmentSummary && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-150 rounded-xl shrink-0 overflow-x-auto hide-scrollbar shadow-xs">
+                                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mr-1 whitespace-nowrap">Resumen UNGET:</span>
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50/50 text-blue-700 text-[10px] font-medium border border-blue-100 whitespace-nowrap">
+                                    C.S: <span className="text-blue-800 font-semibold">{establishmentSummary.cs}</span>
+                                </div>
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50/50 text-amber-700 text-[10px] font-medium border border-amber-100 whitespace-nowrap">
+                                    P.S: <span className="text-amber-805 font-semibold">{establishmentSummary.ps}</span>
+                                </div>
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-teal-50/50 text-teal-700 text-[10px] font-medium border border-teal-100 whitespace-nowrap">
+                                    ALM: <span className="text-teal-800 font-semibold">{establishmentSummary.alm}</span>
+                                </div>
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-violet-50/50 text-violet-700 text-[10px] font-medium border border-violet-100 whitespace-nowrap">
+                                    HOSP: <span className="text-violet-800 font-semibold">{establishmentSummary.hosp}</span>
+                                </div>
+                            </div>
                         )}
-                        {viewLevel === 'data' && (
-                             <button 
-                                onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
-                                className="p-2 -ml-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
-                            >
-                                <ArrowLeft className="h-5 w-5" />
-                            </button>       
+
+                        {viewLevel === 'ungets' && globalUngetSummary && sources.length > 0 && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-150 rounded-xl shrink-0 overflow-x-auto hide-scrollbar shadow-xs">
+                                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mr-1 whitespace-nowrap">Total Regional:</span>
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50/50 text-blue-700 text-[10px] font-medium border border-blue-100 whitespace-nowrap">
+                                    C.S: <span className="text-blue-800 font-semibold">{globalUngetSummary.cs}</span>
+                                </div>
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50/50 text-amber-700 text-[10px] font-medium border border-amber-100 whitespace-nowrap">
+                                    P.S: <span className="text-amber-805 font-semibold">{globalUngetSummary.ps}</span>
+                                </div>
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-teal-50/50 text-teal-700 text-[10px] font-medium border border-teal-100 whitespace-nowrap">
+                                    ALM: <span className="text-teal-800 font-semibold">{globalUngetSummary.alm}</span>
+                                </div>
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-violet-50/50 text-violet-700 text-[10px] font-medium border border-violet-100 whitespace-nowrap">
+                                    HOSP: <span className="text-violet-800 font-semibold">{globalUngetSummary.hosp}</span>
+                                </div>
+                            </div>
                         )}
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-100 text-teal-800 shrink-0 min-w-0">
-                             {viewLevel === 'ungets' && (
-                                <>
-                                    <Building2 className="h-4 w-4 shrink-0" />
-                                    <span className="whitespace-nowrap font-bold">UNGETs</span>
-                                </>
-                             )}
-                             {viewLevel === 'sheets' && (
-                                <>
-                                    <MapPin className="h-4 w-4 shrink-0" />
-                                    <span className="whitespace-nowrap font-bold truncate">{scriptUrls[selectedUngetIndex!]?.name || 'Documento'}</span>
-                                </>
-                             )}
-                             {viewLevel === 'data' && (
-                                <>
-                                    <FileSpreadsheet className="h-4 w-4 shrink-0" />
-                                    <span className="whitespace-nowrap font-bold truncate">{(() => {
-                                        const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
-                                        const lastDash = name.lastIndexOf('-');
-                                        const desc = lastDash === -1 ? name.replace(/^FARM\s*-\s*/i, '') : name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
-                                        const code = selectedSourceId ? getAlmCodeForSheet(selectedSourceId, data) : '';
-                                        return code ? `${desc} (${code})` : desc;
-                                    })()}</span>
-                                </>
-                             )}
-                        </div>
                     </div>
 
-                    {/* Desktop Breadcrumbs */}
-                    <nav className="hidden sm:flex items-center gap-2 text-sm font-medium overflow-x-auto pb-1 -mb-1 hide-scrollbar">
-                        <button 
-                            onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors shrink-0 ${viewLevel === 'ungets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
-                        >
-                            <Building2 className="h-4 w-4 shrink-0" />
-                            <span className="whitespace-nowrap">UNGETs</span>
-                        </button>
-                        
-                        {selectedUngetIndex !== null && (
-                            <>
-                                <ChevronRight className="h-4 w-4 text-gray-300 shrink-0" />
-                                <button 
-                                    onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors shrink-0 ${viewLevel === 'sheets' ? 'bg-teal-100 text-teal-800' : 'text-gray-500 hover:bg-gray-100'}`}
-                                >
-                                    <MapPin className="h-4 w-4 shrink-0" />
-                                    <span className="whitespace-nowrap truncate max-w-[200px] sm:max-w-none">{scriptUrls[selectedUngetIndex]?.name || 'Documento'}</span>
-                                </button>
-                            </>
-                        )}
-
-                        {selectedSourceId && (
-                            <>
-                                <ChevronRight className="h-4 w-4 text-gray-300 shrink-0" />
-                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-100 text-teal-800 shrink-0">
-                                    <FileSpreadsheet className="h-4 w-4 shrink-0" />
-                                    <span className="whitespace-nowrap truncate max-w-[200px] sm:max-w-none">{(() => {
-                                        const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
-                                        const lastDash = name.lastIndexOf('-');
-                                        const desc = lastDash === -1 ? name.replace(/^FARM\s*-\s*/i, '') : name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
-                                        const code = selectedSourceId ? getAlmCodeForSheet(selectedSourceId, data) : '';
-                                        return code ? `${desc} (${code})` : desc;
-                                    })()}</span>
-                                </div>
-                            </>
-                        )}
-                    </nav>
-
-                    {/* ACTIONS (Search & Filters) */}
-                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center w-full">
-                        {/* Search */}
-                        <div className="w-full sm:max-w-md">
+                    {/* ACTIONS BAR (Search left, unifed actions right) */}
+                    <div className="flex flex-col md:flex-row gap-3 items-center justify-between w-full border-t border-slate-200/50 pt-3">
+                        {/* Campo de Búsqueda inteligente */}
+                        <div className="w-full md:max-w-md shrink-0">
                             {viewLevel === 'ungets' && (
                                 <div className="relative w-full">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Search className="h-4 w-4 text-gray-400" />
+                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-slate-450" />
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Buscar UNGET por nombre..."
                                         value={ungetSearchTerm}
                                         onChange={(e) => setUngetSearchTerm(e.target.value)}
-                                        className="block w-full pl-9 pr-3 py-2 border border-teal-500/30 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-xs transition-all shadow-sm"
+                                        className="block w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/80 focus:border-transparent text-xs transition-all shadow-xs"
                                     />
                                 </div>
                             )}
                             {viewLevel === 'data' && (
                                 <div className="relative w-full">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Search className="h-4 w-4 text-gray-400" />
+                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-slate-450" />
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Buscar en esta hoja..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="block w-full pl-9 pr-3 py-2 border border-teal-500/30 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-xs transition-all shadow-sm"
+                                        className="block w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/80 focus:border-transparent text-xs transition-all shadow-xs"
                                     />
                                 </div>
                             )}
                             {viewLevel === 'sheets' && (
                                 <div className="relative w-full">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Search className="h-4 w-4 text-gray-400" />
+                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-slate-450" />
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Buscar establecimiento por nombre o código..."
                                         value={sheetSearchTerm}
                                         onChange={(e) => setSheetSearchTerm(e.target.value)}
-                                        className="block w-full pl-9 pr-3 py-2 border border-teal-500/30 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 sm:text-xs transition-all shadow-sm"
+                                        className="block w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/80 focus:border-transparent text-xs transition-all shadow-xs"
                                     />
                                 </div>
                             )}
                         </div>
 
-                        {/* Alerts and count */}
-                        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto shrink-0 justify-start sm:justify-end overflow-x-auto pb-1 sm:pb-0 hide-scrollbar scroll-smooth">
+                        {/* Botones de acción unificados */}
+                        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-start md:justify-end shrink-0">
                             {viewLevel === 'data' && (
                                 <>
                                     {activeSheetExpirationInfo.expiredCount > 0 && (
                                         <button 
                                             onClick={() => { setExpirationModalType('expired'); setIsExpirationModalOpen(true); }}
-                                            className="flex items-center gap-1.5 bg-red-50 text-red-700 px-3 py-2 rounded-xl border border-red-200 shadow-sm text-xs font-bold shrink-0"
+                                            className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 px-3.5 py-2 rounded-xl border border-red-100 shadow-xs text-xs font-bold transition-all shrink-0"
                                             title="Ver productos vencidos"
                                         >
-                                            <AlertTriangle className="h-4 w-4" />
+                                            <AlertTriangle className="h-4 w-4 shrink-0 animate-pulse text-red-500" />
                                             <span>{activeSheetExpirationInfo.expiredCount} vencido{activeSheetExpirationInfo.expiredCount !== 1 ? 's' : ''}</span>
                                         </button>
                                     )}
                                     {activeSheetExpirationInfo.expiringThisMonthCount > 0 && (
                                         <button 
                                             onClick={() => { setExpirationModalType('expiring'); setIsExpirationModalOpen(true); }}
-                                            className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-2 rounded-xl border border-amber-200 shadow-sm text-xs font-bold shrink-0"
+                                            className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 px-3.5 py-2 rounded-xl border border-amber-100 shadow-xs text-xs font-bold transition-all shrink-0"
                                             title="Ver productos por vencer este mes"
                                         >
-                                            <Clock className="h-4 w-4" />
+                                            <Clock className="h-4 w-4 shrink-0" />
                                             <span>{activeSheetExpirationInfo.expiringThisMonthCount} por vencer</span>
                                         </button>
                                     )}
+                                    
+                                    <button
+                                        onClick={exportCurrentSheetToExcel}
+                                        className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-700 px-2.5 py-1.5 rounded-lg border border-emerald-200 shadow-xs text-[10px] font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer"
+                                        title="Descargar Excel del Establecimiento"
+                                    >
+                                        <Download className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                                        <span>Exportar Stock</span>
+                                    </button>
                                 </>
                             )}
                             
                             {viewLevel === 'sheets' && (
                                 <>
-                                    <button
-                                        onClick={exportAllEstablishmentsToExcel}
-                                        className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold shrink-0 transition-colors"
-                                        title="Descargar Excel de Todos los Establecimientos"
-                                    >
-                                        <Download className="h-4 w-4" />
-                                        <span className="hidden sm:inline">Exportar Todos</span>
-                                    </button>
-
+                                    {/* Botón Filtros Avanzados */}
                                     <button
                                         onClick={() => setIsAdvancedFiltersSidebarOpen(true)}
-                                        className="flex items-center gap-1.5 bg-teal-50 hover:bg-teal-100/80 text-teal-700 px-3 py-2 rounded-xl border border-teal-200 shadow-sm text-xs font-bold shrink-0 transition-colors relative"
+                                        className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-xs text-[10px] font-semibold uppercase tracking-wider transition-all relative shrink-0 cursor-pointer"
                                         title="Filtros Avanzados"
                                     >
-                                        <Filter className="h-4 w-4" />
-                                        <span>Filtros Avanzados</span>
+                                        <Filter className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                                        <span>Filtros</span>
                                         {/* Indicador de filtros activos */}
                                         {(!filter_CS || !filter_PS || !filter_ALM || !filter_HOSP || !filter_OTRO || !filter_emerald || !filter_amber || !filter_red || !filter_gray || filterSortOrder !== 'name_asc' || filterHasPendingExpirations) && (
-                                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-teal-500 rounded-full border border-white animate-pulse" />
+                                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-teal-500 rounded-full border border-white animate-pulse" />
                                         )}
                                     </button>
-                                </>
-                            )}
 
-                            {viewLevel === 'sheets' && establishmentSummary && (
-                                <div className="flex items-center gap-1.5 px-3 py-2 sm:py-1 bg-gray-50 border border-gray-200 rounded-xl shrink-0 overflow-x-auto hide-scrollbar">
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-blue-700 text-[10px] sm:text-[11px] font-black border border-blue-100 shadow-sm whitespace-nowrap">
-                                        C.S: {establishmentSummary.cs}
-                                    </div>
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-amber-700 text-[10px] sm:text-[11px] font-black border border-amber-100 shadow-sm whitespace-nowrap">
-                                        P.S: {establishmentSummary.ps}
-                                    </div>
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-teal-700 text-[10px] sm:text-[11px] font-black border border-teal-100 shadow-sm whitespace-nowrap">
-                                        ALM: {establishmentSummary.alm}
-                                    </div>
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-violet-700 text-[10px] sm:text-[11px] font-black border border-violet-100 shadow-sm whitespace-nowrap">
-                                        HOSP: {establishmentSummary.hosp}
-                                    </div>
-                                </div>
+                                    {/* Botón Reporte de Actualización */}
+                                    <button
+                                        onClick={() => setIsReportModalOpen(true)}
+                                        className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 px-2.5 py-1.5 rounded-lg border border-indigo-200 shadow-xs text-[10px] font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer"
+                                        title="Ver Reporte General de Actualizaciones"
+                                    >
+                                        <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-indigo-600" />
+                                        <span>Reporte Actualización</span>
+                                    </button>
+
+                                    {/* Botón de Exportar Todos */}
+                                    <button
+                                        onClick={exportAllEstablishmentsToExcel}
+                                        className="flex items-center gap-1.5 bg-teal-50 hover:bg-teal-100/80 text-teal-700 px-2.5 py-1.5 rounded-lg border border-teal-200 shadow-xs text-[10px] font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer"
+                                        title="Descargar Excel de Todos los Establecimientos"
+                                    >
+                                        <Download className="h-3.5 w-3.5 shrink-0 text-teal-600" />
+                                        <span>Exportar Stock</span>
+                                    </button>
+                                </>
                             )}
 
                             {viewLevel === 'ungets' && globalUngetSummary && sources.length > 0 && (
-                                <>
-                                    <button
-                                        onClick={exportAllUngetsToExcel}
-                                        className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold shrink-0 transition-colors"
-                                        title="Descargar Excel de Todas las UNGETs"
-                                    >
-                                        <Download className="h-4 w-4" />
-                                        <span className="hidden sm:inline">Exportar todos</span>
-                                    </button>
-                                    
-                                    <div className="flex items-center gap-1.5 px-3 py-2 sm:py-1 bg-gray-50 border border-gray-200 rounded-xl shrink-0 overflow-x-auto hide-scrollbar">
-                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-blue-700 text-[10px] sm:text-[11px] font-black border border-blue-100 shadow-sm whitespace-nowrap">
-                                            C.S: {globalUngetSummary.cs}
-                                        </div>
-                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-amber-700 text-[10px] sm:text-[11px] font-black border border-amber-100 shadow-sm whitespace-nowrap">
-                                            P.S: {globalUngetSummary.ps}
-                                        </div>
-                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-teal-700 text-[10px] sm:text-[11px] font-black border border-teal-100 shadow-sm whitespace-nowrap">
-                                            ALM: {globalUngetSummary.alm}
-                                        </div>
-                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white text-violet-700 text-[10px] sm:text-[11px] font-black border border-violet-100 shadow-sm whitespace-nowrap">
-                                            HOSP: {globalUngetSummary.hosp}
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-
-                            {viewLevel === 'data' && (
                                 <button
-                                    onClick={exportCurrentSheetToExcel}
-                                    className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-xl border border-green-200 shadow-sm text-xs font-bold shrink-0 transition-colors"
-                                    title="Descargar Excel del Establecimiento"
+                                    onClick={exportAllUngetsToExcel}
+                                    className="flex items-center gap-1.5 bg-teal-50 hover:bg-teal-100/80 text-teal-700 px-2.5 py-1.5 rounded-lg border border-teal-200 shadow-xs text-[10px] font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer"
+                                    title="Descargar Excel de Todas las UNGETs"
                                 >
-                                    <Download className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Exportar Excel</span>
+                                    <Download className="h-3.5 w-3.5 shrink-0 text-teal-600" />
+                                    <span>Exportar Stock</span>
                                 </button>
                             )}
-
-                            <div className="hidden sm:block text-xs text-gray-500 bg-white px-3 sm:px-4 py-2 rounded-xl border border-gray-200 shadow-sm font-medium shrink-0 whitespace-nowrap">
-                                {viewLevel === 'ungets' ? `${scriptUrls.length} UNGETs` : 
-                                 viewLevel === 'sheets' ? `${sources.filter(s => s.urlIndex === selectedUngetIndex).length} Establ.` : 
-                                 `${filteredData.length} prod.`}
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1693,48 +1954,55 @@ export const SheetSearchModule: React.FC = () => {
                             {/* LEVEL 2: SHEET CARDS */}
                             {viewLevel === 'sheets' && (
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
-                                        <h3 className="text-sm sm:text-lg font-black text-gray-900 uppercase">Seleccione un establecimiento</h3>
+                                    <div className="flex items-center justify-between border-b border-gray-200/50 pb-3 mb-4 sm:mb-6">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">Establecimientos de Salud</h3>
+                                            {filteredAndSortedSources.length > 0 && (
+                                                <span className="text-[10px] sm:text-xs text-slate-550 font-extrabold bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200/60 shadow-xs">
+                                                    {filteredAndSortedSources.length} {filteredAndSortedSources.length === 1 ? 'establecimiento' : 'establecimientos'}
+                                                </span>
+                                            )}
+                                        </div>
                                         
                                         {/* Selector de tipo de Visualización */}
-                                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl self-end sm:self-auto border border-slate-200/65 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] shrink-0">
+                                        <div className="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-xl border border-slate-200/60 shadow-[inset_0_1px_1.5px_rgba(0,0,0,0.02)] shrink-0">
                                             <button
                                                 type="button"
                                                 onClick={() => setSheetsViewMode('grid')}
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10.5px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                                                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                                                     sheetsViewMode === 'grid'
-                                                        ? 'bg-white text-teal-950 font-black shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-200/30'
-                                                        : 'text-slate-500 hover:text-slate-850 hover:bg-white/30 border border-transparent'
+                                                        ? 'bg-white text-teal-950 shadow-xs border border-slate-200/30'
+                                                        : 'text-slate-400 hover:text-slate-700'
                                                 }`}
                                                 title="Vista Cuadrícula"
                                             >
-                                                <LayoutGrid className="h-3.5 w-3.5 text-slate-500" />
+                                                <LayoutGrid className="h-3.5 w-3.5 shrink-0" />
                                                 <span className="hidden xs:inline">Cuadrícula</span>
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setSheetsViewMode('list')}
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10.5px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                                                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                                                     sheetsViewMode === 'list'
-                                                        ? 'bg-white text-teal-950 font-black shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-200/30'
-                                                        : 'text-slate-500 hover:text-slate-850 hover:bg-white/30 border border-transparent'
+                                                        ? 'bg-white text-teal-950 shadow-xs border border-slate-200/30'
+                                                        : 'text-slate-400 hover:text-slate-700'
                                                 }`}
                                                 title="Vista Lista"
                                             >
-                                                <List className="h-3.5 w-3.5 text-slate-500" />
+                                                <List className="h-3.5 w-3.5 shrink-0" />
                                                 <span className="hidden xs:inline">Lista</span>
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setSheetsViewMode('compact')}
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10.5px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                                                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                                                     sheetsViewMode === 'compact'
-                                                        ? 'bg-white text-teal-950 font-black shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-200/30'
-                                                        : 'text-slate-500 hover:text-slate-850 hover:bg-white/30 border border-transparent'
+                                                        ? 'bg-white text-teal-950 shadow-xs border border-slate-200/30'
+                                                        : 'text-slate-400 hover:text-slate-700'
                                                 }`}
                                                 title="Vista Compacta"
                                             >
-                                                <Grid className="h-3.5 w-3.5 text-slate-500" />
+                                                <Grid className="h-3.5 w-3.5 shrink-0" />
                                                 <span className="hidden xs:inline">Compacto</span>
                                             </button>
                                         </div>
@@ -2382,8 +2650,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* C.S. */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_CS 
-                                            ? 'bg-blue-50/40 border-blue-200 text-blue-900 shadow-[0_3px_10px_-2px_rgba(59,130,246,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2393,17 +2661,17 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             filter_CS 
-                                                ? 'bg-blue-600 border-blue-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className={`text-xs font-extrabold transition-colors ${filter_CS ? 'text-blue-950 font-black' : 'text-slate-700 font-bold'}`}>Centro de Salud (C.S.)</span>
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_CS ? 'text-teal-950 font-extrabold' : 'text-slate-700 font-semibold'}`}>Centro de Salud (C.S.)</span>
                                             <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
                                                 filter_CS 
-                                                    ? 'bg-blue-600/10 text-blue-700 border-blue-200/55 shadow-xs' 
-                                                    : 'bg-slate-50 text-slate-500 border-slate-100'
+                                                    ? 'bg-teal-50 text-teal-850 border-teal-200/55 shadow-xs' 
+                                                    : 'bg-slate-50 text-slate-500 border-slate-200/50'
                                             }`}>
                                                 C.S. {establishmentSummary?.cs ?? 0}
                                             </span>
@@ -2413,8 +2681,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* P.S. */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_PS 
-                                            ? 'bg-amber-50/40 border-amber-200 text-amber-900 shadow-[0_3px_10px_-2px_rgba(245,158,11,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2424,17 +2692,17 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             filter_PS 
-                                                ? 'bg-amber-600 border-amber-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className={`text-xs font-extrabold transition-colors ${filter_PS ? 'text-amber-950 font-black' : 'text-slate-700 font-bold'}`}>Puesto de Salud (P.S.)</span>
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_PS ? 'text-teal-950 font-extrabold' : 'text-slate-700 font-semibold'}`}>Puesto de Salud (P.S.)</span>
                                             <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
                                                 filter_PS 
-                                                    ? 'bg-amber-600/10 text-amber-700 border-amber-200/55 shadow-xs' 
-                                                    : 'bg-slate-50 text-slate-500 border-slate-100'
+                                                    ? 'bg-teal-50 text-teal-850 border-teal-200/55 shadow-xs' 
+                                                    : 'bg-slate-50 text-slate-500 border-slate-200/50'
                                             }`}>
                                                 P.S. {establishmentSummary?.ps ?? 0}
                                             </span>
@@ -2444,8 +2712,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* ALM */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_ALM 
-                                            ? 'bg-teal-50/40 border-teal-200 text-teal-900 shadow-[0_3px_10px_-2px_rgba(20,184,166,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2461,11 +2729,11 @@ export const SheetSearchModule: React.FC = () => {
                                             <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className={`text-xs font-extrabold transition-colors ${filter_ALM ? 'text-teal-950 font-black' : 'text-slate-700 font-bold'}`}>Almacén (ALM)</span>
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_ALM ? 'text-teal-950 font-extrabold' : 'text-slate-700 font-semibold'}`}>Almacén (ALM)</span>
                                             <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
                                                 filter_ALM 
-                                                    ? 'bg-teal-600/10 text-teal-700 border-teal-200/55 shadow-xs' 
-                                                    : 'bg-slate-50 text-slate-500 border-slate-100'
+                                                    ? 'bg-teal-50 text-teal-850 border-teal-200/55 shadow-xs' 
+                                                    : 'bg-slate-50 text-slate-500 border-slate-200/50'
                                             }`}>
                                                 ALM {establishmentSummary?.alm ?? 0}
                                             </span>
@@ -2475,8 +2743,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* HOSP */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_HOSP 
-                                            ? 'bg-violet-50/40 border-violet-200 text-violet-900 shadow-[0_3px_10px_-2px_rgba(139,92,246,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2486,17 +2754,17 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             filter_HOSP 
-                                                ? 'bg-violet-600 border-violet-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className={`text-xs font-extrabold transition-colors ${filter_HOSP ? 'text-violet-950 font-black' : 'text-slate-700 font-bold'}`}>Hospital (HOSP)</span>
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_HOSP ? 'text-teal-950 font-extrabold' : 'text-slate-700 font-semibold'}`}>Hospital (HOSP)</span>
                                             <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
                                                 filter_HOSP 
-                                                    ? 'bg-violet-600/10 text-violet-700 border-violet-200/55 shadow-xs' 
-                                                    : 'bg-slate-50 text-slate-500 border-slate-100'
+                                                    ? 'bg-teal-50 text-teal-850 border-teal-200/55 shadow-xs' 
+                                                    : 'bg-slate-50 text-slate-500 border-slate-200/50'
                                             }`}>
                                                 HOSP {establishmentSummary?.hosp ?? 0}
                                             </span>
@@ -2506,8 +2774,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* Otros */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_OTRO 
-                                            ? 'bg-slate-200 border-slate-300 text-slate-900 shadow-[0_3px_10px_-2px_rgba(100,116,139,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2517,17 +2785,17 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             filter_OTRO 
-                                                ? 'bg-slate-700 border-slate-700 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                         <div className="flex justify-between items-center w-full">
-                                            <span className={`text-xs font-extrabold transition-colors ${filter_OTRO ? 'text-slate-950 font-black' : 'text-slate-700 font-bold'}`}>Otros</span>
+                                            <span className={`text-xs font-extrabold transition-colors ${filter_OTRO ? 'text-teal-950 font-extrabold' : 'text-slate-700 font-semibold'}`}>Otros</span>
                                             <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg border transition-all ${
                                                 filter_OTRO 
-                                                    ? 'bg-slate-700/10 text-slate-700 border-slate-300 shadow-xs' 
-                                                    : 'bg-slate-50 text-slate-500 border-slate-100'
+                                                    ? 'bg-teal-50 text-teal-855 border-teal-200/55 shadow-xs' 
+                                                    : 'bg-slate-50 text-slate-500 border-slate-200/50'
                                             }`}>
                                                 Otro {
                                                     sources && selectedUngetIndex !== null ? (
@@ -2580,8 +2848,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* Al día */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_emerald 
-                                            ? 'bg-emerald-50/40 border-emerald-200 text-emerald-950 shadow-[0_3px_10px_-2px_rgba(16,185,129,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2591,7 +2859,7 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             filter_emerald 
-                                                ? 'bg-emerald-600 border-emerald-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -2599,7 +2867,7 @@ export const SheetSearchModule: React.FC = () => {
                                         <div className="flex items-center justify-between w-full">
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white shrink-0 shadow-sm animate-pulse" />
-                                                <span className={`text-xs font-extrabold transition-colors ${filter_emerald ? 'text-emerald-950 font-black' : 'text-slate-700 font-bold'}`}>Al día</span>
+                                                <span className={`text-xs font-bold transition-colors ${filter_emerald ? 'text-slate-900 font-black' : 'text-slate-700 font-semibold'}`}>Al día</span>
                                             </div>
                                             <span className="text-[10px] text-slate-400 font-bold">&lt;1 hora sin actualizar</span>
                                         </div>
@@ -2608,8 +2876,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* Pendiente */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_amber 
-                                            ? 'bg-amber-50/40 border-amber-200 text-amber-950 shadow-[0_3px_10px_-2px_rgba(245,158,11,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2619,7 +2887,7 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             filter_amber 
-                                                ? 'bg-amber-600 border-amber-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -2627,7 +2895,7 @@ export const SheetSearchModule: React.FC = () => {
                                         <div className="flex items-center justify-between w-full">
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500 border border-white shrink-0 shadow-sm" />
-                                                <span className={`text-xs font-extrabold transition-colors ${filter_amber ? 'text-amber-950 font-black' : 'text-slate-700 font-bold'}`}>Pendiente</span>
+                                                <span className={`text-xs font-bold transition-colors ${filter_amber ? 'text-slate-900 font-black' : 'text-slate-700 font-semibold'}`}>Pendiente</span>
                                             </div>
                                             <span className="text-[10px] text-slate-400 font-bold">&gt;1 hora sin actualizar</span>
                                         </div>
@@ -2636,8 +2904,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* Crítico */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_red 
-                                            ? 'bg-red-50/40 border-red-200 text-red-950 shadow-[0_3px_10px_-2px_rgba(239,68,68,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2647,7 +2915,7 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             filter_red 
-                                                ? 'bg-red-600 border-red-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -2655,7 +2923,7 @@ export const SheetSearchModule: React.FC = () => {
                                         <div className="flex items-center justify-between w-full">
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-red-500 border border-white shrink-0 shadow-sm" />
-                                                <span className={`text-xs font-extrabold transition-colors ${filter_red ? 'text-red-950 font-black' : 'text-slate-700 font-bold'}`}>Crítico</span>
+                                                <span className={`text-xs font-bold transition-colors ${filter_red ? 'text-slate-900 font-black' : 'text-slate-700 font-semibold'}`}>Crítico</span>
                                             </div>
                                             <span className="text-[10px] text-slate-400 font-bold">&gt;24 horas</span>
                                         </div>
@@ -2664,8 +2932,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* Sin Datos / Desconectado */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_gray 
-                                            ? 'bg-slate-100 border-slate-300 text-slate-950 shadow-[0_3px_10px_-2px_rgba(100,116,139,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2675,14 +2943,14 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             filter_gray 
-                                                ? 'bg-slate-700 border-slate-700 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="w-2.5 h-2.5 rounded-full bg-slate-400 border border-white shrink-0 shadow-sm" />
-                                            <span className={`text-xs font-extrabold transition-colors ${filter_gray ? 'text-slate-950 font-black' : 'text-slate-700 font-bold'}`}>Sin Datos / Desconectado</span>
+                                            <span className={`text-xs font-bold transition-colors ${filter_gray ? 'text-slate-905 font-black' : 'text-slate-700 font-semibold'}`}>Sin Datos / Desconectado</span>
                                         </div>
                                     </label>
                                 </div>
@@ -2826,8 +3094,8 @@ export const SheetSearchModule: React.FC = () => {
                                 </div>
                                 <label className={`group flex items-center gap-3.5 p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                     filterHasPendingExpirations 
-                                        ? 'bg-red-500 text-white border-red-500 shadow-[0_4px_15px_rgba(239,68,68,0.25)]' 
-                                        : 'bg-white border-slate-100 hover:bg-slate-50 hover:border-red-200'
+                                        ? 'bg-red-50/25 border-red-200 text-slate-900 shadow-sm' 
+                                        : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-red-200/50 shadow-xs'
                                 }`}>
                                     <input
                                         type="checkbox"
@@ -2837,14 +3105,14 @@ export const SheetSearchModule: React.FC = () => {
                                     />
                                     <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                         filterHasPendingExpirations 
-                                            ? 'bg-white text-red-600 border-white scale-100' 
+                                            ? 'bg-red-600 border-red-600 text-white scale-100' 
                                             : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                     }`}>
                                         <Check className="h-3 w-3 stroke-[3]" />
                                     </div>
                                     <div className="flex items-center gap-2.5">
-                                        <AlertTriangle className={`h-4.5 w-4.5 shrink-0 ${filterHasPendingExpirations ? 'text-white' : 'text-red-500'}`} />
-                                        <span className={`text-xs font-black leading-tight ${filterHasPendingExpirations ? 'text-white' : 'text-slate-700 group-hover:text-red-700'}`}>
+                                        <AlertTriangle className={`h-4.5 w-4.5 shrink-0 ${filterHasPendingExpirations ? 'text-red-600 animate-pulse' : 'text-slate-400'}`} />
+                                        <span className={`text-xs font-bold leading-tight ${filterHasPendingExpirations ? 'text-red-950 font-extrabold' : 'text-slate-705 group-hover:text-red-700'}`}>
                                             Mostrar sólo establecimientos con productos por vencer / vencidos
                                         </span>
                                     </div>
@@ -2886,7 +3154,7 @@ export const SheetSearchModule: React.FC = () => {
 
             {/* MODAL DE OPCIONES DE EXPORTACIÓN (CENTRADITO) */}
             {isExportOptionsModalOpen && (
-                <div className="fixed inset-0 z-[10005] flex items-center justify-center bg-black/45 backdrop-blur-xs animate-in fade-in duration-200 p-4">
+                <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/45 backdrop-blur-xs animate-in fade-in duration-200 p-4">
                     {/* Backdrop Click Dismiss */}
                     <div className="absolute inset-0" onClick={() => setIsExportOptionsModalOpen(false)} />
                     
@@ -2899,7 +3167,7 @@ export const SheetSearchModule: React.FC = () => {
                                     <FileSpreadsheet className="h-5.5 w-5.5" />
                                 </div>
                                 <div>
-                                    <h3 className="font-black text-slate-900 text-base tracking-tight uppercase">Opciones de Exportación</h3>
+                                    <h3 className="font-black text-slate-900 text-base tracking-tight uppercase">Exportación de Stock Detallado</h3>
                                     <p className="text-[10px] text-teal-600 font-extrabold tracking-widest uppercase">
                                         Consolidado: {exportScope === 'single' && selectedUngetIndex !== null ? scriptUrls[selectedUngetIndex]?.name : 'TODAS LAS UNGETs (REGIONAL)'}
                                     </p>
@@ -2946,8 +3214,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* C.S. */}
                                     <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                         exportCS 
-                                            ? 'bg-blue-50/40 border-blue-200 text-blue-900 shadow-[0_3px_10px_-2px_rgba(59,130,246,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2955,10 +3223,10 @@ export const SheetSearchModule: React.FC = () => {
                                             onChange={(e) => setExportCS(e.target.checked)}
                                             className="sr-only"
                                         />
-                                        <span className={`text-xs font-extrabold transition-colors ${exportCS ? 'text-blue-950 font-black' : 'text-slate-700 font-bold'}`}>Centro de Salud (C.S.)</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportCS ? 'text-teal-950 font-extrabold' : 'text-slate-705 font-semibold'}`}>Centro de Salud (C.S.)</span>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportCS 
-                                                ? 'bg-blue-600 border-blue-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -2968,8 +3236,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* P.S. */}
                                     <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                         exportPS 
-                                            ? 'bg-amber-50/40 border-amber-200 text-amber-900 shadow-[0_3px_10px_-2px_rgba(245,158,11,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2977,10 +3245,10 @@ export const SheetSearchModule: React.FC = () => {
                                             onChange={(e) => setExportPS(e.target.checked)}
                                             className="sr-only"
                                         />
-                                        <span className={`text-xs font-extrabold transition-colors ${exportPS ? 'text-amber-950 font-black' : 'text-slate-700 font-bold'}`}>Puesto de Salud (P.S.)</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportPS ? 'text-teal-950 font-extrabold' : 'text-slate-705 font-semibold'}`}>Puesto de Salud (P.S.)</span>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportPS 
-                                                ? 'bg-amber-600 border-amber-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -2990,8 +3258,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* ALM */}
                                     <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                         exportALM 
-                                            ? 'bg-teal-50/40 border-teal-200 text-teal-900 shadow-[0_3px_10px_-2px_rgba(20,184,166,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -2999,7 +3267,7 @@ export const SheetSearchModule: React.FC = () => {
                                             onChange={(e) => setExportALM(e.target.checked)}
                                             className="sr-only"
                                         />
-                                        <span className={`text-xs font-extrabold transition-colors ${exportALM ? 'text-teal-950 font-black' : 'text-slate-700 font-bold'}`}>Almacén (ALM)</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportALM ? 'text-teal-950 font-extrabold' : 'text-slate-705 font-semibold'}`}>Almacén (ALM)</span>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportALM 
                                                 ? 'bg-teal-600 border-teal-600 text-white scale-100' 
@@ -3012,8 +3280,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* HOSP */}
                                     <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                         exportHOSP 
-                                            ? 'bg-violet-50/40 border-violet-200 text-violet-900 shadow-[0_3px_10px_-2px_rgba(139,92,246,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -3021,10 +3289,10 @@ export const SheetSearchModule: React.FC = () => {
                                             onChange={(e) => setExportHOSP(e.target.checked)}
                                             className="sr-only"
                                         />
-                                        <span className={`text-xs font-extrabold transition-colors ${exportHOSP ? 'text-violet-950 font-black' : 'text-slate-700 font-bold'}`}>Hospital (HOSP)</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportHOSP ? 'text-teal-950 font-extrabold' : 'text-slate-705 font-semibold'}`}>Hospital (HOSP)</span>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportHOSP 
-                                                ? 'bg-violet-600 border-violet-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -3034,8 +3302,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* OTRO */}
                                     <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer col-span-2 transition-all border select-none ${
                                         exportOTRO 
-                                            ? 'bg-slate-100 border-slate-300 text-slate-900 shadow-[0_3px_10px_-2px_rgba(100,116,139,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -3043,10 +3311,10 @@ export const SheetSearchModule: React.FC = () => {
                                             onChange={(e) => setExportOTRO(e.target.checked)}
                                             className="sr-only"
                                         />
-                                        <span className={`text-xs font-extrabold transition-colors ${exportOTRO ? 'text-slate-950 font-black' : 'text-slate-700 font-bold'}`}>Otros / Sin Clasificar</span>
+                                        <span className={`text-xs font-extrabold transition-colors ${exportOTRO ? 'text-teal-950 font-extrabold' : 'text-slate-705 font-semibold'}`}>Otros / Sin Clasificar</span>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportOTRO 
-                                                ? 'bg-slate-700 border-slate-700 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -3085,8 +3353,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* Emerald */}
                                     <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                         exportEmerald 
-                                            ? 'bg-emerald-50/40 border-emerald-200 text-emerald-950 shadow-[0_3px_10px_-2px_rgba(16,185,129,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -3096,11 +3364,11 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className="flex items-center gap-2 font-extrabold text-xs">
                                             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                                            <span className={exportEmerald ? 'text-emerald-950 font-black' : 'text-slate-700 font-bold'}>Al día (&lt;1h)</span>
+                                            <span className={exportEmerald ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-semibold'}>Al día (&lt;1h)</span>
                                         </div>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportEmerald 
-                                                ? 'bg-emerald-600 border-emerald-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -3110,8 +3378,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* Amber */}
                                     <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                         exportAmber 
-                                            ? 'bg-amber-50/40 border-amber-200 text-amber-950 shadow-[0_3px_10px_-2px_rgba(245,158,11,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -3121,11 +3389,11 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className="flex items-center gap-2 font-extrabold text-xs">
                                             <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-                                            <span className={exportAmber ? 'text-amber-950 font-black' : 'text-slate-700 font-bold'}>Pendiente (&gt;1h)</span>
+                                            <span className={exportAmber ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-semibold'}>Pendiente (&gt;1h)</span>
                                         </div>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportAmber 
-                                                ? 'bg-amber-600 border-amber-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -3135,8 +3403,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* Red */}
                                     <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                         exportRed 
-                                            ? 'bg-red-50/40 border-red-200 text-red-950 shadow-[0_3px_10px_-2px_rgba(239,68,68,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -3146,11 +3414,11 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className="flex items-center gap-2 font-extrabold text-xs">
                                             <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
-                                            <span className={exportRed ? 'text-red-950 font-black' : 'text-slate-700 font-bold'}>Crítico (&gt;24h)</span>
+                                            <span className={exportRed ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-semibold'}>Crítico (&gt;24h)</span>
                                         </div>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportRed 
-                                                ? 'bg-red-600 border-red-600 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -3160,8 +3428,8 @@ export const SheetSearchModule: React.FC = () => {
                                     {/* Gray */}
                                     <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                         exportGray 
-                                            ? 'bg-slate-100 border-slate-300 text-slate-900 shadow-[0_3px_10px_-2px_rgba(100,116,139,0.08)]' 
-                                            : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 hover:border-slate-200'
+                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
+                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                     }`}>
                                         <input
                                             type="checkbox"
@@ -3171,11 +3439,11 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className="flex items-center gap-2 font-extrabold text-xs">
                                             <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0" />
-                                            <span className={exportGray ? 'text-slate-950 font-black' : 'text-slate-700 font-bold'}>Sin Datos</span>
+                                            <span className={exportGray ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-semibold'}>Sin Datos</span>
                                         </div>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportGray 
-                                                ? 'bg-slate-700 border-slate-700 text-white scale-100' 
+                                                ? 'bg-teal-600 border-teal-600 text-white scale-100' 
                                                 : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                         }`}>
                                             <Check className="h-3 w-3 stroke-[3]" />
@@ -3257,8 +3525,8 @@ export const SheetSearchModule: React.FC = () => {
                                 </div>
                                 <label className={`group flex items-center justify-between p-3.5 rounded-2xl cursor-pointer transition-all border select-none ${
                                     exportHasPendingExpirations 
-                                        ? 'bg-red-500 text-white border-red-500 shadow-[0_4px_15px_rgba(239,68,68,0.25)]' 
-                                        : 'bg-white border-slate-100 hover:bg-slate-50 hover:border-red-200'
+                                        ? 'bg-red-50/25 border-red-200 text-slate-900 shadow-sm' 
+                                        : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-red-200/50 shadow-xs'
                                 }`}>
                                     <input
                                         type="checkbox"
@@ -3266,15 +3534,15 @@ export const SheetSearchModule: React.FC = () => {
                                         onChange={(e) => setExportHasPendingExpirations(e.target.checked)}
                                         className="sr-only"
                                     />
-                                    <div className="flex items-center gap-3.5">
-                                        <AlertTriangle className={`h-4.5 w-4.5 shrink-0 ${exportHasPendingExpirations ? 'text-white' : 'text-red-500 animate-pulse'}`} />
-                                        <span className={`text-xs font-black leading-tight ${exportHasPendingExpirations ? 'text-white' : 'text-slate-700 group-hover:text-red-700'}`}>
+                                    <div className="flex items-center gap-2.5">
+                                        <AlertTriangle className={`h-4.5 w-4.5 shrink-0 ${exportHasPendingExpirations ? 'text-red-650 animate-pulse' : 'text-slate-400'}`} />
+                                        <span className={`text-xs font-bold leading-tight ${exportHasPendingExpirations ? 'text-red-950 font-extrabold' : 'text-slate-705 group-hover:text-red-700'}`}>
                                             Exportar únicamente medicamentos vencidos o por vencer
                                         </span>
                                     </div>
                                     <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                         exportHasPendingExpirations 
-                                            ? 'bg-white text-red-600 border-white scale-100' 
+                                            ? 'bg-red-600 border-red-600 text-white scale-100' 
                                             : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
                                     }`}>
                                         <Check className="h-3 w-3 stroke-[3]" />
@@ -3306,6 +3574,141 @@ export const SheetSearchModule: React.FC = () => {
                                     <Download className="h-4.5 w-4.5 shrink-0" />
                                     <span>Exportar Excel</span>
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE REPORTE GENERAL */}
+            {isReportModalOpen && (
+                <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/45 backdrop-blur-xs animate-in fade-in duration-200 p-4">
+                    <div className="absolute inset-0" onClick={() => setIsReportModalOpen(false)} />
+                    <div className="bg-slate-50 w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-[0_20px_60px_-10px_rgba(0,0,0,0.3)] relative flex flex-col border border-white overflow-hidden">
+                        
+                        <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between text-teal-950 bg-white sticky top-0 z-10 gap-4">
+                            <div className="flex flex-col gap-1">
+                                <h2 className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
+                                    <FileSpreadsheet className="h-5 w-5 text-teal-600" />
+                                    Reporte General de Actualización
+                                </h2>
+                                <p className="text-[11px] font-bold text-slate-400">
+                                    Panel de control y estado de sincronización por establecimiento.
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2 self-end sm:self-auto">
+                                <button
+                                    onClick={exportReportToExcel}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider border border-green-200 transition-colors cursor-pointer shrink-0"
+                                    title="Descargar Excel"
+                                >
+                                    <FileSpreadsheet className="h-3.5 w-3.5" />
+                                    <span>Exportar a Excel</span>
+                                </button>
+                                <div className="h-6 w-px bg-slate-200 mx-1"></div>
+                                <button
+                                    onClick={() => setIsReportModalOpen(false)}
+                                    className="p-2 hover:bg-slate-100 rounded-full transition-colors group cursor-pointer border border-transparent hover:border-slate-200 shrink-0"
+                                    title="Cerrar Reporte"
+                                >
+                                    <X className="h-5 w-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto bg-slate-50/50 p-4 sm:p-6 overscroll-contain">
+                            <div ref={reportTableRef} className="bg-white rounded-2xl border border-slate-200 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.03)] overflow-hidden">
+                                <div className="w-full overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-slate-200">
+                                        <thead className="bg-slate-50/80 select-none">
+                                            <tr>
+                                                <th 
+                                                    scope="col" 
+                                                    className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider w-[45%] cursor-pointer hover:bg-slate-100/50 transition-colors"
+                                                    onClick={() => setReportSort({ field: 'name', order: reportSort.field === 'name' && reportSort.order === 'asc' ? 'desc' : 'asc' })}
+                                                >
+                                                    <div className="flex items-center gap-1.5">
+                                                        Establecimiento
+                                                        {reportSort.field === 'name' ? (
+                                                            reportSort.order === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : <ArrowUpDown className="w-3 h-3 text-slate-300" />}
+                                                    </div>
+                                                </th>
+                                                <th 
+                                                    scope="col" 
+                                                    className="px-4 py-3 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider w-[25%] hidden sm:table-cell cursor-pointer hover:bg-slate-100/50 transition-colors"
+                                                    onClick={() => setReportSort({ field: 'status', order: reportSort.field === 'status' && reportSort.order === 'asc' ? 'desc' : 'asc' })}
+                                                >
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        Estado
+                                                        {reportSort.field === 'status' ? (
+                                                            reportSort.order === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : <ArrowUpDown className="w-3 h-3 text-slate-300" />}
+                                                    </div>
+                                                </th>
+                                                <th 
+                                                    scope="col" 
+                                                    className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-wider w-[30%] cursor-pointer hover:bg-slate-100/50 transition-colors"
+                                                    onClick={() => setReportSort({ field: 'date', order: reportSort.field === 'date' && reportSort.order === 'desc' ? 'asc' : 'desc' })}
+                                                >
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        Sincronización
+                                                        {reportSort.field === 'date' ? (
+                                                            reportSort.order === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                                                        ) : <ArrowUpDown className="w-3 h-3 text-slate-300" />}
+                                                    </div>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-slate-100">
+                                            {sortedReportSources.map((sheet) => {
+                                                const lastDash = sheet.name.lastIndexOf('-');
+                                                const description = lastDash === -1 ? sheet.name.replace(/^FARM\s*-\s*/i, '') : sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                                const code = getAlmCodeForSheet(sheet.id, data);
+                                                const status = getUpdateStatus(sheet.lastUpdateTime);
+                                                const dateStr = sheet.lastUpdateTime ? formatFullDate(sheet.lastUpdateTime) : 'No sincronizado';
+                                                
+                                                return (
+                                                    <tr key={sheet.id} className="hover:bg-slate-50/60 transition-colors">
+                                                        <td className="px-4 py-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-[10px] font-extrabold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md shrink-0 border border-teal-100">{code || 'N/A'}</span>
+                                                                <span className="text-[11px] sm:text-xs font-black text-slate-800 line-clamp-2">{description}</span>
+                                                            </div>
+                                                            {/* Mobile status indicator */}
+                                                            <div className="sm:hidden mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-100 inline-flex">
+                                                                <span className={`w-1.5 h-1.5 rounded-full ${status.color}`}></span>
+                                                                <span className="text-[9px] font-bold text-slate-600">{status.label}</span>
+                                                            </div>
+                                                            <div className="md:hidden mt-1.5 flex gap-2 w-full">
+                                                                <span className="text-[9px] font-bold text-slate-500">
+                                                                    Actualizado: {dateStr}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center hidden sm:table-cell">
+                                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200">
+                                                                <span className={`w-2 h-2 rounded-full ${status.color}`}></span>
+                                                                <span className="text-[10px] font-bold text-slate-600 whitespace-nowrap">{status.label}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <div className="flex items-center justify-end gap-1.5 text-[10px] sm:text-xs font-bold text-slate-500 whitespace-nowrap">
+                                                                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />
+                                                                {dateStr}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                    {sortedReportSources.length === 0 && (
+                                        <div className="py-12 text-center text-slate-500 text-xs font-bold">
+                                            No hay establecimientos para mostrar según los filtros actuales.
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
