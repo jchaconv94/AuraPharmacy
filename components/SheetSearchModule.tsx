@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { toast } from 'sonner';
 import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft, ChevronDown, LayoutGrid, List, Grid, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
@@ -722,15 +723,15 @@ export const SheetSearchModule: React.FC = () => {
             if (result.success) {
                 setScriptUrls([...tempUrls]);
                 setIsConfigOpen(false);
-                import('sonner').then(m => m.toast.success("Configuración guardada en la nube."));
+                toast.success("Configuración guardada en la nube.");
                 
                 // Sincronizar datos inmediatamente con las nuevas URLs
                 fetchData(tempUrls);
             } else {
-                import('sonner').then(m => m.toast.error("Error al guardar en el servidor: " + result.message));
+                toast.error("Error al guardar en el servidor: " + result.message);
             }
         } catch (e) {
-            import('sonner').then(m => m.toast.error("Error de conexión al guardar configuración."));
+            toast.error("Error de conexión al guardar configuración.");
         } finally {
             setIsLoading(false);
         }
@@ -751,11 +752,11 @@ export const SheetSearchModule: React.FC = () => {
         } else {
             // Caso nuevo
             if (maxUrlsAllowed && tempUrls.length >= maxUrlsAllowed) {
-                import('sonner').then(m => m.toast.error(`Ha alcanzado el límite máximo de ${maxUrlsAllowed} URLs para su rol.`));
+                toast.error(`Ha alcanzado el límite máximo de ${maxUrlsAllowed} URLs para su rol.`);
                 return;
             }
             if (tempUrls.find(u => u.url === url)) {
-                import('sonner').then(m => m.toast.error("Esta URL ya está registrada."));
+                toast.error("Esta URL ya está registrada.");
                 return;
             }
             setTempUrls([...tempUrls, { url, name }]);
@@ -789,8 +790,7 @@ export const SheetSearchModule: React.FC = () => {
         if (!user) return;
         
         // Usamos una confirmación por toast en lugar de window.confirm que falla en iframes
-        import('sonner').then(m => {
-            m.toast("¿Eliminar esta conexión?", {
+        toast("¿Eliminar esta conexión?", {
                 description: `Se borrará el acceso a "${scriptUrls[index].name}"`,
                 action: {
                     label: "Eliminar",
@@ -805,10 +805,10 @@ export const SheetSearchModule: React.FC = () => {
                                     setViewLevel('ungets');
                                     setSelectedUngetIndex(null);
                                 }
-                                m.toast.success("Eliminado correctamente");
+                                toast.success("Eliminado correctamente");
                             }
                         } catch(e) {
-                            m.toast.error("Error al eliminar");
+                            toast.error("Error al eliminar");
                         } finally {
                             setIsLoading(false);
                         }
@@ -819,7 +819,6 @@ export const SheetSearchModule: React.FC = () => {
                     onClick: () => {}
                 }
             });
-        });
     };
 
     const handleSelectUnget = (index: number) => {

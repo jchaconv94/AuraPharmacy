@@ -14,18 +14,18 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Toaster } from 'sonner';
 
 // Lazy loaded components para optimizar el bundle inicial
-const Dashboard = lazy(() => import('./components/Dashboard').then(m => ({ default: m.Dashboard })));
-const AnalysisTable = lazy(() => import('./components/AnalysisTable').then(m => ({ default: m.AnalysisTable })));
-const ReportOptionsModal = lazy(() => import('./components/ReportOptionsModal').then(m => ({ default: m.ReportOptionsModal })));
-const ReviewWarningModal = lazy(() => import('./components/ReviewWarningModal').then(m => ({ default: m.ReviewWarningModal })));
-const ManualEntryModal = lazy(() => import('./components/ManualEntryModal').then(m => ({ default: m.ManualEntryModal })));
-const SuccessModal = lazy(() => import('./components/SuccessModal').then(m => ({ default: m.SuccessModal })));
-const LoginScreen = lazy(() => import('./components/LoginScreen').then(m => ({ default: m.LoginScreen })));
-const AdminPanel = lazy(() => import('./components/AdminPanel').then(m => ({ default: m.AdminPanel })));
-const UserProfile = lazy(() => import('./components/UserProfile').then(m => ({ default: m.UserProfile })));
-const WelcomeModal = lazy(() => import('./components/WelcomeModal').then(m => ({ default: m.WelcomeModal })));
-const RedistributionModule = lazy(() => import('./components/RedistributionModule').then(m => ({ default: m.RedistributionModule })));
-const SheetSearchModule = lazy(() => import('./components/SheetSearchModule').then(m => ({ default: m.SheetSearchModule })));
+import { Dashboard } from './components/Dashboard';
+import { AnalysisTable } from './components/AnalysisTable';
+import { ReportOptionsModal } from './components/ReportOptionsModal';
+import { ReviewWarningModal } from './components/ReviewWarningModal';
+import { ManualEntryModal } from './components/ManualEntryModal';
+import { SuccessModal } from './components/SuccessModal';
+import { LoginScreen } from './components/LoginScreen';
+import { AdminPanel } from './components/AdminPanel';
+import { UserProfile } from './components/UserProfile';
+import { WelcomeModal } from './components/WelcomeModal';
+import { RedistributionModule } from './components/RedistributionModule';
+import { SheetSearchModule } from './components/SheetSearchModule';
 
 const SuspenseFallback = () => (
     <div className="flex-1 flex h-full w-full items-center justify-center p-8 bg-gray-50/50">
