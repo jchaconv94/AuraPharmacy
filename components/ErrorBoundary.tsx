@@ -24,6 +24,16 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
+
+    // Auto-reload si falla la carga de un módulo dinámico (ej. por una nueva versión desplegada)
+    const isChunkLoadFailed = /Failed to fetch dynamically imported module/i.test(error.message);
+    if (isChunkLoadFailed) {
+      const reloadCount = parseInt(sessionStorage.getItem('chunk_failed_reload') || '0', 10);
+      if (reloadCount < 2) {
+        sessionStorage.setItem('chunk_failed_reload', String(reloadCount + 1));
+        window.location.reload();
+      }
+    }
   }
 
   private handleReset = () => {
