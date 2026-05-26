@@ -31,14 +31,19 @@ export class ErrorBoundary extends Component<Props, State> {
       const reloadCount = parseInt(sessionStorage.getItem('chunk_failed_reload') || '0', 10);
       if (reloadCount < 2) {
         sessionStorage.setItem('chunk_failed_reload', String(reloadCount + 1));
-        window.location.reload();
+        // Forzar un reload sin caché usando una query string temporal
+        const url = new URL(window.location.href);
+        url.searchParams.set('t', Date.now().toString());
+        window.location.href = url.toString();
       }
     }
   }
 
   private handleReset = () => {
     this.setState({ hasError: false, error: null });
-    window.location.reload();
+    const url = new URL(window.location.href);
+    url.searchParams.set('t', Date.now().toString());
+    window.location.href = url.toString();
   };
 
   public render() {

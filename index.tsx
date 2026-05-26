@@ -7,7 +7,9 @@ window.addEventListener('vite:preloadError', (event) => {
   const reloadCount = parseInt(sessionStorage.getItem('chunk_failed_reload') || '0', 10);
   if (reloadCount < 2) {
     sessionStorage.setItem('chunk_failed_reload', String(reloadCount + 1));
-    window.location.reload();
+    const url = new URL(window.location.href);
+    url.searchParams.set('t', Date.now().toString());
+    window.location.href = url.toString();
   }
 });
 
