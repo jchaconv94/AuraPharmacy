@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
-import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft, ChevronDown, LayoutGrid, List, Grid, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft, ChevronDown, LayoutGrid, List, Grid, ArrowUp, ArrowDown, ArrowUpDown, Hospital, Monitor } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -23,6 +23,7 @@ interface SIGData {
   Saldo: string;
   Precio_Det: string;
   Precio_Cab: string;
+  FECHA_DEL_EQUIPO?: string;
   Ultima_Actualizacion: string;
   sourceId?: string;
   [key: string]: any;
@@ -34,6 +35,8 @@ interface SheetSource {
   urlIndex: number;
   lastUpdate?: string;
   lastUpdateTime?: number;
+  equipmentDate?: string;
+  equipmentDateTime?: number;
 }
 
 const parseDataDate = (str?: string): number => {
@@ -68,6 +71,15 @@ const formatFullDate = (timestamp?: number): string => {
     const minutes = String(d.getMinutes()).padStart(2, '0');
     const seconds = String(d.getSeconds()).padStart(2, '0');
     return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+};
+
+const datesMatch = (ts1?: number, ts2?: number): boolean => {
+    if (!ts1 || !ts2) return true;
+    const d1 = new Date(ts1);
+    const d2 = new Date(ts2);
+    return d1.getDate() === d2.getDate() && 
+           d1.getMonth() === d2.getMonth() && 
+           d1.getFullYear() === d2.getFullYear();
 };
 
 const getUpdateStatus = (timestamp?: number) => {
@@ -335,6 +347,7 @@ export const SheetSearchModule: React.FC = () => {
             'COD. SISMED',
             'ESTABLECIMIENTO',
             'ESTADO DE ACTUALIZACION',
+            'FECHA DEL EQUIPO',
             'ULTIMA ACTUALIZACION',
             'VENCIDOS',
             'VENCEN ESTE MES',
@@ -398,6 +411,7 @@ export const SheetSearchModule: React.FC = () => {
                 codeStr,
                 description,
                 status.label,
+                sheet.equipmentDateTime ? formatFullDate(sheet.equipmentDateTime) : 'No disponible',
                 sheet.lastUpdateTime ? formatFullDate(sheet.lastUpdateTime) : 'No sincronizado',
                 expiredCount,
                 expiringThisMonthCount,
@@ -438,9 +452,10 @@ export const SheetSearchModule: React.FC = () => {
         ws.getColumn(2).width = 35;
         ws.getColumn(3).width = 32;
         ws.getColumn(4).width = 25;
-        ws.getColumn(5).width = 15;
-        ws.getColumn(6).width = 20;
+        ws.getColumn(5).width = 25;
+        ws.getColumn(6).width = 15;
         ws.getColumn(7).width = 20;
+        ws.getColumn(8).width = 20;
 
         const buffer = await wb.xlsx.writeBuffer();
         saveAs(new Blob([buffer]), `Reporte_General_Stock_${formatFullDate(Date.now()).replace(/[:/ ]/g, '_')}.xlsx`);
@@ -622,12 +637,23 @@ export const SheetSearchModule: React.FC = () => {
                             
                             let lastUpdateStr = '';
                             let lastUpdateTime = 0;
+                            let equipmentDateStr = '';
+                            let equipmentDateTime = 0;
+                            
                             if (Array.isArray(sheet.data) && sheet.data.length > 0) {
                                 // Tomar el dato de la primera fila de datos (que es la segunda de la hoja según el usuario)
                                 const firstRow = sheet.data[0];
-                                if (firstRow.Ultima_Actualizacion) {
-                                    lastUpdateStr = firstRow.Ultima_Actualizacion;
+                                
+                                // Capturar ÚLTIMA ACTUALIZACIÓN
+                                if (firstRow.ULTIMA_ACTUALIZACION || firstRow.Ultima_Actualizacion || firstRow['ULTIMA ACTUALIZACION']) {
+                                    lastUpdateStr = firstRow.ULTIMA_ACTUALIZACION || firstRow.Ultima_Actualizacion || firstRow['ULTIMA ACTUALIZACION'];
                                     lastUpdateTime = parseDataDate(lastUpdateStr);
+                                }
+                                
+                                // Capturar FECHA DEL EQUIPO
+                                if (firstRow.FECHA_DEL_EQUIPO || firstRow['FECHA DEL EQUIPO']) {
+                                    equipmentDateStr = firstRow.FECHA_DEL_EQUIPO || firstRow['FECHA DEL EQUIPO'];
+                                    equipmentDateTime = parseDataDate(equipmentDateStr);
                                 }
                             }
 
@@ -636,16 +662,24 @@ export const SheetSearchModule: React.FC = () => {
                                 name: sheet.name, 
                                 urlIndex,
                                 lastUpdate: lastUpdateStr,
-                                lastUpdateTime: lastUpdateTime || undefined
+                                lastUpdateTime: lastUpdateTime || undefined,
+                                equipmentDate: equipmentDateStr,
+                                equipmentDateTime: equipmentDateTime || undefined
                             });
                             
                             if (Array.isArray(sheet.data)) {
-                                const validData = sheet.data.filter((row: any) => row && (row.ID_Producto || row.Nombre)).map((row: any) => ({
-                                    ...row,
-                                    Fec_Vencim: formatDate(row.Fec_Vencim),
-                                    Ultima_Actualizacion: formatDate(row.Ultima_Actualizacion),
-                                    sourceId: uniqueSourceId
-                                }));
+                                const validData = sheet.data.filter((row: any) => row && (row.ID_Producto || row.Nombre)).map((row: any) => {
+                                    const rawUltima = row.ULTIMA_ACTUALIZACION || row.Ultima_Actualizacion || row['ULTIMA ACTUALIZACION'];
+                                    const rawEquipo = row.FECHA_DEL_EQUIPO || row['FECHA DEL EQUIPO'];
+                                    
+                                    return {
+                                        ...row,
+                                        Fec_Vencim: formatDate(row.Fec_Vencim),
+                                        Ultima_Actualizacion: formatDate(rawUltima),
+                                        FECHA_DEL_EQUIPO: formatDate(rawEquipo),
+                                        sourceId: uniqueSourceId
+                                    };
+                                });
                                 allData = [...allData, ...validData];
                             }
                         });
@@ -868,7 +902,9 @@ export const SheetSearchModule: React.FC = () => {
             'DESC_FFINAN': r.DESC_FFINAN || r.FF || '',
             'Saldo': r.Saldo !== undefined ? r.Saldo : (r.SALDO !== undefined ? r.SALDO : ''),
             'Precio_Det': r.Precio_Det || r.PRECIO_COMPRA || '',
-            'Precio_Cab': r.Precio_Cab || r.PRECIO_REF || ''
+            'Precio_Cab': r.Precio_Cab || r.PRECIO_REF || '',
+            'FECHA DEL EQUIPO': r.FECHA_DEL_EQUIPO || '',
+            'ULTIMA ACTUALIZACION': r.Ultima_Actualizacion || ''
         }));
 
         const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -1029,7 +1065,9 @@ export const SheetSearchModule: React.FC = () => {
                 'DESC_FFINAN': r.DESC_FFINAN || r.FF || '',
                 'Saldo': r.Saldo !== undefined ? r.Saldo : (r.SALDO !== undefined ? r.SALDO : ''),
                 'Precio_Det': r.Precio_Det || r.PRECIO_COMPRA || '',
-                'Precio_Cab': r.Precio_Cab || r.PRECIO_REF || ''
+                'Precio_Cab': r.Precio_Cab || r.PRECIO_REF || '',
+                'FECHA DEL EQUIPO': r.FECHA_DEL_EQUIPO || '',
+                'ULTIMA ACTUALIZACION': r.Ultima_Actualizacion || ''
             };
         });
 
@@ -1596,7 +1634,7 @@ export const SheetSearchModule: React.FC = () => {
                                  )}
                                  {viewLevel === 'data' && (
                                     <>
-                                        <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
+                                        <Hospital className="h-3.5 w-3.5 shrink-0" />
                                         <span className="whitespace-nowrap font-black truncate max-w-[130px]">{(() => {
                                             const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
                                             const lastDash = name.lastIndexOf('-');
@@ -1636,7 +1674,7 @@ export const SheetSearchModule: React.FC = () => {
                                 <>
                                     <ChevronRight className="h-3.5 w-3.5 text-gray-300 shrink-0" />
                                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-800 border border-teal-100 font-bold shrink-0">
-                                        <FileSpreadsheet className="scale-90" />
+                                        <Hospital className="scale-90" />
                                         <span className="whitespace-nowrap truncate max-w-[200px] sm:max-w-none">{(() => {
                                             const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
                                             const lastDash = name.lastIndexOf('-');
@@ -2063,7 +2101,7 @@ export const SheetSearchModule: React.FC = () => {
                                                                     )}
                                                                 </div>
                                                                 <div className="w-12 h-12 shrink-0 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center sm:mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
-                                                                    <FileSpreadsheet className="h-6 w-6" />
+                                                                    <Hospital className="h-6 w-6" />
                                                                     <div 
                                                                         className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`}
                                                                         title={getUpdateStatus(sheet.lastUpdateTime).label}
@@ -2098,18 +2136,34 @@ export const SheetSearchModule: React.FC = () => {
                                                                             </div>
                                                                         )}
                                                                         {sheet.lastUpdateTime && (
-                                                                            <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-gray-500">
-                                                                                <RefreshCw className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                                                                <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                            <div className="flex flex-col gap-0.5">
+                                                                                <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-gray-500">
+                                                                                    <RefreshCw className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                                                                    <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                                </div>
+                                                                                {sheet.equipmentDateTime && (
+                                                                                    <div className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-bold ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-400'}`}>
+                                                                                        <Monitor className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                                                                        <span>Equipo: {formatFullDate(sheet.equipmentDateTime)}</span>
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
                                                                         )}
                                                                     </div>
 
                                                                     {/* Desktop last updated */}
                                                                     {sheet.lastUpdateTime && (
-                                                                        <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-gray-500 mt-2">
-                                                                            <RefreshCw className="h-3 w-3" />
-                                                                            <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                        <div className="hidden sm:flex flex-col gap-0.5 mt-2">
+                                                                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500">
+                                                                                <RefreshCw className="h-3 w-3" />
+                                                                                <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                            </div>
+                                                                            {sheet.equipmentDateTime && (
+                                                                                <div className={`flex items-center gap-1.5 text-[10px] font-bold ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-400'}`}>
+                                                                                    <Monitor className="h-3 w-3" />
+                                                                                    <span>Equipo: {formatFullDate(sheet.equipmentDateTime)}</span>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -2145,7 +2199,7 @@ export const SheetSearchModule: React.FC = () => {
                                                                 {/* Left: Icon and Title */}
                                                                 <div className="flex items-center gap-3.5 min-w-0 flex-1">
                                                                     <div className="w-10 h-10 shrink-0 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
-                                                                        <FileSpreadsheet className="h-5.5 w-5.5" />
+                                                                        <Hospital className="h-5.5 w-5.5" />
                                                                         <div 
                                                                             className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`}
                                                                             title={getUpdateStatus(sheet.lastUpdateTime).label}
@@ -2157,6 +2211,11 @@ export const SheetSearchModule: React.FC = () => {
                                                                             {sheet.lastUpdateTime && (
                                                                                 <span className="text-[9px] sm:text-[9.5px] font-extrabold text-slate-400" title="Última actualización">
                                                                                     Act: {formatFullDate(sheet.lastUpdateTime)}
+                                                                                </span>
+                                                                            )}
+                                                                            {sheet.equipmentDateTime && (
+                                                                                <span className={`text-[9px] sm:text-[9.5px] font-extrabold border-l border-slate-200 pl-2 ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-300'}`}>
+                                                                                    Equipo: {formatFullDate(sheet.equipmentDateTime)}
                                                                                 </span>
                                                                             )}
                                                                         </div>
@@ -2464,6 +2523,14 @@ export const SheetSearchModule: React.FC = () => {
                                             <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">Última Actualización</p>
                                             <p className="text-xs font-medium text-gray-500">{formatDate(selectedRecord.Ultima_Actualizacion) || '-'}</p>
                                         </div>
+                                        {selectedRecord.FECHA_DEL_EQUIPO && (
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mb-1">Fecha del Equipo</p>
+                                                <p className={`text-xs font-medium ${selectedRecord.FECHA_DEL_EQUIPO !== selectedRecord.Ultima_Actualizacion ? 'text-red-500' : 'text-slate-400'}`}>
+                                                    {formatDate(selectedRecord.FECHA_DEL_EQUIPO)}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 
@@ -3623,7 +3690,7 @@ export const SheetSearchModule: React.FC = () => {
                                             <tr>
                                                 <th 
                                                     scope="col" 
-                                                    className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider w-[45%] cursor-pointer hover:bg-slate-100/50 transition-colors"
+                                                    className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider w-[40%] cursor-pointer hover:bg-slate-100/50 transition-colors"
                                                     onClick={() => setReportSort({ field: 'name', order: reportSort.field === 'name' && reportSort.order === 'asc' ? 'desc' : 'asc' })}
                                                 >
                                                     <div className="flex items-center gap-1.5">
@@ -3635,7 +3702,7 @@ export const SheetSearchModule: React.FC = () => {
                                                 </th>
                                                 <th 
                                                     scope="col" 
-                                                    className="px-4 py-3 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider w-[25%] hidden sm:table-cell cursor-pointer hover:bg-slate-100/50 transition-colors"
+                                                    className="px-4 py-3 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider w-[20%] hidden sm:table-cell cursor-pointer hover:bg-slate-100/50 transition-colors"
                                                     onClick={() => setReportSort({ field: 'status', order: reportSort.field === 'status' && reportSort.order === 'asc' ? 'desc' : 'asc' })}
                                                 >
                                                     <div className="flex items-center justify-center gap-1.5">
@@ -3647,7 +3714,15 @@ export const SheetSearchModule: React.FC = () => {
                                                 </th>
                                                 <th 
                                                     scope="col" 
-                                                    className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-wider w-[30%] cursor-pointer hover:bg-slate-100/50 transition-colors"
+                                                    className="px-4 py-3 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider w-[20%] hidden sm:table-cell"
+                                                >
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        Equipo
+                                                    </div>
+                                                </th>
+                                                <th 
+                                                    scope="col" 
+                                                    className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-wider w-[20%] cursor-pointer hover:bg-slate-100/50 transition-colors"
                                                     onClick={() => setReportSort({ field: 'date', order: reportSort.field === 'date' && reportSort.order === 'desc' ? 'asc' : 'desc' })}
                                                 >
                                                     <div className="flex items-center justify-end gap-1.5">
@@ -3666,6 +3741,7 @@ export const SheetSearchModule: React.FC = () => {
                                                 const code = getAlmCodeForSheet(sheet.id, data);
                                                 const status = getUpdateStatus(sheet.lastUpdateTime);
                                                 const dateStr = sheet.lastUpdateTime ? formatFullDate(sheet.lastUpdateTime) : 'No sincronizado';
+                                                const equipoDateStr = sheet.equipmentDateTime ? formatFullDate(sheet.equipmentDateTime) : 'Sin fecha';
                                                 
                                                 return (
                                                     <tr key={sheet.id} className="hover:bg-slate-50/60 transition-colors">
@@ -3679,16 +3755,27 @@ export const SheetSearchModule: React.FC = () => {
                                                                 <span className={`w-1.5 h-1.5 rounded-full ${status.color}`}></span>
                                                                 <span className="text-[9px] font-bold text-slate-600">{status.label}</span>
                                                             </div>
-                                                            <div className="md:hidden mt-1.5 flex gap-2 w-full">
+                                                            <div className="md:hidden mt-1.5 flex flex-col gap-0.5 w-full">
                                                                 <span className="text-[9px] font-bold text-slate-500">
                                                                     Actualizado: {dateStr}
                                                                 </span>
+                                                                {sheet.equipmentDateTime && (
+                                                                    <span className={`text-[9px] font-bold ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-500'}`}>
+                                                                        Equipo: {equipoDateStr}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-3 text-center hidden sm:table-cell">
                                                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200">
                                                                 <span className={`w-2 h-2 rounded-full ${status.color}`}></span>
                                                                 <span className="text-[10px] font-bold text-slate-600 whitespace-nowrap">{status.label}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center hidden sm:table-cell">
+                                                            <div className={`inline-flex items-center gap-1.5 text-[10px] sm:text-xs font-bold whitespace-nowrap ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-500'}`}>
+                                                                <Monitor className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-400' : 'text-slate-400'}`} />
+                                                                {equipoDateStr}
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-3 text-right">
