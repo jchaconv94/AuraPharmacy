@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
-import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft, ChevronDown, LayoutGrid, List, Grid, ArrowUp, ArrowDown, ArrowUpDown, Hospital, Monitor } from 'lucide-react';
+import { Search, Database, RefreshCw, AlertCircle, Link as LinkIcon, FileSpreadsheet, Settings, Save, Check, CheckCircle2, XCircle, Copy, X, Plus, Trash2, Building2, ChevronRight, ChevronLeft, MapPin, Clock, AlertTriangle, Download, Filter, ArrowLeft, ChevronDown, LayoutGrid, List, Grid, Table2, ArrowUp, ArrowDown, ArrowUpDown, Hospital, Monitor, Stethoscope, Package, Wifi, WifiOff, FileClock, Maximize2, Minimize2, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -83,7 +83,7 @@ const datesMatch = (ts1?: number, ts2?: number): boolean => {
 };
 
 const getUpdateStatus = (timestamp?: number) => {
-    if (!timestamp || timestamp === 0) return { color: 'bg-gray-400', label: 'Sin datos' };
+    if (!timestamp || timestamp === 0) return { color: 'bg-gray-400', label: 'Sin datos', fullLabel: 'Sin datos' };
     
     const now = new Date().getTime();
     const diffMs = now - timestamp;
@@ -91,15 +91,17 @@ const getUpdateStatus = (timestamp?: number) => {
     const diffHours = diffMs / (1000 * 60 * 60);
 
     if (diffMs < 0) {
-        return { color: 'bg-emerald-500', label: 'Actualizado recientemente' };
+        return { color: 'bg-emerald-500', label: 'Actualizado recientemente', fullLabel: 'Actualizado recientemente' };
     }
     
     // Dentro de la hora (<= 1 hora): Verde
     if (diffHours <= 1) {
-        const minLabel = diffMinutes <= 0 ? 'menos de 1 min' : `${diffMinutes} min`;
+        const minLabel = diffMinutes <= 0 ? '< 1m' : `${diffMinutes}m`;
+        const minFullLabel = diffMinutes <= 0 ? 'Menos de un minuto' : `${diffMinutes} minuto${diffMinutes !== 1 ? 's' : ''}`;
         return { 
             color: 'bg-emerald-500', 
-            label: `Hace ${minLabel}` 
+            label: `Hace ${minLabel}`,
+            fullLabel: `Hace ${minFullLabel}`
         };
     }
     
@@ -109,7 +111,8 @@ const getUpdateStatus = (timestamp?: number) => {
         const mins = diffMinutes % 60;
         return { 
             color: 'bg-amber-500', 
-            label: `Hace ${hrs} ${hrs === 1 ? 'hora' : 'horas'} con ${mins} min`
+            label: `Hace ${hrs}h ${mins}m`,
+            fullLabel: `Hace ${hrs} hora${hrs !== 1 ? 's' : ''} ${mins} minuto${mins !== 1 ? 's' : ''}`
         };
     }
     
@@ -118,8 +121,37 @@ const getUpdateStatus = (timestamp?: number) => {
     const hrs = Math.floor(diffHours) % 24;
     return { 
         color: 'bg-red-500', 
-        label: `Hace ${days} ${days === 1 ? 'día' : 'días'} con ${hrs} h`
+        label: `Hace ${days}d ${hrs}h`,
+        fullLabel: `Hace ${days} día${days !== 1 ? 's' : ''} ${hrs} hora${hrs !== 1 ? 's' : ''}`
     };
+};
+
+const renderSyncStatusPill = (timestamp?: number) => {
+    const statusObj = getUpdateStatus(timestamp);
+    const isEmerald = statusObj.color.includes('emerald') || statusObj.color.includes('bg-emerald-500');
+    const isAmber = statusObj.color.includes('amber') || statusObj.color.includes('bg-amber-500');
+    const isRed = statusObj.color.includes('red') || statusObj.color.includes('bg-red-500');
+    
+    let containerClass = "bg-slate-50 text-slate-500 border-slate-200";
+    let dotClass = "bg-slate-400";
+    
+    if (isEmerald) {
+        containerClass = "bg-[#f0fdf4] text-[#166534] border-[#bbf7d0] hover:bg-[#e8fbf0]";
+        dotClass = "bg-[#22c55e]";
+    } else if (isAmber) {
+        containerClass = "bg-[#fffbeb] text-[#92400e] border-[#fef08a] hover:bg-[#fff9db]";
+        dotClass = "bg-[#f59e0b]";
+    } else if (isRed) {
+        containerClass = "bg-[#fef2f2] text-[#991b1b] border-[#fecaca] hover:bg-[#fee2e2]";
+        dotClass = "bg-[#ef4444]";
+    }
+    
+    return (
+        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-black tracking-wide border shadow-3xs transition-colors select-none whitespace-nowrap overflow-hidden ${containerClass}`}>
+            <span className={`h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full shrink-0 ${dotClass}`} />
+            <span className="truncate">{statusObj.label}</span>
+        </span>
+    );
 };
 
 const getSheetType = (name: string): 'CS' | 'PS' | 'ALM' | 'HOSP' | 'OTRO' => {
@@ -164,6 +196,44 @@ const formatAlmCode = (code: string | undefined): string => {
         return c.substring(0, c.length - 2);
     }
     return c;
+};
+
+const getItemExpiration = (item: SIGData): { month: number; year: number } | null => {
+    if (!item || !item.Fec_Vencim) return null;
+    const parts = item.Fec_Vencim.split(/[\/\-]/);
+    if (parts.length === 3) {
+        const p0 = parseInt(parts[0], 10);
+        const p1 = parseInt(parts[1], 10);
+        const p2 = parseInt(parts[2], 10);
+
+        let month = 0, year = 2000;
+
+        if (p0 > 1000) {
+            year = p0;
+            month = p1 - 1;
+        } else if (p2 > 1000 || p2 < 100) {
+            year = p2 < 100 ? p2 + 2000 : p2;
+            if (p0 > 12) {
+                month = p1 - 1;
+            } else if (p1 > 12) {
+                month = p0 - 1;
+            } else {
+                month = p1 - 1;
+            }
+        }
+        if (!isNaN(month) && !isNaN(year)) {
+            return { month: month + 1, year };
+        }
+    } else if (parts.length === 2) {
+        const p0 = parseInt(parts[0], 10);
+        const p1 = parseInt(parts[1], 10);
+        if (!isNaN(p0) && !isNaN(p1)) {
+            const month = p0;
+            const year = p1 < 100 ? p1 + 2000 : p1;
+            return { month, year };
+        }
+    }
+    return null;
 };
 
 const getAlmCodeForSheet = (sheetId: string, sheetData: SIGData[]): string => {
@@ -292,7 +362,7 @@ export const SheetSearchModule: React.FC = () => {
     const [filter_red, setFilter_red] = useState(true);
     const [filter_gray, setFilter_gray] = useState(true);
 
-    const [filterSortOrder, setFilterSortOrder] = useState<'name_asc' | 'name_desc' | 'date_newest' | 'date_oldest' | 'expired_highest'>('name_asc');
+    const [filterSortOrder, setFilterSortOrder] = useState<string>('name_asc');
     const [filterHasPendingExpirations, setFilterHasPendingExpirations] = useState<boolean>(false);
     const [filterDateLimit, setFilterDateLimit] = useState<'all' | '1h' | '12h' | '24h' | '3d' | '7d'>('all');
     
@@ -305,10 +375,67 @@ export const SheetSearchModule: React.FC = () => {
     const [viewLevel, setViewLevel] = useState<'ungets' | 'sheets' | 'data'>('ungets');
     const [selectedUngetIndex, setSelectedUngetIndex] = useState<number | null>(null);
     const [selectedSourceId, setSelectedSourceId] = useState<string>(''); 
-    const [sheetsViewMode, setSheetsViewMode] = useState<'grid' | 'list' | 'compact'>('grid');
+    const [sheetsViewMode, setSheetsViewMode] = useState<'grid' | 'list' | 'compact' | 'table'>('grid');
+    const [isTableFullscreen, setIsTableFullscreen] = useState(false);
+    const [stockModalSourceId, setStockModalSourceId] = useState<string | null>(null);
+    const [stockModalSearchTerm, setStockModalSearchTerm] = useState('');
+
+    // Handler to toggle native fullscreen + React state
+    const handleToggleTableFullscreen = (targetState: boolean) => {
+        const elem = document.documentElement;
+        if (targetState) {
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(err => console.error("Error enabling full-screen mode:", err));
+            } else if ((elem as any).webkitRequestFullscreen) {
+                (elem as any).webkitRequestFullscreen();
+            } else if ((elem as any).msRequestFullscreen) {
+                (elem as any).msRequestFullscreen();
+            }
+            setIsTableFullscreen(true);
+        } else {
+            if (document.exitFullscreen && document.fullscreenElement) {
+                document.exitFullscreen().catch(err => console.error("Error exiting full-screen mode:", err));
+            } else if ((document as any).webkitExitFullscreen) {
+                (document as any).webkitExitFullscreen();
+            } else if ((document as any).msExitFullscreen) {
+                (document as any).msExitFullscreen();
+            }
+            setIsTableFullscreen(false);
+        }
+    };
+
+    useEffect(() => {
+        const handleFullScreenChange = () => {
+            const isNativeFullScreen = !!document.fullscreenElement || 
+                                       !!(document as any).webkitFullscreenElement || 
+                                       !!(document as any).msFullscreenElement;
+            if (!isNativeFullScreen) {
+                setIsTableFullscreen(false);
+            }
+        };
+
+        document.addEventListener('fullscreenchange', handleFullScreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
+        document.addEventListener('msfullscreenchange', handleFullScreenChange);
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullScreenChange);
+            document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
+            document.removeEventListener('msfullscreenchange', handleFullScreenChange);
+        };
+    }, []);
     // Modal & Config
     const [isConfigOpen, setIsConfigOpen] = useState(false);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+    const [isDataFiltersOpen, setIsDataFiltersOpen] = useState(false);
+    const [dataFilterTipsum, setDataFilterTipsum] = useState<string>('all');
+    const [dataFilterFFinan, setDataFilterFFinan] = useState<string>('all');
+    const [dataFilterStock, setDataFilterStock] = useState<string>('all');
+    const [dataFilterExpiration, setDataFilterExpiration] = useState<string>('all');
+    const [dataFilterExpMonth, setDataFilterExpMonth] = useState<string>('all');
+    const [dataFilterExpYear, setDataFilterExpYear] = useState<string>('all');
+    const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
+    const [isYearDropdownOpen, setIsYearDropdownOpen] = useState(false);
     const [reportSort, setReportSort] = useState<{ field: 'name' | 'status' | 'date', order: 'asc' | 'desc' }>({ field: 'date', order: 'asc' });
     const reportTableRef = useRef<HTMLDivElement>(null);
 
@@ -501,6 +628,13 @@ export const SheetSearchModule: React.FC = () => {
     useEffect(() => {
         if (viewLevel !== 'sheets') {
             setIsAdvancedFiltersSidebarOpen(false);
+        }
+        if (viewLevel !== 'data') {
+            setIsDataFiltersOpen(false);
+            setDataFilterTipsum('all');
+            setDataFilterFFinan('all');
+            setDataFilterStock('all');
+            setDataFilterExpiration('all');
         }
     }, [viewLevel]);
 
@@ -863,9 +997,14 @@ export const SheetSearchModule: React.FC = () => {
     };
 
     const handleSelectSheet = (sourceId: string) => {
-        setSelectedSourceId(sourceId);
-        setViewLevel('data');
-        setSearchTerm('');
+        if (isTableFullscreen) {
+            setStockModalSourceId(sourceId);
+            setStockModalSearchTerm('');
+        } else {
+            setSelectedSourceId(sourceId);
+            setViewLevel('data');
+            setSearchTerm('');
+        }
     };
 
     const goBack = () => {
@@ -905,6 +1044,40 @@ export const SheetSearchModule: React.FC = () => {
             'Precio_Cab': r.Precio_Cab || r.PRECIO_REF || '',
             'FECHA DEL EQUIPO': r.FECHA_DEL_EQUIPO || '',
             'ULTIMA ACTUALIZACION': r.Ultima_Actualizacion || ''
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Stock");
+        XLSX.writeFile(wb, `Stock_${sheetInfo.name}_${new Date().toISOString().split('T')[0]}.xlsx`.replace(/\s+/g, '_'));
+    };
+
+    const exportModalStockToExcel = () => {
+        if (!stockModalSourceId) return;
+        const sheetInfo = sources.find(s => s.id === stockModalSourceId);
+        if (!sheetInfo) return;
+
+        const dataToExport = modalStockData.map(r => ({
+            'ALMCOD': r.ALMCOD || '',
+            'DESC_ALM': r.DESC_ALM || sheetInfo.name || '',
+            'ID_Producto': r.ID_Producto || '',
+            'CODIGO_SIG': r.CODIGO_SIG || r.SIGA || '',
+            'Nombre': r.Nombre || r.DESC_ITEM || '',
+            'Sub_Grupo': r.Sub_Grupo || '',
+            'Saldo': typeof r.Saldo !== 'undefined' ? r.Saldo : (r.CANTIDAD || 0),
+            'Precio_Cab': r.Precio_Cab || r.PRECIO_REF || '',
+            'Lote': r.Lote || r.LOTE || '',
+            'Fec_Vencim': r.Fec_Vencim ? formatDate(r.Fec_Vencim) : r.FECHA_VENCIMIENTO || '',
+            'Mes_Vencim': r.Mes_Vencim || '',
+            'Año_Vencim': r.Año_Vencim || '',
+            'Reg_Sanitario': r.Reg_Sanitario || r.REGISTRO_SANITARIO || '',
+            'TIPSUM': r.TIPSUM || r.TIPO_SUMINISTRO || '',
+            'DESC_TIPSUM': r.DESC_TIPSUM || '',
+            'ESTMNT': r.ESTMNT || '',
+            'FFINAN': r.FFINAN || r.FUENTE_FINANCIAMIENTO || '',
+            'DESC_FFINAN': r.DESC_FFINAN || '',
+            'FECHA DEL EQUIPO': r.FECHA_DEL_EQUIPO || '',
+            'Ultima_Actualizacion': r.Ultima_Actualizacion || ''
         }));
 
         const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -1165,9 +1338,68 @@ export const SheetSearchModule: React.FC = () => {
 
     const filteredData = useMemo(() => {
         let currentData = selectedSourceId ? data.filter(item => item && item.sourceId === selectedSourceId) : data;
+        currentData = currentData.filter(Boolean);
+
+        return currentData.filter(item => {
+            // 1. Search term check
+            if (searchTerm.trim()) {
+                const lowerTerm = searchTerm.toLowerCase();
+                const matchesSearch = (
+                    String(item.Nombre || '').toLowerCase().includes(lowerTerm) ||
+                    String(item.CODIGO_SIG || '').toLowerCase().includes(lowerTerm) ||
+                    String(item.ID_Producto || '').toLowerCase().includes(lowerTerm) ||
+                    String(item.Lote || '').toLowerCase().includes(lowerTerm) ||
+                    String(item.DESC_ALM || '').toLowerCase().includes(lowerTerm) ||
+                    String(item.Reg_Sanitario || '').toLowerCase().includes(lowerTerm)
+                );
+                if (!matchesSearch) return false;
+            }
+
+            // 2. Tipsum filter (dynamic match)
+            if (dataFilterTipsum !== 'all') {
+                const tipsum = String(item.TIPSUM || '').toUpperCase().trim();
+                if (tipsum !== dataFilterTipsum.toUpperCase().trim()) return false;
+            }
+
+            // 3. FFinan filter (dynamic match)
+            if (dataFilterFFinan !== 'all') {
+                const ffinan = String(item.FFINAN || '').toUpperCase().trim();
+                if (ffinan !== dataFilterFFinan.toUpperCase().trim()) return false;
+            }
+
+            // 4. Stock filter (with_stock: >0, no_stock: <=0)
+            if (dataFilterStock !== 'all') {
+                const stockVal = parseFloat(String(item.Saldo || '0').replace(/,/g, ''));
+                if (dataFilterStock === 'with_stock' && stockVal <= 0) return false;
+                if (dataFilterStock === 'no_stock' && stockVal > 0) return false;
+            }
+
+            // 5. Expiration filter
+            if (dataFilterExpiration !== 'all') {
+                const { expiredCount, expiringThisMonthCount } = getExpirationStats([item]);
+                if (dataFilterExpiration === 'expired' && expiredCount === 0) return false;
+                if (dataFilterExpiration === 'expiring' && expiringThisMonthCount === 0) return false;
+                if (dataFilterExpiration === 'ok' && (expiredCount > 0 || expiringThisMonthCount > 0)) return false;
+            }
+
+            // 6. Custom Expiration Month / Year Filter
+            if (dataFilterExpMonth !== 'all' || dataFilterExpYear !== 'all') {
+                const exp = getItemExpiration(item);
+                if (!exp) return false;
+                if (dataFilterExpMonth !== 'all' && exp.month !== parseInt(dataFilterExpMonth, 10)) return false;
+                if (dataFilterExpYear !== 'all' && String(exp.year) !== dataFilterExpYear) return false;
+            }
+
+            return true;
+        });
+    }, [data, searchTerm, selectedSourceId, dataFilterTipsum, dataFilterFFinan, dataFilterStock, dataFilterExpiration, dataFilterExpMonth, dataFilterExpYear]);
+
+    const modalStockData = useMemo(() => {
+        if (!stockModalSourceId) return [];
+        let currentData = data.filter(item => item && item.sourceId === stockModalSourceId);
         
-        if (!searchTerm.trim()) return currentData.filter(Boolean);
-        const lowerTerm = searchTerm.toLowerCase();
+        if (!stockModalSearchTerm.trim()) return currentData;
+        const lowerTerm = stockModalSearchTerm.toLowerCase();
         
         return currentData.filter(item => {
             if (!item) return false;
@@ -1179,10 +1411,49 @@ export const SheetSearchModule: React.FC = () => {
                 String(item.DESC_ALM || '').toLowerCase().includes(lowerTerm)
             );
         });
-    }, [data, searchTerm, selectedSourceId]);
+    }, [data, stockModalSearchTerm, stockModalSourceId]);
 
     const activeSheetData = useMemo(() => selectedSourceId ? data.filter(item => item && item.sourceId === selectedSourceId) : [], [data, selectedSourceId]);
     const activeSheetExpirationInfo = useMemo(() => getExpirationStats(activeSheetData), [activeSheetData]);
+    const filteredDataExpirationInfo = useMemo(() => getExpirationStats(filteredData), [filteredData]);
+
+    const availableTipsums = useMemo(() => {
+        const currentData = selectedSourceId ? data.filter(item => item && item.sourceId === selectedSourceId) : data;
+        const set = new Set<string>();
+        currentData.forEach(item => {
+            if (item && item.TIPSUM) {
+                const val = item.TIPSUM.toString().trim();
+                if (val) set.add(val);
+            }
+        });
+        return Array.from(set).sort();
+    }, [data, selectedSourceId]);
+
+    const availableFFinans = useMemo(() => {
+        const currentData = selectedSourceId ? data.filter(item => item && item.sourceId === selectedSourceId) : data;
+        const set = new Set<string>();
+        currentData.forEach(item => {
+            if (item && item.FFINAN) {
+                const val = item.FFINAN.toString().trim();
+                if (val) set.add(val);
+            }
+        });
+        return Array.from(set).sort();
+    }, [data, selectedSourceId]);
+
+    const availableYears = useMemo(() => {
+        const currentData = selectedSourceId ? data.filter(item => item && item.sourceId === selectedSourceId) : data;
+        const set = new Set<string>();
+        currentData.forEach(item => {
+            if (item) {
+                const exp = getItemExpiration(item);
+                if (exp && exp.year > 2000 && exp.year < 2100) {
+                    set.add(String(exp.year));
+                }
+            }
+        });
+        return Array.from(set).sort();
+    }, [data, selectedSourceId]);
 
     const allUngetSummaries = useMemo(() => {
         const summaries: Record<number, { cs: number, ps: number, alm: number, hosp: number }> = {};
@@ -1205,13 +1476,19 @@ export const SheetSearchModule: React.FC = () => {
     }, [scriptUrls, sources]);
 
     const globalUngetSummary = useMemo(() => {
-        const counts = { cs: 0, ps: 0, alm: 0, hosp: 0 };
+        const counts = { cs: 0, ps: 0, alm: 0, hosp: 0, total: 0, online: 0, delayed: 0, offline: 0 };
         sources.forEach(s => {
             const name = s.name.toUpperCase();
             if (name.includes('C.S.') || name.includes('CENTRO DE SALUD')) counts.cs++;
             else if (name.includes('P.S.') || name.includes('PUESTO DE SALUD')) counts.ps++;
             else if (name.includes('ALM') || name.includes('ALMACEN')) counts.alm++;
             else if (name.includes('HOSP') || name.includes('HOSPITAL')) counts.hosp++;
+            
+            counts.total++;
+            const status = getUpdateStatus(s.lastUpdateTime).color;
+            if (status === 'bg-emerald-500') counts.online++;
+            else if (status === 'bg-amber-500') counts.delayed++;
+            else counts.offline++;
         });
         return counts;
     }, [sources]);
@@ -1274,6 +1551,50 @@ export const SheetSearchModule: React.FC = () => {
 
         // Sorting
         return [...matching].sort((s1, s2) => {
+            if (filterSortOrder === 'code_asc') {
+                const c1 = getAlmCodeForSheet(s1.id, data) || '';
+                const c2 = getAlmCodeForSheet(s2.id, data) || '';
+                return c1.localeCompare(c2);
+            }
+            if (filterSortOrder === 'code_desc') {
+                const c1 = getAlmCodeForSheet(s1.id, data) || '';
+                const c2 = getAlmCodeForSheet(s2.id, data) || '';
+                return c2.localeCompare(c1);
+            }
+            if (filterSortOrder === 'type_asc') {
+                const type1 = getSheetType(s1.name);
+                const type2 = getSheetType(s2.name);
+                return type1.localeCompare(type2);
+            }
+            if (filterSortOrder === 'type_desc') {
+                const type1 = getSheetType(s1.name);
+                const type2 = getSheetType(s2.name);
+                return type2.localeCompare(type1);
+            }
+            if (filterSortOrder === 'equip_newest') {
+                const t1 = s1.equipmentDateTime || 0;
+                const t2 = s2.equipmentDateTime || 0;
+                return t2 - t1;
+            }
+            if (filterSortOrder === 'equip_oldest') {
+                const t1 = s1.equipmentDateTime || 0;
+                const t2 = s2.equipmentDateTime || 100000000000000;
+                const t1_val = t1 === 0 ? 100000000000001 : t1;
+                const t2_val = t2 === 0 ? 100000000000001 : t2;
+                return t1_val - t2_val;
+            }
+            if (filterSortOrder === 'status_green_first' || filterSortOrder === 'status_red_first') {
+                const getStatusWeight = (s: typeof s1) => {
+                    const color = getUpdateStatus(s.lastUpdateTime).color;
+                    if (color.includes('bg-emerald-500')) return 1;
+                    if (color.includes('bg-amber-500')) return 2;
+                    if (color.includes('bg-red-500')) return 3;
+                    return 4; // gray / sin datos
+                };
+                const w1 = getStatusWeight(s1);
+                const w2 = getStatusWeight(s2);
+                return filterSortOrder === 'status_green_first' ? w1 - w2 : w2 - w1;
+            }
             if (filterSortOrder === 'name_asc') {
                 return s1.name.localeCompare(s2.name);
             }
@@ -1303,6 +1624,20 @@ export const SheetSearchModule: React.FC = () => {
 
                 if (expInd2 !== expInd1) {
                     return expInd2 - expInd1;
+                }
+                return s1.name.localeCompare(s2.name);
+            }
+            if (filterSortOrder === 'expired_lowest') {
+                const sheetData1 = data.filter(r => r.sourceId === s1.id);
+                const stats1 = getExpirationStats(sheetData1);
+                const expInd1 = stats1.expiredCount * 10 + stats1.expiringThisMonthCount;
+
+                const sheetData2 = data.filter(r => r.sourceId === s2.id);
+                const stats2 = getExpirationStats(sheetData2);
+                const expInd2 = stats2.expiredCount * 10 + stats2.expiringThisMonthCount;
+
+                if (expInd2 !== expInd1) {
+                    return expInd1 - expInd2;
                 }
                 return s1.name.localeCompare(s2.name);
             }
@@ -1342,13 +1677,19 @@ export const SheetSearchModule: React.FC = () => {
             return description.toLowerCase().includes(term) || code.toLowerCase().includes(term);
         });
 
-        const counts = { cs: 0, ps: 0, alm: 0, hosp: 0 };
+        const counts = { cs: 0, ps: 0, alm: 0, hosp: 0, total: 0, online: 0, delayed: 0, offline: 0 };
         filteredSources.forEach(s => {
             const name = s.name.toUpperCase();
             if (name.includes('C.S.') || name.includes('CENTRO DE SALUD')) counts.cs++;
             else if (name.includes('P.S.') || name.includes('PUESTO DE SALUD')) counts.ps++;
             else if (name.includes('ALM') || name.includes('ALMACEN')) counts.alm++;
             else if (name.includes('HOSP') || name.includes('HOSPITAL')) counts.hosp++;
+            
+            counts.total++;
+            const status = getUpdateStatus(s.lastUpdateTime).color;
+            if (status === 'bg-emerald-500') counts.online++;
+            else if (status === 'bg-amber-500') counts.delayed++;
+            else counts.offline++;
         });
 
         return counts;
@@ -1379,36 +1720,162 @@ export const SheetSearchModule: React.FC = () => {
     }, [filteredAndSortedSources, reportSort]);
 
     return (
-        <div className={`flex flex-col h-full bg-gray-50/50 sm:p-4 2xl:p-6 pb-20 max-w-7xl mx-auto w-full transition-all duration-300 ${isAdvancedFiltersSidebarOpen && viewLevel === 'sheets' ? 'md:pr-[380px] xl:pr-[420px]' : ''}`}>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3 sm:gap-4 border-b border-gray-200 pb-4 px-4 pt-4 sm:px-0 sm:pt-0">
-                <div className="w-full sm:w-auto">
-                    <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                        <Database className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600 shrink-0" />
-                        <span className="truncate">Consulta Stock</span>
+        <div className={`flex flex-col h-full transition-all duration-300 ${isAdvancedFiltersSidebarOpen && viewLevel === 'sheets' ? 'md:pr-[380px] xl:pr-[420px]' : ''}`}>
+            {/* Minimalist Top Header */}
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center px-4 sm:px-10 lg:px-14 xl:px-16 py-4 sm:py-8 gap-4 sm:gap-6">
+                {/* Left Side: Title & KPIs underneath */}
+                <div className="w-full xl:w-auto flex flex-col gap-3 sm:gap-4 overflow-hidden">
+                    {/* Title */}
+                    <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2 sm:gap-2.5">
+                        <Database className="h-5 w-5 text-teal-600 shrink-0" />
+                        <span className="truncate">Reporte de Stock detallado SISMED</span>
                     </h2>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-1 line-clamp-2 sm:line-clamp-none">
-                        Consulte medicamentos e insumos directamente desde el registro consolidado (Apps Script).
-                    </p>
+
+                    {/* Connection KPIs (Cards) */}
+                    {(() => {
+                        if (viewLevel === 'data') {
+                            return (
+                                <div className="flex flex-row items-center gap-2 sm:gap-4 overflow-x-auto hide-scrollbar w-full justify-start pb-1 animate-in fade-in duration-200">
+                                    {/* Total Productos */}
+                                    <div className="flex items-center gap-2 sm:gap-2.5 bg-white border border-slate-100/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2 shrink-0">
+                                        <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-teal-50 flex items-center justify-center shrink-0">
+                                            <Package className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-600" />
+                                        </div>
+                                        <div className="flex flex-col justify-center gap-0.5 pr-2">
+                                            <span className="text-sm sm:text-lg font-black text-slate-800 leading-none">{filteredData.length}</span>
+                                            <span className="text-[9px] sm:text-[10px] font-bold text-teal-600 leading-none uppercase">Lotes</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Por Vencer */}
+                                    <div className="flex items-center gap-2 sm:gap-2.5 bg-white border border-slate-100/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2 shrink-0">
+                                        <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-amber-50 flex items-center justify-center shrink-0 border border-amber-100/50">
+                                            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
+                                        </div>
+                                        <div className="flex flex-col justify-center gap-0.5 pr-2">
+                                            <span className="text-sm sm:text-lg font-black text-slate-800 leading-none">{filteredDataExpirationInfo.expiringThisMonthCount}</span>
+                                            <span className="text-[9px] sm:text-[10px] font-bold text-amber-600 leading-none uppercase">Por Vencer</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Vencidos */}
+                                    <div className="flex items-center gap-2 sm:gap-2.5 bg-white border border-slate-100/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2 shrink-0">
+                                        <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-red-50 flex items-center justify-center shrink-0 border border-red-100/50">
+                                            <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />
+                                        </div>
+                                        <div className="flex flex-col justify-center gap-0.5 pr-2">
+                                            <span className="text-sm sm:text-lg font-black text-slate-800 leading-none">{filteredDataExpirationInfo.expiredCount}</span>
+                                            <span className="text-[9px] sm:text-[10px] font-bold text-red-500 leading-none uppercase">Vencidos</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        const currentSummary = viewLevel === 'sheets' ? establishmentSummary : (viewLevel === 'ungets' ? globalUngetSummary : null);
+                        if (!currentSummary) return null;
+                        return (
+                            <div className="flex flex-row items-center gap-2 sm:gap-4 overflow-x-auto hide-scrollbar w-full justify-start pb-1">
+                                {/* En Línea */}
+                                <div className="flex items-center gap-2 sm:gap-2.5 bg-white border border-slate-100/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2 shrink-0">
+                                    <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-teal-50 flex items-center justify-center shrink-0">
+                                        <Wifi className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-600" />
+                                    </div>
+                                    <div className="flex flex-col justify-center gap-0.5 pr-2">
+                                        <span className="text-sm sm:text-lg font-black text-slate-800 leading-none">{currentSummary.online}</span>
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-teal-600 leading-none uppercase">En Línea</span>
+                                    </div>
+                                </div>
+
+                                {/* Desconectados */}
+                                <div className="flex items-center gap-2 sm:gap-2.5 bg-white border border-slate-100/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2 shrink-0">
+                                    <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-amber-50 flex items-center justify-center shrink-0 border border-amber-100/50">
+                                        <FileClock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
+                                    </div>
+                                    <div className="flex flex-col justify-center gap-0.5 pr-2">
+                                        <span className="text-sm sm:text-lg font-black text-slate-800 leading-none">{currentSummary.delayed}</span>
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-amber-600 leading-none uppercase">Desconectados</span>
+                                    </div>
+                                </div>
+
+                                {/* Fuera de Línea */}
+                                <div className="flex items-center gap-2 sm:gap-2.5 bg-white border border-slate-100/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2 shrink-0">
+                                    <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-red-50 flex items-center justify-center shrink-0 border border-red-100/50">
+                                        <WifiOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />
+                                    </div>
+                                    <div className="flex flex-col justify-center gap-0.5 pr-2">
+                                        <span className="text-sm sm:text-lg font-black text-slate-800 leading-none">{currentSummary.offline}</span>
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-red-500 leading-none uppercase">Fuera Línea</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-0 overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
-                    <button 
-                        onClick={() => {
-                            setTempUrls([...scriptUrls]);
-                            setIsConfigOpen(!isConfigOpen);
-                        }}
-                        className="flex-1 sm:flex-none border border-gray-300 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5 sm:gap-2 shrink-0"
-                    >
-                        <Settings className="h-4 w-4 text-gray-500" />
-                        Configurar
-                    </button>
-                    <button 
-                        id="sync-btn"
-                        onClick={() => fetchData()} disabled={isLoading || isSilentSyncing}
-                        className="flex-1 sm:flex-none bg-teal-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm shrink-0"
-                    >
-                        <RefreshCw className={`h-4 w-4 ${isLoading || isSilentSyncing ? 'animate-spin' : ''}`} />
-                        {isLoading || isSilentSyncing ? 'Sincronizando...' : 'Sincronizar'}
-                    </button>
+
+                {/* Right Side: Navigation Breadcrumbs (top-right) + Action Buttons (bottom-right) */}
+                <div className="flex flex-col gap-3 sm:gap-4 w-full xl:w-auto items-start xl:items-end justify-start overflow-hidden">
+                    {/* Navigation Tabs (Breadcrumbs) aligned to the right */}
+                    <div className="flex items-center text-[10px] sm:text-[12px] font-bold text-slate-500 overflow-x-auto hide-scrollbar shrink-0 uppercase tracking-widest gap-1 self-stretch xl:self-auto justify-start xl:justify-end pb-1 sm:pb-0">
+                        <button 
+                            onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
+                            className={`flex items-center gap-1.5 sm:gap-2 transition-colors shrink-0 ${viewLevel === 'ungets' ? 'text-teal-600 font-black' : 'hover:text-slate-800'}`}
+                        >
+                            <Building2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${viewLevel === 'ungets' ? 'text-teal-600' : 'text-slate-400'}`} />
+                            <span className={viewLevel === 'ungets' ? 'font-black text-teal-600' : ''}>PANEL REGIONAL</span>
+                        </button>
+                        
+                        {selectedUngetIndex !== null && (
+                            <>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-350 mx-0.5 sm:mx-1 shrink-0" />
+                                <button 
+                                    onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
+                                    className={`flex items-center gap-1.5 sm:gap-2 transition-colors shrink-0 ${viewLevel === 'sheets' ? 'text-teal-600 font-black' : 'hover:text-slate-800'}`}
+                                >
+                                    <FileSpreadsheet className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${viewLevel === 'sheets' ? 'text-teal-600' : 'text-slate-400'}`} />
+                                    <span className={`truncate max-w-[120px] sm:max-w-[150px] md:max-w-[200px] ${viewLevel === 'sheets' ? 'font-black text-teal-600' : ''}`}>{scriptUrls[selectedUngetIndex]?.name || 'Documento'}</span>
+                                </button>
+                            </>
+                        )}
+
+                        {selectedSourceId && (
+                            <>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-350 mx-0.5 sm:mx-1 shrink-0" />
+                                <div className="flex items-center gap-1.5 sm:gap-2 text-teal-600 shrink-0">
+                                    <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-500" />
+                                    <span className="font-black truncate max-w-[120px] sm:max-w-[150px] md:max-w-[250px]">{(() => {
+                                        const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
+                                        const lastDash = name.lastIndexOf('-');
+                                        const desc = lastDash === -1 ? name.replace(/^FARM\s*-\s*/i, '') : name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                        const code = selectedSourceId ? getAlmCodeForSheet(selectedSourceId, data) : '';
+                                        return code ? `${desc} (${code})` : desc;
+                                    })()}</span>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Action Buttons underneath breadcrumbs */}
+                    <div className="flex items-center gap-2 sm:gap-2.5 w-full md:w-auto overflow-x-auto pb-1 sm:pb-0 hide-scrollbar justify-start xl:justify-end shrink-0">
+                        <button 
+                            onClick={() => {
+                                setTempUrls([...scriptUrls]);
+                                setIsConfigOpen(!isConfigOpen);
+                            }}
+                            className="bg-white border border-slate-200 text-slate-700 px-3 py-2 sm:px-4 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap shrink-0"
+                        >
+                            <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-500" />
+                            Configurar
+                        </button>
+                        <button 
+                            id="sync-btn"
+                            onClick={() => fetchData()} disabled={isLoading || isSilentSyncing}
+                            className="flex-1 sm:flex-none bg-teal-600 text-white px-4 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm hover:bg-teal-700 hover:shadow-md transition-all disabled:opacity-50 disabled:hover:shadow-none flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap"
+                        >
+                            <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isLoading || isSilentSyncing ? 'animate-spin' : ''}`} />
+                            {isLoading || isSilentSyncing ? 'Sincronizando...' : 'Sincronizar'}
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -1590,278 +2057,199 @@ export const SheetSearchModule: React.FC = () => {
             )}
 
             {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 sm:rounded-xl flex items-center gap-2 mb-6 mx-4 sm:mx-0">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 sm:rounded-xl flex items-center gap-2 mb-6 mx-4 sm:mx-10 lg:mx-14 xl:mx-16">
                     <AlertCircle className="h-5 w-5 shrink-0" />
                     <span className="text-sm">{error}</span>
                 </div>
             )}
 
-            <div className="bg-white sm:rounded-2xl border-y sm:border border-gray-200 shadow-sm flex-1 flex flex-col min-h-[600px] overflow-hidden">
-                {/* BREADCRUMBS & SEARCH */}
-                <div className="p-4 sm:p-5 border-b border-gray-150 bg-slate-50/50 flex flex-col gap-4 font-sans">
-                    {/* BREADCRUMBS Y ESTADÍSTICAS RÁPIDAS */}
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between w-full pb-1">
-                        {/* Mobile Breadcrumb (Back button + Current state) */}
-                        <div className="flex sm:hidden items-center gap-2 text-sm">
-                            {viewLevel === 'sheets' && (
-                                <button 
-                                    onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
-                                    className="p-1.5 -ml-1 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
-                                >
-                                    <ArrowLeft className="h-5 w-5" />
-                                </button>
-                            )}
-                            {viewLevel === 'data' && (
-                                 <button 
-                                    onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
-                                    className="p-1.5 -ml-1 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
-                                >
-                                    <ArrowLeft className="h-5 w-5" />
-                                </button>       
-                            )}
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-100 text-teal-800 shrink-0 min-w-0 font-bold text-xs">
-                                 {viewLevel === 'ungets' && (
-                                    <>
-                                        <Building2 className="h-3.5 w-3.5 shrink-0" />
-                                        <span className="whitespace-nowrap font-black">UNGETs</span>
-                                    </>
-                                 )}
-                                 {viewLevel === 'sheets' && (
-                                    <>
-                                        <MapPin className="h-3.5 w-3.5 shrink-0" />
-                                        <span className="whitespace-nowrap font-black truncate max-w-[130px]">{scriptUrls[selectedUngetIndex!]?.name || 'Documento'}</span>
-                                    </>
-                                 )}
-                                 {viewLevel === 'data' && (
-                                    <>
-                                        <Hospital className="h-3.5 w-3.5 shrink-0" />
-                                        <span className="whitespace-nowrap font-black truncate max-w-[130px]">{(() => {
-                                            const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
-                                            const lastDash = name.lastIndexOf('-');
-                                            const desc = lastDash === -1 ? name.replace(/^FARM\s*-\s*/i, '') : name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
-                                            const code = selectedSourceId ? getAlmCodeForSheet(selectedSourceId, data) : '';
-                                            return code ? `${desc} (${code})` : desc;
-                                        })()}</span>
-                                    </>
-                                 )}
+            <div className="bg-white sm:rounded-[1.25rem] border-y sm:border border-slate-200 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex-1 flex flex-col min-h-[300px] overflow-hidden mx-0 sm:mx-10 lg:mx-14 xl:mx-16">
+                {/* TOOLBAR */}
+                <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col gap-4">
+                    {/* Search & Actions */}
+                    <div className="flex flex-col md:flex-row gap-3 items-center justify-between w-full">
+                        <div className="relative flex-1 w-full md:max-w-[50%] group">
+                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none z-10">
+                                <Search className="h-4 w-4 text-slate-400 group-focus-within:text-teal-600 stroke-[2.5] transition-colors" />
                             </div>
-                        </div>
-
-                        {/* Desktop Breadcrumbs */}
-                        <nav className="hidden sm:flex items-center gap-2 text-xs font-semibold overflow-x-auto hide-scrollbar">
-                            <button 
-                                onClick={() => { setViewLevel('ungets'); setSelectedUngetIndex(null); setSelectedSourceId(''); }}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all shrink-0 ${viewLevel === 'ungets' ? 'bg-teal-500/10 text-teal-800 border border-teal-100' : 'text-gray-500 hover:text-slate-800 hover:bg-gray-100'}`}
-                            >
-                                <Building2 className="scale-90" />
-                                <span className="whitespace-nowrap">PANEL REGIONAL</span>
-                            </button>
-                            
-                            {selectedUngetIndex !== null && (
-                                <>
-                                    <ChevronRight className="h-3.5 w-3.5 text-gray-300 shrink-0" />
-                                    <button 
-                                        onClick={() => { setViewLevel('sheets'); setSelectedSourceId(''); }}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all shrink-0 ${viewLevel === 'sheets' ? 'bg-teal-500/10 text-teal-800 border border-teal-100' : 'text-gray-500 hover:text-slate-800 hover:bg-gray-100'}`}
-                                    >
-                                        <MapPin className="scale-90" />
-                                        <span className="whitespace-nowrap truncate max-w-[200px] sm:max-w-none">{scriptUrls[selectedUngetIndex]?.name || 'Documento'}</span>
-                                    </button>
-                                </>
-                            )}
-
-                            {selectedSourceId && (
-                                <>
-                                    <ChevronRight className="h-3.5 w-3.5 text-gray-300 shrink-0" />
-                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-800 border border-teal-100 font-bold shrink-0">
-                                        <Hospital className="scale-90" />
-                                        <span className="whitespace-nowrap truncate max-w-[200px] sm:max-w-none">{(() => {
-                                            const name = sources.find(s => s.id === selectedSourceId)?.name || 'Hoja';
-                                            const lastDash = name.lastIndexOf('-');
-                                            const desc = lastDash === -1 ? name.replace(/^FARM\s*-\s*/i, '') : name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
-                                            const code = selectedSourceId ? getAlmCodeForSheet(selectedSourceId, data) : '';
-                                            return code ? `${desc} (${code})` : desc;
-                                        })()}</span>
-                                    </div>
-                                </>
-                            )}
-                        </nav>
-
-                        {/* Indicadores rápidos de tipo (Estadísticas alineadas a la derecha) */}
-                        {viewLevel === 'sheets' && establishmentSummary && (
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-150 rounded-xl shrink-0 overflow-x-auto hide-scrollbar shadow-xs">
-                                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mr-1 whitespace-nowrap">Resumen UNGET:</span>
-                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50/50 text-blue-700 text-[10px] font-medium border border-blue-100 whitespace-nowrap">
-                                    C.S: <span className="text-blue-800 font-semibold">{establishmentSummary.cs}</span>
-                                </div>
-                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50/50 text-amber-700 text-[10px] font-medium border border-amber-100 whitespace-nowrap">
-                                    P.S: <span className="text-amber-805 font-semibold">{establishmentSummary.ps}</span>
-                                </div>
-                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-teal-50/50 text-teal-700 text-[10px] font-medium border border-teal-100 whitespace-nowrap">
-                                    ALM: <span className="text-teal-800 font-semibold">{establishmentSummary.alm}</span>
-                                </div>
-                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-violet-50/50 text-violet-700 text-[10px] font-medium border border-violet-100 whitespace-nowrap">
-                                    HOSP: <span className="text-violet-800 font-semibold">{establishmentSummary.hosp}</span>
-                                </div>
-                            </div>
-                        )}
-
-                        {viewLevel === 'ungets' && globalUngetSummary && sources.length > 0 && (
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-150 rounded-xl shrink-0 overflow-x-auto hide-scrollbar shadow-xs">
-                                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mr-1 whitespace-nowrap">Total Regional:</span>
-                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50/50 text-blue-700 text-[10px] font-medium border border-blue-100 whitespace-nowrap">
-                                    C.S: <span className="text-blue-800 font-semibold">{globalUngetSummary.cs}</span>
-                                </div>
-                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50/50 text-amber-700 text-[10px] font-medium border border-amber-100 whitespace-nowrap">
-                                    P.S: <span className="text-amber-805 font-semibold">{globalUngetSummary.ps}</span>
-                                </div>
-                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-teal-50/50 text-teal-700 text-[10px] font-medium border border-teal-100 whitespace-nowrap">
-                                    ALM: <span className="text-teal-800 font-semibold">{globalUngetSummary.alm}</span>
-                                </div>
-                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-violet-50/50 text-violet-700 text-[10px] font-medium border border-violet-100 whitespace-nowrap">
-                                    HOSP: <span className="text-violet-800 font-semibold">{globalUngetSummary.hosp}</span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* ACTIONS BAR (Search left, unifed actions right) */}
-                    <div className="flex flex-col md:flex-row gap-3 items-center justify-between w-full border-t border-slate-200/50 pt-3">
-                        {/* Campo de Búsqueda inteligente */}
-                        <div className="w-full md:max-w-md shrink-0">
                             {viewLevel === 'ungets' && (
-                                <div className="relative w-full">
-                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                        <Search className="h-4 w-4 text-slate-450" />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar UNGET por nombre..."
-                                        value={ungetSearchTerm}
-                                        onChange={(e) => setUngetSearchTerm(e.target.value)}
-                                        className="block w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/80 focus:border-transparent text-xs transition-all shadow-xs"
+                                <div className="relative w-full text-slate-800">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Buscar UNGET..." 
+                                        value={ungetSearchTerm} 
+                                        onChange={(e) => setUngetSearchTerm(e.target.value)} 
+                                        className="w-full pl-10 pr-12 py-2.5 bg-slate-50/85 md:bg-slate-50 border border-slate-200 hover:border-slate-300 focus:bg-white focus:border-teal-500 rounded-xl text-sm transition-all focus:outline-none focus:ring-4 focus:ring-teal-500/10 placeholder:text-slate-450 shadow-2xs font-medium text-slate-800" 
                                     />
-                                </div>
-                            )}
-                            {viewLevel === 'data' && (
-                                <div className="relative w-full">
-                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                        <Search className="h-4 w-4 text-slate-450" />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar en esta hoja..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="block w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/80 focus:border-transparent text-xs transition-all shadow-xs"
-                                    />
+                                    {ungetSearchTerm && (
+                                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                            <button 
+                                                type="button"
+                                                onClick={() => setUngetSearchTerm('')}
+                                                className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors active:scale-95 cursor-pointer"
+                                                title="Limpiar"
+                                            >
+                                                <X className="h-3.5 w-3.5 stroke-[2.5]" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             {viewLevel === 'sheets' && (
-                                <div className="relative w-full">
-                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                        <Search className="h-4 w-4 text-slate-450" />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar establecimiento por nombre o código..."
-                                        value={sheetSearchTerm}
-                                        onChange={(e) => setSheetSearchTerm(e.target.value)}
-                                        className="block w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/80 focus:border-transparent text-xs transition-all shadow-xs"
+                                <div className="relative w-full text-slate-800">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Buscar establecimiento por nombre o código..." 
+                                        value={sheetSearchTerm} 
+                                        onChange={(e) => setSheetSearchTerm(e.target.value)} 
+                                        className="w-full pl-10 pr-32 py-2.5 bg-slate-50/85 md:bg-slate-50 border border-slate-200 hover:border-slate-300 focus:bg-white focus:border-teal-500 rounded-xl text-sm transition-all focus:outline-none focus:ring-4 focus:ring-teal-500/10 placeholder:text-slate-450 shadow-2xs font-medium text-slate-800" 
                                     />
+                                    <div className="absolute inset-y-0 right-0 pr-1.5 flex items-center gap-1.5">
+                                        {sheetSearchTerm && (
+                                            <button 
+                                                type="button"
+                                                onClick={() => setSheetSearchTerm('')}
+                                                className="p-1 hover:bg-slate-100/80 text-slate-400 hover:text-slate-600 rounded-full transition-colors active:scale-95 cursor-pointer flex items-center justify-center"
+                                                title="Limpiar"
+                                            >
+                                                <X className="h-3.5 w-3.5 stroke-[2.5]" />
+                                            </button>
+                                        )}
+                                        <button 
+                                            type="button"
+                                            onClick={() => setIsAdvancedFiltersSidebarOpen(true)} 
+                                            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 active:scale-95 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200/80 text-xs font-black transition-all shrink-0 relative shadow-sm cursor-pointer hover:border-slate-300 active:bg-slate-100"
+                                        >
+                                            <Filter className="h-3.5 w-3.5 text-teal-600" /> 
+                                            <span>Filtros</span>
+                                            {(!filter_CS || !filter_PS || !filter_ALM || !filter_HOSP || !filter_OTRO || !filter_emerald || !filter_amber || !filter_red || !filter_gray || filterSortOrder !== 'name_asc' || filterHasPendingExpirations) && (
+                                                <span className="absolute top-0 right-0 -mr-1 -mt-1 w-2.5 h-2.5 bg-teal-500 rounded-full border-2 border-white animate-pulse" />
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            {viewLevel === 'data' && (
+                                <div className="relative w-full text-slate-800">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Buscar medicamento en esta hoja..." 
+                                        value={searchTerm} 
+                                        onChange={(e) => setSearchTerm(e.target.value)} 
+                                        className="w-full pl-10 pr-32 py-2.5 bg-slate-50/85 md:bg-slate-50 border border-slate-200 hover:border-slate-300 focus:bg-white focus:border-teal-500 rounded-xl text-sm transition-all focus:outline-none focus:ring-4 focus:ring-teal-500/10 placeholder:text-slate-450 shadow-2xs font-medium text-slate-800" 
+                                    />
+                                    <div className="absolute inset-y-0 right-0 pr-1.5 flex items-center gap-1.5">
+                                        {searchTerm && (
+                                            <button 
+                                                type="button"
+                                                onClick={() => setSearchTerm('')}
+                                                className="p-1 hover:bg-slate-100/80 text-slate-400 hover:text-slate-600 rounded-full transition-colors active:scale-95 cursor-pointer flex items-center justify-center"
+                                                title="Limpiar"
+                                            >
+                                                <X className="h-3.5 w-3.5 stroke-[2.5]" />
+                                            </button>
+                                        )}
+                                        <button 
+                                            type="button"
+                                            onClick={() => setIsAdvancedFiltersSidebarOpen(true)} 
+                                            className="flex items-center gap-1.5 bg-white hover:bg-slate-50 active:scale-95 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200/85 text-xs font-black transition-all shrink-0 relative shadow-sm cursor-pointer hover:border-slate-300 active:bg-slate-100"
+                                        >
+                                            <Filter className="h-3.5 w-3.5 text-teal-600" /> 
+                                            <span>Filtros</span>
+                                            {(dataFilterTipsum !== 'all' || dataFilterFFinan !== 'all' || dataFilterStock !== 'all' || dataFilterExpiration !== 'all') && (
+                                                <span className="absolute top-0 right-0 -mr-1 -mt-1 w-2.5 h-2.5 bg-teal-500 rounded-full border-2 border-white animate-pulse" />
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
 
-                        {/* Botones de acción unificados */}
-                        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-start md:justify-end shrink-0">
+                        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto md:overflow-visible hide-scrollbar shrink-0 pt-1 md:pt-0 md:ml-auto pb-1 relative z-30">
                             {viewLevel === 'data' && (
                                 <>
                                     {activeSheetExpirationInfo.expiredCount > 0 && (
-                                        <button 
-                                            onClick={() => { setExpirationModalType('expired'); setIsExpirationModalOpen(true); }}
-                                            className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 px-3.5 py-2 rounded-xl border border-red-100 shadow-xs text-xs font-bold transition-all shrink-0"
-                                            title="Ver productos vencidos"
-                                        >
-                                            <AlertTriangle className="h-4 w-4 shrink-0 animate-pulse text-red-500" />
-                                            <span>{activeSheetExpirationInfo.expiredCount} vencido{activeSheetExpirationInfo.expiredCount !== 1 ? 's' : ''}</span>
+                                        <button onClick={() => { setExpirationModalType('expired'); setIsExpirationModalOpen(true); }} className="flex items-center gap-1.5 bg-white hover:bg-red-50 text-red-600 px-3 py-2 rounded-lg border border-red-100 text-xs font-bold transition-all shrink-0 whitespace-nowrap">
+                                            <AlertTriangle className="h-3.5 w-3.5 text-red-500 animate-pulse shrink-0" />
+                                            <span>{activeSheetExpirationInfo.expiredCount} Vencidos</span>
                                         </button>
                                     )}
                                     {activeSheetExpirationInfo.expiringThisMonthCount > 0 && (
-                                        <button 
-                                            onClick={() => { setExpirationModalType('expiring'); setIsExpirationModalOpen(true); }}
-                                            className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 px-3.5 py-2 rounded-xl border border-amber-100 shadow-xs text-xs font-bold transition-all shrink-0"
-                                            title="Ver productos por vencer este mes"
-                                        >
-                                            <Clock className="h-4 w-4 shrink-0" />
-                                            <span>{activeSheetExpirationInfo.expiringThisMonthCount} por vencer</span>
+                                        <button onClick={() => { setExpirationModalType('expiring'); setIsExpirationModalOpen(true); }} className="flex items-center gap-1.5 bg-white hover:bg-amber-50 text-amber-600 px-3 py-2 rounded-lg border border-amber-100 text-xs font-bold transition-all shrink-0 whitespace-nowrap">
+                                            <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                            <span>{activeSheetExpirationInfo.expiringThisMonthCount} Por vencer</span>
                                         </button>
                                     )}
-                                    
-                                    <button
-                                        onClick={exportCurrentSheetToExcel}
-                                        className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-700 px-2.5 py-1.5 rounded-lg border border-emerald-200 shadow-xs text-[10px] font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer"
-                                        title="Descargar Excel del Establecimiento"
-                                    >
-                                        <Download className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                                        <span>Exportar Stock</span>
+                                    <button onClick={exportCurrentSheetToExcel} className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 px-3 sm:px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold transition-all shrink-0 whitespace-nowrap">
+                                        <Download className="h-4 w-4 text-emerald-600 shrink-0" /> Exportar Stock
                                     </button>
                                 </>
                             )}
                             
                             {viewLevel === 'sheets' && (
-                                <>
-                                    {/* Botón Filtros Avanzados */}
-                                    <button
-                                        onClick={() => setIsAdvancedFiltersSidebarOpen(true)}
-                                        className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-xs text-[10px] font-semibold uppercase tracking-wider transition-all relative shrink-0 cursor-pointer"
-                                        title="Filtros Avanzados"
+                                <div className="relative z-30">
+                                    <button 
+                                        onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                                        className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 px-3 sm:px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold transition-all shrink-0 shadow-sm whitespace-nowrap group cursor-pointer"
                                     >
-                                        <Filter className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                                        <span>Filtros</span>
-                                        {/* Indicador de filtros activos */}
-                                        {(!filter_CS || !filter_PS || !filter_ALM || !filter_HOSP || !filter_OTRO || !filter_emerald || !filter_amber || !filter_red || !filter_gray || filterSortOrder !== 'name_asc' || filterHasPendingExpirations) && (
-                                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-teal-500 rounded-full border border-white animate-pulse" />
-                                        )}
+                                        <Download className="h-4 w-4 text-emerald-600 shrink-0 transition-transform group-hover:translate-y-0.5" />
+                                        <span>Exportar Reportes</span>
+                                        <ChevronDown className={`h-4 w-4 text-slate-400 shrink-0 transition-transform duration-200 ${isExportDropdownOpen ? 'rotate-180' : ''}`} />
                                     </button>
+                                    
+                                    {isExportDropdownOpen && (
+                                        <>
+                                            {/* Overlay screen to close dropdown on click outside */}
+                                            <div className="fixed inset-0 z-40" onClick={() => setIsExportDropdownOpen(false)} />
+                                            {/* Dropdown Card */}
+                                            <div className="absolute right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.05)] z-50 overflow-hidden w-64 divide-y divide-slate-100 py-1 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                                                <button 
+                                                    onClick={() => {
+                                                        setIsExportDropdownOpen(false);
+                                                        exportAllEstablishmentsToExcel();
+                                                    }}
+                                                    className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-all text-slate-705 group cursor-pointer"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+                                                        <Download className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 leading-tight">Exportar Stock</span>
+                                                        <span className="text-[10px] text-slate-400 font-medium leading-normal">Saldos de todos los establecimientos</span>
+                                                    </div>
+                                                </button>
 
-                                    {/* Botón Reporte de Actualización */}
-                                    <button
-                                        onClick={() => setIsReportModalOpen(true)}
-                                        className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 px-2.5 py-1.5 rounded-lg border border-indigo-200 shadow-xs text-[10px] font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer"
-                                        title="Ver Reporte General de Actualizaciones"
-                                    >
-                                        <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-indigo-600" />
-                                        <span>Reporte Actualización</span>
-                                    </button>
-
-                                    {/* Botón de Exportar Todos */}
-                                    <button
-                                        onClick={exportAllEstablishmentsToExcel}
-                                        className="flex items-center gap-1.5 bg-teal-50 hover:bg-teal-100/80 text-teal-700 px-2.5 py-1.5 rounded-lg border border-teal-200 shadow-xs text-[10px] font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer"
-                                        title="Descargar Excel de Todos los Establecimientos"
-                                    >
-                                        <Download className="h-3.5 w-3.5 shrink-0 text-teal-600" />
-                                        <span>Exportar Stock</span>
-                                    </button>
-                                </>
+                                                <button 
+                                                    onClick={() => {
+                                                        setIsExportDropdownOpen(false);
+                                                        exportReportToExcel();
+                                                    }}
+                                                    className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-all text-slate-705 group cursor-pointer"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                                                        <FileSpreadsheet className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 leading-tight">Reporte Actualización</span>
+                                                        <span className="text-[10px] text-slate-400 font-medium leading-normal">Estado y fecha de sincronizaciones</span>
+                                                    </div>
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             )}
 
                             {viewLevel === 'ungets' && globalUngetSummary && sources.length > 0 && (
-                                <button
-                                    onClick={exportAllUngetsToExcel}
-                                    className="flex items-center gap-1.5 bg-teal-50 hover:bg-teal-100/80 text-teal-700 px-2.5 py-1.5 rounded-lg border border-teal-200 shadow-xs text-[10px] font-semibold uppercase tracking-wider transition-all shrink-0 cursor-pointer"
-                                    title="Descargar Excel de Todas las UNGETs"
-                                >
-                                    <Download className="h-3.5 w-3.5 shrink-0 text-teal-600" />
-                                    <span>Exportar Stock</span>
+                                <button onClick={exportAllUngetsToExcel} className="flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 px-3 sm:px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold transition-all shrink-0 whitespace-nowrap shadow-sm">
+                                    <Download className="h-4 w-4 text-emerald-600 shrink-0" /> Exportar Stock
                                 </button>
                             )}
                         </div>
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-auto p-4 sm:p-6 pb-32 sm:pb-6 bg-gray-50/30">
+                <div className={`flex-1 bg-gray-50/30 scrollbar-thin ${viewLevel === 'data' ? 'overflow-visible' : 'overflow-auto'}`}>
                     {isConfigLoading && scriptUrls.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-teal-600 gap-3 py-20">
                             <RefreshCw className="h-10 w-10 animate-spin" />
@@ -1882,7 +2270,7 @@ export const SheetSearchModule: React.FC = () => {
                             </button>
                         </div>
                     ) : (
-                        <>
+                        <div className="p-4 sm:p-6 pb-32 sm:pb-6 flex flex-col gap-6">
                             {/* LEVEL 1: UNGET CARDS */}
                             {viewLevel === 'ungets' && (
                                 <div className="animate-in fade-in zoom-in-95 duration-300">
@@ -1991,18 +2379,53 @@ export const SheetSearchModule: React.FC = () => {
                             {/* LEVEL 2: SHEET CARDS */}
                             {viewLevel === 'sheets' && (
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                                    <div className="flex items-center justify-between border-b border-gray-200/50 pb-3 mb-4 sm:mb-6">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">Establecimientos de Salud</h3>
-                                            {filteredAndSortedSources.length > 0 && (
-                                                <span className="text-[10px] sm:text-xs text-slate-550 font-extrabold bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200/60 shadow-xs">
-                                                    {filteredAndSortedSources.length} {filteredAndSortedSources.length === 1 ? 'establecimiento' : 'establecimientos'}
-                                                </span>
+                                    <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-gray-200/50 pb-3 mb-4 sm:mb-6 gap-4">
+                                        <div className="flex flex-col gap-2.5">
+                                            {/* Title and Counter Pill */}
+                                            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-1 h-5 bg-teal-500 rounded-full"></span>
+                                                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest break-words flex-1">
+                                                        Establecimientos de Salud
+                                                    </h3>
+                                                </div>
+                                                {filteredAndSortedSources.length > 0 && (
+                                                    <span className="text-[10px] whitespace-nowrap font-black bg-teal-50 text-teal-850 px-2.5 py-0.5 rounded-full border border-teal-100/70 shadow-xs uppercase tracking-wide">
+                                                        {filteredAndSortedSources.length} {filteredAndSortedSources.length === 1 ? 'establecimiento' : 'establecimientos'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            
+                                            {/* Beautiful Premium Type KPIs */}
+                                            {establishmentSummary && (
+                                                <div className="flex flex-wrap gap-2 pt-0.5">
+                                                    <div className="flex items-center gap-1.5 bg-sky-50/70 border border-sky-100/50 text-sky-800 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-xs" title="Centros de Salud">
+                                                        <span className="w-1.5 h-1.5 bg-sky-500 rounded-full"></span>
+                                                        <span className="text-slate-500 font-medium">C.S.:</span>
+                                                        <span className="font-extrabold">{establishmentSummary.cs}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 bg-amber-50/70 border border-amber-100/50 text-amber-800 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-xs" title="Puestos de Salud">
+                                                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                                                        <span className="text-slate-500 font-medium">P.S.:</span>
+                                                        <span className="font-extrabold">{establishmentSummary.ps}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 bg-indigo-50/70 border border-indigo-100/50 text-indigo-800 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-xs" title="Almacenes">
+                                                        <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
+                                                        <span className="text-slate-500 font-medium">ALM:</span>
+                                                        <span className="font-extrabold">{establishmentSummary.alm}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 bg-violet-50/70 border border-violet-100/50 text-violet-800 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow-xs" title="Hospitales">
+                                                        <span className="w-1.5 h-1.5 bg-violet-500 rounded-full"></span>
+                                                        <span className="text-slate-500 font-medium">HOSP:</span>
+                                                        <span className="font-extrabold">{establishmentSummary.hosp}</span>
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
                                         
                                         {/* Selector de tipo de Visualización */}
-                                        <div className="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-xl border border-slate-200/60 shadow-[inset_0_1px_1.5px_rgba(0,0,0,0.02)] shrink-0">
+                                        <div className="flex flex-wrap items-center gap-2 shrink-0 overflow-x-auto pb-1 -mb-1 max-w-full no-scrollbar">
+                                            <div className="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-xl border border-slate-200/60 shadow-[inset_0_1px_1.5px_rgba(0,0,0,0.02)] shrink-0 pr-1 lg:pr-0.5">
                                             <button
                                                 type="button"
                                                 onClick={() => setSheetsViewMode('grid')}
@@ -2042,9 +2465,40 @@ export const SheetSearchModule: React.FC = () => {
                                                 <Grid className="h-3.5 w-3.5 shrink-0" />
                                                 <span className="hidden xs:inline">Compacto</span>
                                             </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSheetsViewMode('table')}
+                                                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                                    sheetsViewMode === 'table'
+                                                        ? 'bg-white text-teal-950 shadow-xs border border-slate-200/30'
+                                                        : 'text-slate-400 hover:text-slate-700'
+                                                }`}
+                                                title="Vista Tabla"
+                                            >
+                                                <Table2 className="h-3.5 w-3.5 shrink-0" />
+                                                <span className="hidden xs:inline">Tabla</span>
+                                            </button>
+                                            </div>
+
+                                            {true && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleToggleTableFullscreen(!isTableFullscreen)}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs border ${
+                                                        isTableFullscreen
+                                                            ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700'
+                                                            : 'bg-teal-50 border-teal-100 text-teal-850 hover:bg-teal-100 hover:text-teal-900 hover:border-teal-200'
+                                                    }`}
+                                                    title="Pantalla Completa"
+                                                >
+                                                    {isTableFullscreen ? <Minimize2 className="h-3.5 w-3.5 shrink-0" /> : <Maximize2 className="h-3.5 w-3.5 shrink-0" />}
+                                                    <span className="hidden xs:inline">{isTableFullscreen ? 'Salir F11' : 'Pantalla Completa'}</span>
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
-                                    {filteredAndSortedSources.length === 0 ? (
+                                    {(() => {
+                                        const viewContent = filteredAndSortedSources.length === 0 ? (
                                         <div className="py-16 text-center bg-white border border-gray-100 rounded-2xl shadow-sm p-8">
                                             <div className="w-16 h-16 bg-teal-50 text-teal-600 rounded-full flex items-center justify-center mx-auto mb-4">
                                                 <Filter className="h-8 w-8 text-teal-500 animate-pulse" />
@@ -2072,13 +2526,14 @@ export const SheetSearchModule: React.FC = () => {
                                             </button>
                                         </div>
                                     ) : (
-                                        <>
-                                            {/* 1) GRID LAYOUT */}
+                                            <>
+                                                {/* 1) GRID LAYOUT */}
                                             {sheetsViewMode === 'grid' && (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 animate-in fade-in duration-200">
+                                                <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4 sm:gap-6 animate-in fade-in duration-200">
                                                     {filteredAndSortedSources.map((sheet) => {
                                                         const sheetData = data.filter(r => r.sourceId === sheet.id);
                                                         const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
+                                                        const statusObj = getUpdateStatus(sheet.lastUpdateTime);
 
                                                         return (
                                                             <button
@@ -2086,26 +2541,27 @@ export const SheetSearchModule: React.FC = () => {
                                                                 onClick={() => handleSelectSheet(sheet.id)}
                                                                 className="group relative bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer"
                                                             >
-                                                                <div className="hidden sm:flex absolute top-4 right-4 flex-col gap-2 items-end z-10">
+                                                                <div className="hidden sm:flex absolute top-4 right-4 sm:top-6 sm:right-6 flex-col gap-1.5 items-end z-10 p-1">
+                                                                    {renderSyncStatusPill(sheet.lastUpdateTime)}
                                                                     {expiredCount > 0 && (
-                                                                        <div className="flex items-center gap-1.5 bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm" title="Vencido en stock">
-                                                                            <AlertTriangle className="h-3 w-3" />
+                                                                        <div className="flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full text-[10px] font-black border border-rose-200/60 shadow-3xs" title="Vencido en stock">
+                                                                            <AlertTriangle className="h-3 w-3 text-rose-500 shrink-0" />
                                                                             <span>{expiredCount} vencido{expiredCount !== 1 ? 's' : ''}</span>
                                                                         </div>
                                                                     )}
                                                                     {expiringThisMonthCount > 0 && (
-                                                                        <div className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm" title="Vence este mes">
-                                                                            <Clock className="h-3 w-3" />
+                                                                        <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full text-[10px] font-black border border-amber-200/60 shadow-3xs" title="Vence este mes">
+                                                                            <Clock className="h-3 w-3 text-amber-505 shrink-0" />
                                                                             <span>{expiringThisMonthCount} por vencer</span>
                                                                         </div>
                                                                     )}
                                                                 </div>
                                                                 <div className="w-12 h-12 shrink-0 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center sm:mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
                                                                     <Hospital className="h-6 w-6" />
-                                                                    <div 
-                                                                        className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`}
-                                                                        title={getUpdateStatus(sheet.lastUpdateTime).label}
-                                                                    />
+                                                                    <div className="absolute -top-1 -right-1 flex h-4 w-4" title={getUpdateStatus(sheet.lastUpdateTime).label}>
+                                                                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${getUpdateStatus(sheet.lastUpdateTime).color}`} />
+                                                                        <span className={`relative inline-flex rounded-full h-4 w-4 border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`} />
+                                                                    </div>
                                                                 </div>
                                                                 <div className="flex-1 sm:mb-4 min-w-0">
                                                                     {(() => {
@@ -2115,36 +2571,43 @@ export const SheetSearchModule: React.FC = () => {
                                                                         
                                                                         return (
                                                                             <>
-                                                                                {code && <p className="text-[10px] sm:text-xs font-bold text-teal-600 mb-0.5">{code}</p>}
-                                                                                <h3 className="text-sm sm:text-lg font-black text-gray-900 leading-tight mb-1 truncate sm:whitespace-normal" title={description}>{description}</h3>
+                                                                                {code && <p className="text-[9px] sm:text-[10px] font-bold text-teal-600 mb-0.5">{code}</p>}
+                                                                                <h3 className="text-sm sm:text-[15px] md:text-lg font-black text-gray-900 leading-tight mb-1 truncate sm:whitespace-normal" title={description}>{description}</h3>
                                                                             </>
                                                                         );
                                                                     })()}
-                                                                    
+
                                                                     {/* Mobile alerts right below the title */}
-                                                                    <div className="sm:hidden flex items-center gap-2 mt-1.5 flex-wrap">
+                                                                    <div className="sm:hidden flex items-center gap-1.5 mt-1 sm:mt-1.5 flex-wrap">
+                                                                        <div className="flex items-center gap-1 bg-slate-105 text-slate-700 px-1.5 py-0.5 rounded-md text-[8.5px] font-black border border-slate-200" title="Total de ítems">
+                                                                            <Package className="h-3 w-3 text-slate-400" />
+                                                                            <span>{sheetData.length} ítems</span>
+                                                                        </div>
                                                                         {expiredCount > 0 && (
-                                                                            <div className="flex items-center gap-1 bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold" title="Vencido en stock">
+                                                                            <div className="flex items-center gap-1 bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full text-[8.5px] font-bold" title="Vencido en stock">
                                                                                 <AlertTriangle className="h-2.5 w-2.5" />
                                                                                 <span>{expiredCount}</span>
                                                                             </div>
                                                                         )}
                                                                         {expiringThisMonthCount > 0 && (
-                                                                            <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold" title="Vence este mes">
+                                                                            <div className="flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-[8.5px] font-bold" title="Vence este mes">
                                                                                 <Clock className="h-2.5 w-2.5" />
                                                                                 <span>{expiringThisMonthCount}</span>
                                                                             </div>
                                                                         )}
                                                                         {sheet.lastUpdateTime && (
-                                                                            <div className="flex flex-col gap-0.5">
-                                                                                <div className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-gray-500">
+                                                                            <div className="flex flex-col gap-0.5 w-full mt-1">
+                                                                                <div className="flex items-center gap-1 text-[8px] sm:text-[9px] font-bold text-gray-500 flex-wrap">
                                                                                     <RefreshCw className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                                                                                     <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-extrabold ${statusObj.color.includes('bg-emerald-500') ? 'bg-emerald-50 text-emerald-700' : statusObj.color.includes('bg-amber-500') ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
+                                                                                        {statusObj.label}
+                                                                                    </span>
                                                                                 </div>
                                                                                 {sheet.equipmentDateTime && (
-                                                                                    <div className={`flex items-center gap-1 text-[9px] sm:text-[10px] font-bold ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-400'}`}>
+                                                                                    <div className={`flex items-center gap-1 text-[8px] sm:text-[9px] font-bold ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-400'}`}>
                                                                                         <Monitor className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                                                                        <span>Equipo: {formatFullDate(sheet.equipmentDateTime)}</span>
+                                                                                        <span>Eq: {formatFullDate(sheet.equipmentDateTime)}</span>
                                                                                     </div>
                                                                                 )}
                                                                             </div>
@@ -2154,25 +2617,31 @@ export const SheetSearchModule: React.FC = () => {
                                                                     {/* Desktop last updated */}
                                                                     {sheet.lastUpdateTime && (
                                                                         <div className="hidden sm:flex flex-col gap-0.5 mt-2">
-                                                                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500">
-                                                                                <RefreshCw className="h-3 w-3" />
-                                                                                <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                            <div className="flex items-center gap-1.5 text-[10.5px] font-medium text-gray-400 flex-wrap">
+                                                                                <RefreshCw className="h-3 w-3 text-slate-400 shrink-0" />
+                                                                                <span>Act: <span className="font-extrabold text-slate-600">{formatFullDate(sheet.lastUpdateTime)}</span></span>
                                                                             </div>
                                                                             {sheet.equipmentDateTime && (
-                                                                                <div className={`flex items-center gap-1.5 text-[10px] font-bold ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-400'}`}>
-                                                                                    <Monitor className="h-3 w-3" />
-                                                                                    <span>Equipo: {formatFullDate(sheet.equipmentDateTime)}</span>
+                                                                                <div className={`flex items-center gap-1.5 text-[10px] font-medium ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-400'}`}>
+                                                                                    <Monitor className="h-3 w-3 shrink-0" />
+                                                                                    <span>Equipo: <span className={`font-extrabold ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500 font-black' : 'text-slate-500'}`}>{formatFullDate(sheet.equipmentDateTime)}</span></span>
                                                                                 </div>
                                                                             )}
                                                                         </div>
                                                                     )}
                                                                 </div>
+
                                                                 <div className="hidden sm:flex items-center justify-between w-full mt-auto pt-4 border-t border-gray-50">
-                                                                    <span className="text-[10px] font-black text-teal-600 uppercase">Consultar Stock</span>
-                                                                    <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
+                                                                    <span className="text-[10.5px] font-black text-teal-600 uppercase tracking-wider">Consultar Stock</span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-extrabold px-1.5 py-0.5 rounded-md" title="Total de ítems en este establecimiento">
+                                                                            <Package className="h-3 w-3 text-slate-400" />
+                                                                            <span>{sheetData.length} items</span>
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="sm:hidden ml-auto">
-                                                                    <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all shrink-0" />
+                                                                <div className="sm:hidden ml-auto flex items-center gap-1.5">
+                                                                    <span className="text-[10px] font-extrabold text-slate-400">({sheetData.length} ítems)</span>
                                                                 </div>
                                                             </button>
                                                         );
@@ -2189,78 +2658,111 @@ export const SheetSearchModule: React.FC = () => {
                                                         const lastDash = sheet.name.lastIndexOf('-');
                                                         const description = lastDash === -1 ? sheet.name.replace(/^FARM\s*-\s*/i, '') : sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
                                                         const code = getAlmCodeForSheet(sheet.id, data);
+                                                        const statusObj = getUpdateStatus(sheet.lastUpdateTime);
 
                                                         return (
                                                             <button
                                                                 key={sheet.id}
                                                                 onClick={() => handleSelectSheet(sheet.id)}
-                                                                className="group relative bg-white border border-gray-200 p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left flex items-center justify-between gap-4 w-full cursor-pointer cursor-pointer"
+                                                                className="group relative bg-white border border-gray-200 p-4 sm:p-5 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left w-full cursor-pointer overflow-hidden"
                                                             >
-                                                                {/* Left: Icon and Title */}
-                                                                <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                                                                    <div className="w-10 h-10 shrink-0 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
-                                                                        <Hospital className="h-5.5 w-5.5" />
-                                                                        <div 
-                                                                            className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`}
-                                                                            title={getUpdateStatus(sheet.lastUpdateTime).label}
-                                                                        />
-                                                                    </div>
-                                                                    <div className="min-w-0">
-                                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                                            {code && <span className="text-[10px] font-extrabold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md shrink-0">{code}</span>}
-                                                                            {sheet.lastUpdateTime && (
-                                                                                <span className="text-[9px] sm:text-[9.5px] font-extrabold text-slate-400" title="Última actualización">
-                                                                                    Act: {formatFullDate(sheet.lastUpdateTime)}
+                                                                <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-4 w-full">
+                                                                    
+                                                                    {/* Column 1: Hospital Info & Status (Flexible width) */}
+                                                                    <div className="flex items-center gap-3 md:gap-4 flex-[1_1_240px] min-w-[200px]">
+                                                                        <div className="w-9 h-9 md:w-11 md:h-11 shrink-0 bg-blue-50 text-blue-600 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors relative shadow-2xs">
+                                                                            <Hospital className="h-5 w-5 md:h-6 md:w-6" />
+                                                                            <div className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5" title={statusObj.label}>
+                                                                                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusObj.color}`} />
+                                                                                <span className={`relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-white ${statusObj.color}`} />
+                                                                            </div>
+                                                                        </div>
+                                                                        
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="flex items-center gap-1.5 mb-0.5 md:mb-1 flex-wrap">
+                                                                                {code && (
+                                                                                    <span className="text-[9px] md:text-[10px] font-black tracking-wider text-teal-600 bg-teal-50/80 px-1.5 py-0.5 rounded-md border border-teal-100 shrink-0">
+                                                                                        {code}
+                                                                                    </span>
+                                                                                )}
+                                                                                {/* Mobile sync state badge */}
+                                                                                <span className="lg:hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[8.5px] font-extrabold bg-slate-50 border border-slate-200 shrink-0 whitespace-nowrap">
+                                                                                    <span className="relative flex h-1.5 w-1.5 mr-0.5 shrink-0">
+                                                                                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusObj.color}`} />
+                                                                                        <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${statusObj.color}`} />
+                                                                                    </span>
+                                                                                    <span className="text-slate-650 truncate max-w-[100px]">{statusObj.label}</span>
                                                                                 </span>
+                                                                            </div>
+                                                                            <h3 className="text-[13px] sm:text-sm md:text-base font-black text-slate-800 leading-tight group-hover:text-slate-950 truncate" title={description}>
+                                                                                {description}
+                                                                            </h3>
+                                                                            {/* Mobile items info */}
+                                                                            <div className="lg:hidden flex items-center gap-1 mt-0.5 md:mt-1 text-[9px] md:text-[10px] text-slate-500 font-extrabold bg-slate-50 border border-slate-150 px-1.5 py-0.5 rounded-md w-fit">
+                                                                                <Package className="h-3 w-3 md:h-3.5 md:w-3.5 text-slate-400 shrink-0" />
+                                                                                <span>{sheetData.length} ítems</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Column 2: Inventory Stats (LG+) */}
+                                                                    <div className="hidden lg:flex flex-col gap-0.5 flex-[1_1_100px] max-w-[140px] min-w-[90px] shrink-0">
+                                                                        <span className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider">Inventario</span>
+                                                                        <div className="inline-flex items-center gap-1 text-[11px] font-black text-slate-705 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg w-fit">
+                                                                            <Package className="h-3 w-3 text-slate-400 shrink-0" />
+                                                                            <span>{sheetData.length} ítems</span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Column 3: Sincronización Logs & Devices (LG+) */}
+                                                                    <div className="hidden lg:flex flex-col gap-0.5 flex-[1_1_140px] max-w-[200px] min-w-[130px] shrink-0">
+                                                                        <span className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider">Última Conexión</span>
+                                                                        <div className="flex flex-col gap-0.5 text-[9px] 2xl:text-[10px] font-extrabold text-slate-600">
+                                                                            {sheet.lastUpdateTime && (
+                                                                                <div className="flex items-center gap-1">
+                                                                                    <RefreshCw className="h-3 w-3 text-slate-450 shrink-0" />
+                                                                                    <span className="truncate">Act: <span className="text-slate-850 font-black">{formatFullDate(sheet.lastUpdateTime)}</span></span>
+                                                                                </div>
                                                                             )}
                                                                             {sheet.equipmentDateTime && (
-                                                                                <span className={`text-[9px] sm:text-[9.5px] font-extrabold border-l border-slate-200 pl-2 ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-300'}`}>
-                                                                                    Equipo: {formatFullDate(sheet.equipmentDateTime)}
-                                                                                </span>
+                                                                                <div className="flex items-center gap-1">
+                                                                                    <Monitor className="h-3 w-3 text-slate-450 shrink-0" />
+                                                                                    <span className="truncate flex-1 min-w-0">Equipo: <span className={`font-black ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-rose-500 font-extrabold' : 'text-slate-600'}`}>{formatFullDate(sheet.equipmentDateTime)}</span></span>
+                                                                                </div>
                                                                             )}
                                                                         </div>
-                                                                        <h3 className="text-sm font-black text-slate-900 leading-snug mt-1 truncate" title={description}>
-                                                                            {description}
-                                                                        </h3>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Right: Badges, Sync state and consult CTA */}
-                                                                <div className="flex items-center gap-3.5 shrink-0">
-                                                                    {/* Expirations badges for Desktop */}
-                                                                    <div className="hidden sm:flex items-center gap-2">
-                                                                        {expiredCount > 0 && (
-                                                                            <div className="flex items-center gap-1.5 bg-red-50 text-red-700 px-2.5 py-1 rounded-lg text-[10px] font-black border border-red-100 shadow-sm" title="Vencido en stock">
-                                                                                <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-                                                                                <span>{expiredCount} vencido{expiredCount !== 1 ? 's' : ''}</span>
-                                                                            </div>
-                                                                        )}
-                                                                        {expiringThisMonthCount > 0 && (
-                                                                            <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg text-[10px] font-black border border-amber-100 shadow-sm" title="Vence este mes">
-                                                                                <Clock className="h-3.5 w-3.5 text-amber-500" />
-                                                                                <span>{expiringThisMonthCount} por vencer</span>
-                                                                            </div>
-                                                                        )}
                                                                     </div>
 
-                                                                    {/* Expirations badges for Mobile */}
-                                                                    <div className="sm:hidden flex items-center gap-1">
-                                                                        {expiredCount > 0 && (
-                                                                            <div className="w-6 h-6 bg-red-100 text-red-700 rounded-lg flex items-center justify-center font-black text-xs" title="Vencidos">
-                                                                                {expiredCount}
-                                                                            </div>
-                                                                        )}
-                                                                        {expiringThisMonthCount > 0 && (
-                                                                            <div className="w-6 h-6 bg-amber-100 text-amber-700 rounded-lg flex items-center justify-center font-black text-xs" title="Por vencer">
-                                                                                {expiringThisMonthCount}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
+                                                                    {/* Column 4: Warning Badges & Actions */}
+                                                                    <div className="flex flex-wrap items-center justify-between sm:justify-end gap-1.5 sm:gap-2.5 flex-[1_1_300px] min-w-[200px] ml-auto">
+                                                                        {/* Sync status pill on desktop layout */}
+                                                                        <div className="hidden lg:flex shrink-0 scale-[0.85] xl:scale-95 origin-right">
+                                                                            {renderSyncStatusPill(sheet.lastUpdateTime)}
+                                                                        </div>
 
-                                                                    {/* Consult Button / Indicator */}
-                                                                    <div className="flex items-center gap-1.5 pl-2 border-l border-slate-100 h-8">
-                                                                        <span className="hidden lg:inline text-[10px] font-black text-teal-600 uppercase tracking-wider group-hover:text-teal-755">Ver Stock</span>
-                                                                        <ChevronRight className="h-4.5 w-4.5 text-slate-300 group-hover:text-teal-500 group-hover:translate-x-1 transition-all" />
+                                                                        {/* Expirations badges */}
+                                                                        <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5 shrink-0 ml-auto">
+                                                                            {expiredCount > 0 && (
+                                                                                <div className="flex items-center gap-1 bg-red-50 text-red-700 px-2 py-0.5 sm:px-2.5 sm:py-1 md:py-1.5 rounded-md sm:rounded-lg text-[9px] sm:text-[10px] font-black border border-red-100/80 shadow-3xs whitespace-nowrap" title="Vencidos en stock">
+                                                                                    <AlertTriangle className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-red-550 shrink-0" />
+                                                                                    <span>{expiredCount} vencido{expiredCount !== 1 ? 's' : ''}</span>
+
+                                                                                </div>
+                                                                            )}
+                                                                            {expiringThisMonthCount > 0 && (
+                                                                                <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-0.5 sm:px-2.5 sm:py-1 md:py-1.5 rounded-md sm:rounded-lg text-[9px] sm:text-[10px] font-black border border-amber-100/80 shadow-3xs whitespace-nowrap" title="Vencimiento cercano">
+                                                                                    <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-550 shrink-0" />
+                                                                                    <span>{expiringThisMonthCount} por vencer</span>
+
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Consult button / indicator */}
+                                                                        <div className="flex items-center gap-1 pl-2 border-l border-slate-150 h-5 sm:h-7 shrink-0 ml-2">
+                                                                            <span className="text-[9px] sm:text-[10.5px] font-black text-teal-600 uppercase tracking-wider group-hover:text-teal-755 whitespace-nowrap">Ver Stock</span>
+
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </button>
@@ -2271,7 +2773,7 @@ export const SheetSearchModule: React.FC = () => {
 
                                             {/* 3) COMPACT LAYOUT */}
                                             {sheetsViewMode === 'compact' && (
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 animate-in fade-in duration-200">
+                                                <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5 animate-in fade-in duration-200">
                                                     {filteredAndSortedSources.map((sheet) => {
                                                         const sheetData = data.filter(r => r.sourceId === sheet.id);
                                                         const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
@@ -2283,51 +2785,63 @@ export const SheetSearchModule: React.FC = () => {
                                                             <button
                                                                 key={sheet.id}
                                                                 onClick={() => handleSelectSheet(sheet.id)}
-                                                                className="group relative bg-white border border-gray-200 p-3.5 rounded-xl shadow-[0_1px_4px_rgba(0,0,0,0.015)] hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col justify-between h-full min-h-[140px] cursor-pointer"
+                                                                className="group relative bg-white border border-gray-200 p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col justify-between h-full min-h-[175px] cursor-pointer"
                                                             >
-                                                                <div>
-                                                                    {/* Compact Top Row: Tiny status indicator and SISMED code */}
-                                                                    <div className="flex items-center justify-between mb-2">
+                                                                <div className="w-full">
+                                                                    {/* Compact Top Row: SISMED code with Establishment style icon, and stats/status dot on the right */}
+                                                                    <div className="flex items-center justify-between mb-3.5">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="w-6.5 h-6.5 shrink-0 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                                                <Hospital className="h-3.5 w-3.5" />
+                                                                            </div>
+                                                                            {code && <span className="text-[10.5px] font-black text-cyan-600 tracking-wide">{code}</span>}
+                                                                        </div>
+
                                                                         <div className="flex items-center gap-1.5">
-                                                                            <div 
-                                                                                className={`w-2.5 h-2.5 rounded-full ${getUpdateStatus(sheet.lastUpdateTime).color}`} 
-                                                                                title={getUpdateStatus(sheet.lastUpdateTime).label}
-                                                                            />
-                                                                            {code && <span className="text-[9px] font-black text-teal-600 tracking-tight">{code}</span>}
+                                                                            {expiredCount > 0 && (
+                                                                                <div className="bg-red-50 text-red-600 text-[10px] font-black px-1.5 py-0.5 rounded-md border border-red-200/50 shadow-3xs" title="Vencido">
+                                                                                    {expiredCount}v
+                                                                                </div>
+                                                                            )}
+                                                                            {expiringThisMonthCount > 0 && (
+                                                                                <div className="bg-amber-50 text-amber-600 text-[10px] font-black px-1.5 py-0.5 rounded-md border border-amber-200/50 shadow-3xs" title="Por vencer">
+                                                                                    {expiringThisMonthCount}pv
+                                                                                </div>
+                                                                            )}
+                                                                            <div className="flex items-center" title={getUpdateStatus(sheet.lastUpdateTime).label}>
+                                                                                <span className="relative flex h-3 w-3">
+                                                                                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${getUpdateStatus(sheet.lastUpdateTime).color}`} />
+                                                                                    <span className={`relative inline-flex rounded-full h-3 w-3 border border-white shadow-3xs ${getUpdateStatus(sheet.lastUpdateTime).color}`} />
+                                                                                </span>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
 
                                                                     {/* Description: Tighter text */}
-                                                                    <h3 className="text-xs font-black text-slate-800 leading-snug line-clamp-2 mb-1 group-hover:text-teal-905 transition-colors" title={description}>
+                                                                    <h3 className="text-[13px] font-black text-slate-800 leading-snug tracking-tight mb-2 group-hover:text-teal-900 transition-colors line-clamp-1" title={description}>
                                                                         {description}
                                                                     </h3>
 
                                                                     {sheet.lastUpdateTime && (
-                                                                        <div className="text-[9px] font-extrabold text-slate-400 mt-1 flex items-center gap-1" title="Última actualización">
-                                                                            <RefreshCw className="h-2.5 w-2.5 text-slate-400/80" />
-                                                                            <span>Act: {formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                        <div className="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-1.5" title="Última actualización">
+                                                                            <RefreshCw className="h-3 w-3 text-slate-400/85 shrink-0" />
+                                                                            <span>Act: <span className="font-extrabold text-slate-500">{formatFullDate(sheet.lastUpdateTime)}</span></span>
+                                                                        </div>
+                                                                    )}
+                                                                    {sheet.equipmentDateTime && (
+                                                                        <div className={`text-[10px] font-bold mt-0.5 flex items-center gap-1.5 ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500' : 'text-slate-400'}`} title="Fecha y hora del equipo">
+                                                                            <Monitor className="h-3 w-3 text-slate-400/85 shrink-0" />
+                                                                            <span>Equipo: <span className={`font-extrabold ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? 'text-red-500 font-black' : 'text-slate-500'}`}>{formatFullDate(sheet.equipmentDateTime)}</span></span>
                                                                         </div>
                                                                     )}
                                                                 </div>
 
                                                                 {/* Expirations and Ver Stock mini row */}
-                                                                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-50 gap-1.5">
-                                                                    <div className="flex items-center gap-1">
-                                                                        {expiredCount > 0 && (
-                                                                            <div className="flex items-center gap-0.5 bg-red-50 text-red-700 px-1.5 py-0.5 rounded text-[8px] font-black border border-red-100" title="Vencido">
-                                                                                <span>{expiredCount}v</span>
-                                                                            </div>
-                                                                        )}
-                                                                        {expiringThisMonthCount > 0 && (
-                                                                            <div className="flex items-center gap-0.5 bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded text-[8px] font-black border border-amber-100" title="Por vencer">
-                                                                                <span>{expiringThisMonthCount}pv</span>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
+                                                                <div className="flex flex-wrap items-center justify-between mt-4 pt-3 border-t border-slate-100 w-full gap-2">
+                                                                    {renderSyncStatusPill(sheet.lastUpdateTime)}
                                                                     
-                                                                    <div className="flex items-center gap-0.5 text-[8.5px] font-black text-teal-600 uppercase tracking-wider group-hover:text-teal-700 transition-all shrink-0">
-                                                                        <span>Ver stock</span>
-                                                                        <ChevronRight className="h-3 w-3 text-teal-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                                                                    <div className="flex items-center text-[9px] font-black text-teal-600 uppercase tracking-wider group-hover:text-teal-700 transition-colors shrink-0 ml-auto">
+                                                                        <span>VER STOCK ({sheetData.length})</span>
                                                                     </div>
                                                                 </div>
                                                             </button>
@@ -2335,24 +2849,424 @@ export const SheetSearchModule: React.FC = () => {
                                                     })}
                                                 </div>
                                             )}
+
+                                            {/* 4) TABLE LAYOUT */}
+                                            {sheetsViewMode === 'table' && (
+                                                <div className={`bg-white rounded-2xl border border-slate-200/50 relative overflow-hidden ${isTableFullscreen ? 'shadow-lg border-slate-200/60 m-1 sm:m-2' : 'shadow-sm animate-in fade-in duration-200'}`}>
+                                                    <div className="overflow-auto scrollbar-thin">
+                                                    <table className="min-w-full divide-y divide-slate-100 text-left font-sans">
+                                                        <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-wider shadow-[0_1px_0_0_rgba(226,232,240,0.8)]">
+                                                            <tr>
+                                                                <th scope="col" className="px-5 py-3 font-black sticky top-0 bg-slate-50 z-10">
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => setFilterSortOrder(filterSortOrder === 'code_asc' ? 'code_desc' : 'code_asc')}
+                                                                        className="group inline-flex items-center gap-1.5 hover:text-slate-800 transition-colors text-left uppercase tracking-wider font-black"
+                                                                    >
+                                                                        <span>Cód. SISMED</span>
+                                                                        <span className="shrink-0">
+                                                                            {filterSortOrder === 'code_asc' && <ArrowUp className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder === 'code_desc' && <ArrowDown className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder !== 'code_asc' && filterSortOrder !== 'code_desc' && (
+                                                                                <ArrowUpDown className="h-3.5 w-3.5 text-slate-300 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                                                            )}
+                                                                        </span>
+                                                                    </button>
+                                                                </th>
+                                                                <th scope="col" className="px-5 py-3 font-black sticky top-0 bg-slate-50 z-10">
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => setFilterSortOrder(filterSortOrder === 'name_asc' ? 'name_desc' : 'name_asc')}
+                                                                        className="group inline-flex items-center gap-1.5 hover:text-slate-800 transition-colors text-left uppercase tracking-wider font-black"
+                                                                    >
+                                                                        <span>Establecimiento de Salud</span>
+                                                                        <span className="shrink-0">
+                                                                            {filterSortOrder === 'name_asc' && <ArrowUp className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder === 'name_desc' && <ArrowDown className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder !== 'name_asc' && filterSortOrder !== 'name_desc' && (
+                                                                                <ArrowUpDown className="h-3.5 w-3.5 text-slate-300 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                                                            )}
+                                                                        </span>
+                                                                    </button>
+                                                                </th>
+                                                                <th scope="col" className="px-5 py-3 font-black text-center sticky top-0 bg-slate-50 z-10">
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => setFilterSortOrder(filterSortOrder === 'type_asc' ? 'type_desc' : 'type_asc')}
+                                                                        className="group inline-flex items-center gap-1.5 hover:text-slate-800 transition-colors uppercase tracking-wider font-black mx-auto justify-center"
+                                                                    >
+                                                                        <span>Tipo</span>
+                                                                        <span className="shrink-0">
+                                                                            {filterSortOrder === 'type_asc' && <ArrowUp className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder === 'type_desc' && <ArrowDown className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder !== 'type_asc' && filterSortOrder !== 'type_desc' && (
+                                                                                <ArrowUpDown className="h-3.5 w-3.5 text-slate-300 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                                                            )}
+                                                                        </span>
+                                                                    </button>
+                                                                </th>
+                                                                <th scope="col" className="px-5 py-3 font-black sticky top-0 bg-slate-50 z-10">
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => setFilterSortOrder(filterSortOrder === 'date_newest' ? 'date_oldest' : 'date_newest')}
+                                                                        className="group inline-flex items-center gap-1.5 hover:text-slate-800 transition-colors text-left uppercase tracking-wider font-black"
+                                                                    >
+                                                                        <span>Última Sincronización</span>
+                                                                        <span className="shrink-0">
+                                                                            {filterSortOrder === 'date_newest' && <ArrowDown className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder === 'date_oldest' && <ArrowUp className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder !== 'date_newest' && filterSortOrder !== 'date_oldest' && (
+                                                                                <ArrowUpDown className="h-3.5 w-3.5 text-slate-300 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                                                            )}
+                                                                        </span>
+                                                                    </button>
+                                                                </th>
+                                                                <th scope="col" className="px-5 py-3 font-black sticky top-0 bg-slate-50 z-10">
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => setFilterSortOrder(filterSortOrder === 'equip_newest' ? 'equip_oldest' : 'equip_newest')}
+                                                                        className="group inline-flex items-center gap-1.5 hover:text-slate-800 transition-colors text-left uppercase tracking-wider font-black"
+                                                                    >
+                                                                        <span>Act. de Equipo</span>
+                                                                        <span className="shrink-0">
+                                                                            {filterSortOrder === 'equip_newest' && <ArrowDown className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder === 'equip_oldest' && <ArrowUp className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder !== 'equip_newest' && filterSortOrder !== 'equip_oldest' && (
+                                                                                <ArrowUpDown className="h-3.5 w-3.5 text-slate-300 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                                                            )}
+                                                                        </span>
+                                                                    </button>
+                                                                </th>
+                                                                <th scope="col" className="px-5 py-3 font-black text-center sticky top-0 bg-slate-50 z-10">
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => setFilterSortOrder(filterSortOrder === 'status_green_first' ? 'status_red_first' : 'status_green_first')}
+                                                                        className="group inline-flex items-center gap-1.5 hover:text-slate-800 transition-colors uppercase tracking-wider font-black mx-auto justify-center"
+                                                                    >
+                                                                        <span>Estado</span>
+                                                                        <span className="shrink-0">
+                                                                            {filterSortOrder === 'status_green_first' && <ArrowUp className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder === 'status_red_first' && <ArrowDown className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder !== 'status_green_first' && filterSortOrder !== 'status_red_first' && (
+                                                                                <ArrowUpDown className="h-3.5 w-3.5 text-slate-300 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                                                            )}
+                                                                        </span>
+                                                                    </button>
+                                                                </th>
+                                                                <th scope="col" className="px-5 py-3 font-black text-center sticky top-0 bg-slate-50 z-10">
+                                                                    <button 
+                                                                        type="button"
+                                                                        onClick={() => setFilterSortOrder(filterSortOrder === 'expired_highest' ? 'expired_lowest' : 'expired_highest')}
+                                                                        className="group inline-flex items-center gap-1.5 hover:text-slate-800 transition-colors uppercase tracking-wider font-black mx-auto justify-center"
+                                                                    >
+                                                                        <span>Expiraciones</span>
+                                                                        <span className="shrink-0">
+                                                                            {filterSortOrder === 'expired_highest' && <ArrowDown className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder === 'expired_lowest' && <ArrowUp className="h-3.5 w-3.5 text-teal-600" />}
+                                                                            {filterSortOrder !== 'expired_highest' && filterSortOrder !== 'expired_lowest' && (
+                                                                                <ArrowUpDown className="h-3.5 w-3.5 text-slate-300 opacity-40 group-hover:opacity-100 transition-opacity" />
+                                                                            )}
+                                                                        </span>
+                                                                    </button>
+                                                                </th>
+                                                                <th scope="col" className="px-5 py-3 font-black text-right pr-6 sticky top-0 bg-slate-50 z-10 uppercase tracking-wider">Acción</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-100 bg-white">
+                                                            {filteredAndSortedSources.map((sheet) => {
+                                                                const sheetData = data.filter(r => r.sourceId === sheet.id);
+                                                                const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
+                                                                const lastDash = sheet.name.lastIndexOf('-');
+                                                                const description = lastDash === -1 ? sheet.name.replace(/^FARM\s*-\s*/i, '') : sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, '');
+                                                                const code = getAlmCodeForSheet(sheet.id, data);
+                                                                const type = getSheetType(sheet.name);
+                                                                
+                                                                let typeBadge = (
+                                                                    <span className="inline-flex items-center justify-center bg-slate-50 text-slate-500 px-2 py-0.5 rounded text-[8.5px] font-bold border border-slate-100/80 min-w-[50px]">
+                                                                        OTRO
+                                                                    </span>
+                                                                );
+                                                                if (type === 'CS') {
+                                                                    typeBadge = (
+                                                                        <span className="inline-flex items-center justify-center bg-sky-50 text-sky-700 px-2 py-0.5 rounded text-[8.5px] font-bold border border-sky-100/70 min-w-[50px]">
+                                                                            C.S.
+                                                                        </span>
+                                                                    );
+                                                                } else if (type === 'PS') {
+                                                                    typeBadge = (
+                                                                        <span className="inline-flex items-center justify-center bg-amber-50 text-amber-700 px-2 py-0.5 rounded text-[8.5px] font-bold border border-amber-100/70 min-w-[50px]">
+                                                                            P.S.
+                                                                        </span>
+                                                                    );
+                                                                } else if (type === 'ALM') {
+                                                                    typeBadge = (
+                                                                        <span className="inline-flex items-center justify-center bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[8.5px] font-bold border border-indigo-100/70 min-w-[50px]">
+                                                                            ALM
+                                                                        </span>
+                                                                    );
+                                                                } else if (type === 'HOSP') {
+                                                                    typeBadge = (
+                                                                        <span className="inline-flex items-center justify-center bg-violet-50 text-violet-700 px-2 py-0.5 rounded text-[8.5px] font-bold border border-violet-100/75 min-w-[50px]">
+                                                                            HOSP
+                                                                        </span>
+                                                                    );
+                                                                }
+
+                                                                const statusObj = getUpdateStatus(sheet.lastUpdateTime);
+
+                                                                return (
+                                                                    <tr 
+                                                                        key={sheet.id}
+                                                                        onClick={() => handleSelectSheet(sheet.id)}
+                                                                        className="hover:bg-teal-50/20 transition-all cursor-pointer group"
+                                                                    >
+                                                                        <td className="px-5 py-3 whitespace-nowrap">
+                                                                            {code ? (
+                                                                                <span className="text-[10px] font-extrabold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
+                                                                                    {code}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[10px] text-slate-400 font-bold">-</span>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-5 py-3">
+                                                                            <h3 className="text-xs font-black text-slate-800 leading-snug truncate max-w-[240px] group-hover:text-teal-905 transition-colors" title={description}>
+                                                                                {description}
+                                                                            </h3>
+                                                                        </td>
+                                                                        <td className="px-5 py-3 text-center whitespace-nowrap">
+                                                                            {typeBadge}
+                                                                        </td>
+                                                                        <td className="px-5 py-3 whitespace-nowrap">
+                                                                            {sheet.lastUpdateTime ? (
+                                                                                <div className={`flex items-center gap-1.5 text-[10.5px] font-bold ${statusObj.color.includes('bg-emerald-500') ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                                                    <Wifi className={`h-3.5 w-3.5 shrink-0 ${statusObj.color.replace('bg-', 'text-')}`} />
+                                                                                    <span>{formatFullDate(sheet.lastUpdateTime)}</span>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="flex items-center gap-1.5 text-[10.5px] text-slate-400 font-bold">
+                                                                                    <Wifi className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                                                    <span>Sin datos</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-5 py-3 whitespace-nowrap">
+                                                                            {sheet.equipmentDateTime ? (
+                                                                                <div className={`flex items-center gap-1.5 text-[10.5px] font-bold ${statusObj.color.includes('bg-emerald-500') ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                                                    <Monitor className={`h-3.5 w-3.5 shrink-0 ${statusObj.color.includes('bg-emerald-500') ? 'text-indigo-500' : 'text-slate-400'}`} />
+                                                                                    <span>{formatFullDate(sheet.equipmentDateTime)}</span>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="flex items-center gap-1.5 text-[10.5px] text-slate-400 font-bold">
+                                                                                    <Monitor className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                                                    <span>Sin datos</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-5 py-3 text-center whitespace-nowrap">
+                                                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${statusObj.color.includes('bg-emerald-500') ? 'bg-emerald-50 text-emerald-800 border-emerald-100' : statusObj.color.includes('bg-amber-500') ? 'bg-amber-50 text-amber-800 border-amber-100' : 'bg-rose-50 text-rose-800 border-rose-100'}`}>
+                                                                                <span className="relative flex h-1.5 w-1.5">
+                                                                                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusObj.color}`} />
+                                                                                    <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${statusObj.color}`} />
+                                                                                </span>
+                                                                                {statusObj.label}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-5 py-3 text-center whitespace-nowrap">
+                                                                            <div className="flex items-center justify-center gap-1.5">
+                                                                                {expiredCount === 0 && expiringThisMonthCount === 0 ? (
+                                                                                    <span className="inline-flex items-center gap-0.5 bg-green-50 text-green-700 px-1.5 py-0.5 rounded text-[9px] font-bold border border-green-100">
+                                                                                        <Check className="h-2.5 w-2.5 text-green-500" /> Al día
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        {expiredCount > 0 && (
+                                                                                            <span className="inline-flex items-center gap-0.5 bg-red-50 text-red-700 px-1.5 py-0.5 rounded text-[9px] font-black border border-red-100" title="Vencido">
+                                                                                                <AlertTriangle className="h-2.5 w-2.5 text-red-500" />
+                                                                                                {expiredCount}v
+                                                                                            </span>
+                                                                                        )}
+                                                                                        {expiringThisMonthCount > 0 && (
+                                                                                            <span className="inline-flex items-center gap-0.5 bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded text-[9px] font-black border border-amber-100" title="Por vencer">
+                                                                                                <Clock className="h-2.5 w-2.5 text-amber-500" />
+                                                                                                {expiringThisMonthCount}pv
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="px-5 py-3 text-right pr-6 whitespace-nowrap">
+                                                                            <div className="inline-flex items-center gap-1 text-[10px] font-black text-teal-600 uppercase tracking-wider group-hover:text-teal-700 transition-all">
+                                                                                <span>Ver stock</span>
+
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </>
-                                    )}
+                                        );
+
+                                        if (isTableFullscreen) {
+                                            return (
+                                                <div className="fixed inset-0 z-[105000] bg-slate-100 flex flex-col h-screen w-screen animate-in fade-in duration-200">
+                                                    {/* Fullscreen Header */}
+                                                    <div className="bg-slate-900 text-white px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between shadow-md shrink-0 border-b border-slate-800">
+                                                        <div className="flex flex-wrap items-center gap-4 sm:gap-6 flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse" />
+                                                                <h3 className="text-xs sm:text-sm font-black uppercase tracking-widest text-slate-100 flex items-center gap-2 shrink-0">
+                                                                    Establecimientos de Salud
+                                                                    <span className="text-[10px] bg-slate-800 text-teal-400 px-2 py-0.5 rounded-full border border-slate-755 w-auto font-bold uppercase tracking-wider">
+                                                                        {filteredAndSortedSources.length} ITEMS
+                                                                    </span>
+                                                                </h3>
+                                                            </div>
+                                                            {establishmentSummary && (
+                                                                <div className="hidden lg:flex flex-wrap items-center gap-2 animate-in fade-in duration-300">
+                                                                    <div className="flex items-center gap-2 bg-emerald-950/50 border border-emerald-800/40 text-emerald-400 px-3 py-1 rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wide shadow-sm" title="Establecimientos En Línea (Actualizados recientemente o hace menos de 1 h)">
+                                                                        <Wifi className="h-4 w-4 text-emerald-400 animate-pulse stroke-[2.5]" />
+                                                                        <span className="text-slate-300 font-medium normal-case">En línea:</span>
+                                                                        <span className="font-black text-xs sm:text-sm text-emerald-300">{establishmentSummary.online}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 bg-amber-950/50 border border-amber-800/40 text-amber-450 px-3 py-1 rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wide shadow-sm" title="Establecimientos Desactualizados (Actualizados entre 1 y 24 h)">
+                                                                        <Clock className="h-4 w-4 text-amber-450 stroke-[2.5]" />
+                                                                        <span className="text-slate-300 font-medium normal-case">Desactualizados:</span>
+                                                                        <span className="font-black text-xs sm:text-sm text-amber-300">{establishmentSummary.delayed}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 bg-red-950/50 border border-red-800/40 text-red-500 px-3 py-1 rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wide shadow-sm" title="Establecimientos Fuera de Línea (Actualizados hace más de 24 h)">
+                                                                        <WifiOff className="h-4 w-4 text-red-400 stroke-[2.5]" />
+                                                                        <span className="text-slate-300 font-medium normal-case">Fuera de línea:</span>
+                                                                        <span className="font-black text-xs sm:text-sm text-red-400">{establishmentSummary.offline}</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
+                                                            {/* Fullscreen Search Input */}
+                                                            <div className="relative group w-32 xs:w-40 sm:w-48 md:w-56">
+                                                                <input 
+                                                                    type="text" 
+                                                                    placeholder="Buscar..." 
+                                                                    value={sheetSearchTerm} 
+                                                                    onChange={(e) => setSheetSearchTerm(e.target.value)} 
+                                                                    className="w-full pl-8 pr-3 py-1.5 bg-slate-800/90 text-white placeholder-slate-400 border border-slate-700/80 hover:bg-slate-750 focus:bg-slate-900 focus:border-teal-500 rounded-xl text-xs transition-colors focus:outline-none focus:ring-1 focus:ring-teal-500/30" 
+                                                                />
+                                                                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                                                                    <Search className="h-3 w-3 text-slate-500 group-focus-within:text-teal-400 transition-colors" />
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Advanced Filters Trigger */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsAdvancedFiltersSidebarOpen(true)}
+                                                                className="relative flex items-center justify-center p-2 rounded-xl bg-slate-800 border border-slate-700/80 hover:bg-slate-750 text-slate-300 hover:text-teal-400 transition-all cursor-pointer shadow-sm shrink-0"
+                                                                title="Filtros Avanzados"
+                                                            >
+                                                                <Filter className="h-3.5 w-3.5" />
+                                                                {(!filter_CS || !filter_PS || !filter_ALM || !filter_HOSP || !filter_OTRO || !filter_emerald || !filter_amber || !filter_red || !filter_gray || filterSortOrder !== 'name_asc' || filterHasPendingExpirations) && (
+                                                                    <span className="absolute top-1 right-1 w-2 h-2 bg-teal-400 rounded-full border border-slate-900 animate-pulse" />
+                                                                )}
+                                                            </button>
+
+                                                            {/* View Switcher inside Fullscreen Header */}
+                                                            <div className="flex items-center gap-0.5 bg-slate-800 border border-slate-700/60 p-0.5 rounded-xl">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSheetsViewMode('grid')}
+                                                                    className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                                                                        sheetsViewMode === 'grid'
+                                                                            ? "bg-slate-700 text-teal-400 font-bold"
+                                                                            : "text-slate-400 hover:text-slate-300"
+                                                                    }`}
+                                                                    title="Vista Cuadrícula"
+                                                                >
+                                                                    <LayoutGrid className="h-3.5 w-3.5" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSheetsViewMode('list')}
+                                                                    className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                                                                        sheetsViewMode === 'list'
+                                                                            ? "bg-slate-700 text-teal-400 font-bold"
+                                                                            : "text-slate-400 hover:text-slate-300"
+                                                                    }`}
+                                                                    title="Vista Lista"
+                                                                >
+                                                                    <List className="h-3.5 w-3.5" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSheetsViewMode('compact')}
+                                                                    className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                                                                        sheetsViewMode === 'compact'
+                                                                            ? "bg-slate-700 text-teal-400 font-bold"
+                                                                            : "text-slate-400 hover:text-slate-300"
+                                                                    }`}
+                                                                    title="Vista Compacta"
+                                                                >
+                                                                    <Grid className="h-3.5 w-3.5" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSheetsViewMode('table')}
+                                                                    className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                                                                        sheetsViewMode === 'table'
+                                                                            ? "bg-slate-700 text-teal-400 font-bold"
+                                                                            : "text-slate-400 hover:text-slate-300"
+                                                                    }`}
+                                                                    title="Vista Tabla"
+                                                                >
+                                                                    <Table2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            </div>
+
+                                                            {/* Exit fullscreen - ICON ONLY */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleToggleTableFullscreen(false)}
+                                                                className="flex items-center justify-center p-2 bg-slate-800 hover:bg-slate-755 text-slate-300 hover:text-teal-400 rounded-xl border border-slate-700/80 shadow-sm cursor-pointer transition-all active:scale-95 shrink-0"
+                                                                title="Salir de Pantalla Completa"
+                                                            >
+                                                                <Minimize2 className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Fullscreen Scrollable Body Container */}
+                                                    <div className="flex-1 overflow-auto p-4 sm:p-6 scrollbar-thin bg-slate-100">
+                                                        {viewContent}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        return viewContent;
+                                    })()}
                                 </div>
                             )}
 
                             {/* LEVEL 3: DATA TABLE */}
                             {viewLevel === 'data' && (
                                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 -mx-4 md:-mx-6 -mt-4 md:-mt-6 font-sans">
-                                    <div className="bg-transparent sm:bg-white sm:border-t border-gray-100 overflow-x-auto custom-scrollbar pb-40 sm:pb-0 px-4 sm:px-0 pt-4 sm:pt-0">
+                                    <div className="bg-transparent sm:bg-white sm:border-t border-gray-100 overflow-y-auto overflow-x-auto min-h-[500px] md:min-h-[650px] max-h-[600px] md:max-h-[750px] lg:max-h-[850px] custom-scrollbar pb-6 px-4 sm:px-0 pt-4 sm:pt-0 relative block">
                                         <table className="min-w-full block sm:table">
-                                            <thead className="hidden sm:table-header-group bg-gray-50/80 sticky top-0 z-10 backdrop-blur-sm">
-                                                <tr>
-                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Cód. SISMED / SIGA</th>
-                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider min-w-[250px]">Descripción del Producto</th>
-                                                    <th scope="col" className="px-4 py-3 text-right text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Saldo</th>
-                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Lote / Venc.</th>
-                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">Tipo Sum.</th>
-                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap">F. Finan.</th>
+                                            <thead className="hidden sm:table-header-group sticky top-0 z-30 shadow-xs border-b border-slate-200">
+                                                <tr className="bg-slate-50">
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50 sticky top-0 z-30 border-b border-slate-200/80 shadow-2xs">Cód. SISMED / SIGA</th>
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider min-w-[250px] bg-slate-50 sticky top-0 z-30 border-b border-slate-200/80 shadow-2xs">Descripción del Producto</th>
+                                                    <th scope="col" className="px-4 py-3 text-right text-xs font-black text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50 sticky top-0 z-30 border-b border-slate-200/80 shadow-2xs">Saldo</th>
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50 sticky top-0 z-30 border-b border-slate-200/80 shadow-2xs">Lote / Venc.</th>
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50 sticky top-0 z-30 border-b border-slate-200/80 shadow-2xs">Tipo Sum.</th>
+                                                    <th scope="col" className="px-4 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider whitespace-nowrap bg-slate-50 sticky top-0 z-30 border-b border-slate-200/80 shadow-2xs">F. Finan.</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="block sm:table-row-group bg-transparent sm:bg-white">
@@ -2432,10 +3346,173 @@ export const SheetSearchModule: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-                        </>
+                        </div>
                     )}
                 </div>
             </div>
+
+            {/* Modal de Stock en Fullscreen */}
+            {isTableFullscreen && stockModalSourceId && (
+                <div className="fixed inset-0 z-[106000] flex items-center justify-center p-2 sm:p-5 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => { setStockModalSourceId(null); setStockModalSearchTerm(''); }}>
+                    <div 
+                        className="bg-white rounded-2xl shadow-xl w-full max-w-6xl overflow-hidden flex flex-col h-full max-h-[90vh] animate-in zoom-in-95 duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Dark Header inside Modal */}
+                        {(() => {
+                            const sheetInfo = sources.find(s => s.id === stockModalSourceId);
+                            const code = getAlmCodeForSheet(stockModalSourceId || '', data);
+                            const statusObj = sheetInfo ? getUpdateStatus(sheetInfo.lastUpdateTime) : null;
+                            const description = sheetInfo ? (sheetInfo.name.lastIndexOf('-') === -1 ? sheetInfo.name.replace(/^FARM\s*-\s*/i, '') : sheetInfo.name.substring(0, sheetInfo.name.lastIndexOf('-')).trim().replace(/^FARM\s*-\s*/i, '')) : '';
+                            
+                            return sheetInfo && (
+                                <div className="px-4 sm:px-5 py-3.5 bg-slate-900 flex justify-between items-center text-white shrink-0">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 bg-teal-500/20 text-teal-400 rounded-xl flex items-center justify-center shadow-inner">
+                                            <Hospital className="h-5 w-5" />
+                                        </div>
+                                        <div className="flex flex-col text-left">
+                                            <div className="flex items-center gap-2">
+                                                {code && <span className="text-xs font-black text-teal-400 font-mono tracking-wider">{code}</span>}
+                                                <span className="text-sm font-bold truncate max-w-[200px] sm:max-w-md">{description}</span>
+                                            </div>
+                                            {statusObj && (
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <span className={`relative flex h-1.5 w-1.5 shrink-0`}>
+                                                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusObj.color}`} />
+                                                        <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${statusObj.color}`} />
+                                                    </span>
+                                                    <span className="text-[10.5px] text-slate-400 font-medium">Act: {statusObj.fullLabel}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="hidden sm:flex items-center gap-4">
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Items encontrados</span>
+                                            <span className="text-xl font-black text-slate-100 leading-none">{modalStockData.length}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                        
+                        {/* Header Filters & Actions */}
+                        <div className="px-4 sm:px-5 pt-4 pb-2 sm:pt-5 sm:pb-3 shrink-0 flex flex-col sm:flex-row gap-4 items-center justify-between">
+                            <div className="relative w-full sm:max-w-xl group">
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar medicamento en esta hoja..." 
+                                    value={stockModalSearchTerm} 
+                                    onChange={(e) => setStockModalSearchTerm(e.target.value)} 
+                                    className="w-full pl-10 pr-10 py-2.5 bg-slate-50/85 text-slate-800 placeholder-slate-450 border border-slate-200 hover:border-slate-300 focus:bg-white focus:border-teal-500 rounded-xl text-sm transition-all focus:outline-none focus:ring-4 focus:ring-teal-500/10 font-semibold shadow-2xs" 
+                                />
+                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                    <Search className="h-4 w-4 text-slate-400 group-focus-within:text-teal-600 stroke-[2.5] transition-colors" />
+                                </div>
+                                {stockModalSearchTerm && (
+                                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center z-10">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setStockModalSearchTerm('')}
+                                            className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors active:scale-95 cursor-pointer flex items-center justify-center"
+                                            title="Limpiar"
+                                        >
+                                            <X className="h-3.5 w-3.5 stroke-[2.5]" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto justify-end">
+                                {(() => {
+                                    const modalDataStats = getExpirationStats(modalStockData);
+                                    return modalDataStats.expiringThisMonthCount > 0 ? (
+                                        <button onClick={() => { setSelectedSourceId(stockModalSourceId || ''); setExpirationModalType('expiring'); setIsExpirationModalOpen(true); }} className="flex items-center gap-1.5 bg-white hover:bg-amber-50 text-amber-600 px-4 py-2.5 rounded-xl border border-amber-200 text-sm font-bold transition-all shrink-0 shadow-sm">
+                                            <Clock className="h-4 w-4 text-amber-500 shrink-0" />
+                                            <span>{modalDataStats.expiringThisMonthCount} Por vencer</span>
+                                        </button>
+                                    ) : null;
+                                })()}
+                                <button onClick={exportModalStockToExcel} className="flex items-center gap-1.5 bg-white hover:bg-teal-50 text-teal-700 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-bold transition-all shrink-0 shadow-sm">
+                                    <Download className="h-4 w-4 shrink-0" />
+                                    Exportar Stock
+                                </button>
+                                <button onClick={() => { setStockModalSourceId(null); setStockModalSearchTerm(''); }} className="ml-2 bg-white text-gray-400 hover:text-gray-700 p-2 rounded-xl transition-colors border border-transparent hover:border-gray-200 hover:bg-gray-50 shadow-sm">
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* Desktop Header */}
+                        <div className="hidden sm:flex flex-row items-center py-3 px-4 sm:px-8 bg-slate-100/80 border-b border-gray-200 gap-6 shrink-0 font-bold text-xs text-slate-500 uppercase tracking-wider">
+                            <div className="shrink-0 w-32">SISMED/SIGA</div>
+                            <div className="flex-1 min-w-0 text-left">Descripción del Producto</div>
+                            <div className="shrink-0 w-24 text-right">Saldo</div>
+                            <div className="shrink-0 w-36 text-left">Lote / Venc.</div>
+                            <div className="shrink-0 w-28 text-right">Tipos</div>
+                        </div>
+
+                        {/* List Body */}
+                        <div className="flex-1 overflow-auto bg-white p-0 sm:p-2 custom-scrollbar">
+                            <div className="flex flex-col">
+                                {modalStockData.length > 0 ? modalStockData.map((row, i) => (
+                                    <div 
+                                        key={`m-${i}`} 
+                                        onClick={() => setSelectedRecord(row)}
+                                        className="flex flex-col sm:flex-row sm:items-center py-4 px-4 sm:px-6 border-b border-gray-100 hover:bg-slate-50 transition-colors cursor-pointer gap-4 sm:gap-6"
+                                    >
+                                        {/* Col 1: IDs */}
+                                        <div className="flex flex-col shrink-0 sm:w-32">
+                                            <span className="font-bold text-gray-800 text-sm">{row.ID_Producto || row.CODIGO_ANTERIOR || '-'}</span>
+                                            <span className="text-[10px] text-gray-400 font-medium mt-0.5">{row.CODIGO_SIG || '-'}</span>
+                                        </div>
+
+                                        {/* Col 2: Name */}
+                                        <div className="flex flex-col flex-1 min-w-0">
+                                            <span className="text-sm font-bold text-gray-900 leading-snug">{row.Nombre || '-'}</span>
+                                            <span className="text-[10px] text-gray-400 font-medium mt-1">RS: {row.Reg_Sanitario || 'S/N'}</span>
+                                        </div>
+
+                                        {/* Col 3: Saldo (Stock) */}
+                                        <div className="flex items-center justify-end shrink-0 sm:w-24">
+                                            <span className="text-xl font-black text-gray-900">
+                                                {(!isNaN(parseInt(String(row.Saldo), 10))) ? parseInt(String(row.Saldo), 10) : 0}
+                                            </span>
+                                        </div>
+
+                                        {/* Col 4: Lote & Vence */}
+                                        <div className="flex flex-col shrink-0 sm:w-36">
+                                            <span className="text-sm text-gray-700">{row.Lote || '-'}</span>
+                                            <span className="text-[10px] text-gray-400 mt-1">Vence: {formatDate(row.Fec_Vencim) || '-'}</span>
+                                        </div>
+
+                                        {/* Col 5: Badges */}
+                                        <div className="flex items-center justify-end gap-2 shrink-0 sm:w-28">
+                                            {row.TIPSUM && (
+                                                <span className="inline-flex items-center px-2 py-1 rounded bg-indigo-50 text-indigo-600 text-[10px] font-bold uppercase border border-indigo-100/50">
+                                                    {row.TIPSUM}
+                                                </span>
+                                            )}
+                                            {row.FFINAN && (
+                                                <span className="inline-flex items-center px-2 py-1 rounded bg-amber-50 text-amber-600 text-[10px] font-bold uppercase border border-amber-100/50">
+                                                    {row.FFINAN}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <div className="py-16 text-center">
+                                        <Search className="h-8 w-8 text-slate-300 mx-auto mb-3" />
+                                        <p className="text-sm text-gray-500">No se encontraron productos en este establecimiento.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal de Detalle */}
             {selectedRecord && (
@@ -2589,7 +3666,7 @@ export const SheetSearchModule: React.FC = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-black text-gray-900">
-                                        {expirationModalType === 'expired' ? 'Productos Vencidos' : 'Productos por Vencer (Este Mes)'}
+                                        {expirationModalType === 'expired' ? `Productos Vencidos (al ${String(new Date().getDate()).padStart(2, '0')}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()})` : 'Productos por Vencer (Este Mes)'}
                                     </h3>
                                     <p className="text-sm text-gray-500">
                                         {expirationModalType === 'expired' ? 'Atención urgente requerida' : 'Asegure la rotación de estos inventarios'}
@@ -2647,21 +3724,23 @@ export const SheetSearchModule: React.FC = () => {
 
             {/* SIDEBAR DE FILTROS AVANZADOS (DERECHA) */}
             {isAdvancedFiltersSidebarOpen && (
-                <div className="fixed inset-0 z-[10000] flex justify-end pointer-events-none">
+                <div className="fixed inset-0 z-[110000] flex justify-end pointer-events-none">
                     {/* Backdrop Click Dismiss (Solo en móvil para no bloquear interacción de fondo en escritorio) */}
                     <div className="absolute inset-0 bg-black/45 backdrop-blur-xs pointer-events-auto md:hidden" onClick={() => setIsAdvancedFiltersSidebarOpen(false)} />
                     
                     {/* Sidebar Container */}
-                    <div className="relative w-full max-w-sm sm:max-w-md md:w-[380px] xl:w-[420px] md:max-w-none bg-slate-50 h-full shadow-[-12px_0_40px_rgba(0,0,0,0.1),-1px_0_4px_rgba(0,0,0,0.02)] border-l border-slate-200 pointer-events-auto animate-in slide-in-from-right duration-350 flex flex-col">
+                    <div className="relative w-full max-w-sm sm:max-w-md md:w-[380px] xl:w-[420px] md:max-w-none bg-slate-50 h-full shadow-[-12px_0_40px_rgba(0,0,0,0.1),-1px_0_4px_rgba(0,0,0,0.02)] border-l border-slate-200 pointer-events-auto animate-in slide-in-from-right duration-350 flex flex-col overflow-y-auto custom-scrollbar">
                         {/* Header */}
-                        <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] z-10 shrink-0">
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] z-20 shrink-0">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 shadow-sm border border-teal-100/50">
                                     <Filter className="h-5 w-5" />
                                 </div>
                                 <div>
                                     <h3 className="font-black text-slate-900 text-base tracking-tight uppercase">Filtros Avanzados</h3>
-                                    <p className="text-[10px] text-teal-600 font-extrabold tracking-widest uppercase">Establecimientos de Salud</p>
+                                    <p className="text-[10px] text-teal-600 font-extrabold tracking-widest uppercase">
+                                        {viewLevel === 'data' ? 'Filtros del Medicamento' : 'Establecimientos de Salud'}
+                                    </p>
                                 </div>
                             </div>
                             <button
@@ -2674,8 +3753,388 @@ export const SheetSearchModule: React.FC = () => {
                         </div>
 
                         {/* Content */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                            {/* Filter Section: Type */}
+                        <div className="flex-1 p-6 space-y-6">
+                            {viewLevel === 'data' ? (
+                                <div className="space-y-6">
+                                    {/* Estado de Vencimiento */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Estado de Vencimiento</h4>
+                                            </div>
+                                            {dataFilterExpiration !== 'all' && (
+                                                <button
+                                                    onClick={() => setDataFilterExpiration('all')}
+                                                    className="text-[10px] text-teal-600 hover:text-teal-700 font-extrabold uppercase hover:underline cursor-pointer"
+                                                >
+                                                    Todos
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {[
+                                                { value: 'all', label: 'Todos', desc: 'Sin restricciones' },
+                                                { value: 'expired', label: 'Vencidos', desc: 'Atención urgente' },
+                                                { value: 'expiring', label: 'Por vencer', desc: 'Este mes' },
+                                                { value: 'ok', label: 'Vigentes', desc: 'Buen estado' }
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    onClick={() => setDataFilterExpiration(opt.value)}
+                                                    className={`group p-3 rounded-2xl cursor-pointer transition-all border text-left select-none ${
+                                                        dataFilterExpiration === opt.value
+                                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-950 shadow-sm'
+                                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                                            dataFilterExpiration === opt.value
+                                                                ? 'bg-teal-600 border-teal-600 text-white scale-100'
+                                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                                        }`}>
+                                                            <Check className="h-3 w-3 stroke-[3]" />
+                                                        </div>
+                                                        <span className={`text-[11px] font-bold tracking-tight uppercase ${dataFilterExpiration === opt.value ? 'text-teal-950 font-black' : 'text-slate-705'}`}>{opt.label}</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 ml-6 leading-none mt-1">{opt.desc}</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Vencimiento Avanzado: Mes y Año */}
+                                    {(() => {
+                                        const monthsList = [
+                                            { value: 'all', label: 'TODOS LOS MESES' },
+                                            { value: '1', label: 'ENERO (01)' },
+                                            { value: '2', label: 'FEBRERO (02)' },
+                                            { value: '3', label: 'MARZO (03)' },
+                                            { value: '4', label: 'ABRIL (04)' },
+                                            { value: '5', label: 'MAYO (05)' },
+                                            { value: '6', label: 'JUNIO (06)' },
+                                            { value: '7', label: 'JULIO (07)' },
+                                            { value: '8', label: 'AGOSTO (08)' },
+                                            { value: '9', label: 'SEPTIEMBRE (09)' },
+                                            { value: '10', label: 'OCTUBRE (10)' },
+                                            { value: '11', label: 'NOVIEMBRE (11)' },
+                                            { value: '12', label: 'DICIEMBRE (12)' }
+                                        ];
+                                        return (
+                                            <div className="space-y-3 bg-slate-50/70 border border-slate-200/60 rounded-2xl p-4">
+                                                <div className="flex items-center justify-between w-full border-b border-slate-200/40 pb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <Calendar className="w-4 h-4 text-teal-600" />
+                                                        <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-wider">Mes / Año de Vencimiento</h4>
+                                                    </div>
+                                                    {(dataFilterExpMonth !== 'all' || dataFilterExpYear !== 'all') && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setDataFilterExpMonth('all');
+                                                                setDataFilterExpYear('all');
+                                                            }}
+                                                            className="text-[10px] text-teal-600 hover:text-teal-700 font-extrabold uppercase hover:underline cursor-pointer"
+                                                        >
+                                                            Limpiar
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                <p className="text-[10px] text-slate-400 leading-normal">
+                                                    Ver productos que vencen únicamente en el período de mes y año seleccionado.
+                                                </p>
+
+                                                <div className="grid grid-cols-2 gap-3 pt-1">
+                                                    {/* Mes */}
+                                                    <div className="space-y-1.5 relative">
+                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Mes de Vencimiento</label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setIsMonthDropdownOpen(!isMonthDropdownOpen);
+                                                                setIsYearDropdownOpen(false);
+                                                            }}
+                                                            className={`w-full flex items-center justify-between pl-3 pr-3 py-2 bg-white border rounded-xl text-[10px] sm:text-[11px] font-bold text-slate-800 uppercase tracking-wide shadow-sm transition-all text-left cursor-pointer focus:outline-none focus:ring-1 focus:ring-teal-500/50 ${
+                                                                isMonthDropdownOpen ? 'border-teal-500 ring-1 ring-teal-500/30' : 'border-slate-200 hover:border-slate-300'
+                                                            }`}
+                                                        >
+                                                            <span className="truncate">
+                                                                {dataFilterExpMonth === 'all' ? 'TODOS LOS MESES' : (
+                                                                    monthsList.find(m => m.value === dataFilterExpMonth)?.label || dataFilterExpMonth
+                                                                )}
+                                                            </span>
+                                                            <ChevronDown className={`h-3 w-3 text-slate-400 stroke-[3] transition-transform duration-200 ${isMonthDropdownOpen ? 'rotate-180' : ''}`} />
+                                                        </button>
+
+                                                        {isMonthDropdownOpen && (
+                                                            <>
+                                                                {/* Click-away backdrop */}
+                                                                <div className="fixed inset-0 z-40" onClick={() => setIsMonthDropdownOpen(false)} />
+                                                                {/* Options list */}
+                                                                <div className="absolute left-0 right-0 z-50 top-full mt-1.5 bg-white border border-slate-150 rounded-xl shadow-xl max-h-52 overflow-y-auto custom-scrollbar divide-y divide-slate-100/50 py-1 transition-all animate-in fade-in slide-in-from-top-2 duration-200">
+                                                                    {monthsList.map(m => (
+                                                                        <button
+                                                                            key={m.value}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setDataFilterExpMonth(m.value);
+                                                                                setIsMonthDropdownOpen(false);
+                                                                            }}
+                                                                            className={`w-full text-left px-3 py-2 text-[10.5px] font-bold tracking-tight uppercase transition-all flex items-center justify-between hover:bg-teal-50/50 cursor-pointer ${
+                                                                                dataFilterExpMonth === m.value ? 'text-teal-905 bg-teal-50/30' : 'text-slate-600 hover:text-slate-900'
+                                                                            }`}
+                                                                        >
+                                                                            <span>{m.label}</span>
+                                                                            {dataFilterExpMonth === m.value && <Check className="h-3 w-3 text-teal-600 stroke-[3]" />}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Año */}
+                                                    <div className="space-y-1.5 relative">
+                                                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Año de Vencimiento</label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setIsYearDropdownOpen(!isYearDropdownOpen);
+                                                                setIsMonthDropdownOpen(false);
+                                                            }}
+                                                            className={`w-full flex items-center justify-between pl-3 pr-3 py-2 bg-white border rounded-xl text-[10px] sm:text-[11px] font-bold text-slate-800 uppercase tracking-wide shadow-sm transition-all text-left cursor-pointer focus:outline-none focus:ring-1 focus:ring-teal-500/50 ${
+                                                                isYearDropdownOpen ? 'border-teal-500 ring-1 ring-teal-500/30' : 'border-slate-200 hover:border-slate-300'
+                                                            }`}
+                                                        >
+                                                            <span className="truncate">
+                                                                {dataFilterExpYear === 'all' ? 'TODOS LOS AÑOS' : dataFilterExpYear}
+                                                            </span>
+                                                            <ChevronDown className={`h-3 w-3 text-slate-400 stroke-[3] transition-transform duration-200 ${isYearDropdownOpen ? 'rotate-180' : ''}`} />
+                                                        </button>
+
+                                                        {isYearDropdownOpen && (
+                                                            <>
+                                                                {/* Click-away backdrop */}
+                                                                <div className="fixed inset-0 z-40" onClick={() => setIsYearDropdownOpen(false)} />
+                                                                {/* Options list */}
+                                                                <div className="absolute left-0 right-0 z-50 top-full mt-1.5 bg-white border border-slate-150 rounded-xl shadow-xl max-h-52 overflow-y-auto custom-scrollbar divide-y divide-slate-100/50 py-1 transition-all animate-in fade-in slide-in-from-top-2 duration-200">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setDataFilterExpYear('all');
+                                                                            setIsYearDropdownOpen(false);
+                                                                        }}
+                                                                        className={`w-full text-left px-3 py-2 text-[10.5px] font-bold tracking-tight uppercase transition-all flex items-center justify-between hover:bg-teal-50/50 cursor-pointer ${
+                                                                            dataFilterExpYear === 'all' ? 'text-teal-905 bg-teal-50/30' : 'text-slate-600 hover:text-slate-900'
+                                                                        }`}
+                                                                    >
+                                                                        <span>TODOS LOS AÑOS</span>
+                                                                        {dataFilterExpYear === 'all' && <Check className="h-3 w-3 text-teal-600 stroke-[3]" />}
+                                                                    </button>
+                                                                    {availableYears.map(yr => (
+                                                                        <button
+                                                                            key={yr}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setDataFilterExpYear(yr);
+                                                                                setIsYearDropdownOpen(false);
+                                                                            }}
+                                                                            className={`w-full text-left px-3 py-2 text-[10.5px] font-bold tracking-tight uppercase transition-all flex items-center justify-between hover:bg-teal-50/50 cursor-pointer ${
+                                                                                dataFilterExpYear === yr ? 'text-teal-905 bg-teal-50/30' : 'text-slate-600 hover:text-slate-900'
+                                                                            }`}
+                                                                        >
+                                                                            <span>{yr}</span>
+                                                                            {dataFilterExpYear === yr && <Check className="h-3 w-3 text-teal-600 stroke-[3]" />}
+                                                                        </button>
+                                                                    ))}
+                                                                    {dataFilterExpYear !== 'all' && !availableYears.includes(dataFilterExpYear) && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setDataFilterExpYear(dataFilterExpYear);
+                                                                                setIsYearDropdownOpen(false);
+                                                                            }}
+                                                                            className="w-full text-left px-3 py-2 text-[10.5px] font-black tracking-tight uppercase bg-teal-50/20 text-teal-905 flex items-center justify-between"
+                                                                        >
+                                                                            <span>{dataFilterExpYear}</span>
+                                                                            <Check className="h-3 w-3 text-teal-600 stroke-[3]" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Manual Input field next to it for advanced typed search or if year isn't in database list */}
+                                                <div className="pt-2 border-t border-slate-200/40 flex items-center gap-2">
+                                                    <div className="flex-1">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Año de 4 dígitos manualmente..."
+                                                            value={dataFilterExpYear === 'all' ? '' : dataFilterExpYear}
+                                                            onChange={(e) => {
+                                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                                                setDataFilterExpYear(cleanVal || 'all');
+                                                            }}
+                                                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[10px] font-medium text-slate-700 placeholder-slate-450 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 shadow-sm transition-all text-center"
+                                                        />
+                                                    </div>
+                                                    {dataFilterExpYear !== 'all' && (
+                                                        <span className="text-[9px] bg-teal-50 border border-teal-200/50 text-teal-700 px-2 py-1 rounded-lg font-black uppercase tracking-wider shrink-0">
+                                                            Año: {dataFilterExpYear}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Disponibilidad de Stock */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Disponibilidad de Stock</h4>
+                                            </div>
+                                            {dataFilterStock !== 'all' && (
+                                                <button
+                                                    onClick={() => setDataFilterStock('all')}
+                                                    className="text-[10px] text-teal-600 hover:text-teal-700 font-extrabold uppercase hover:underline cursor-pointer"
+                                                >
+                                                    Todos
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-2.5">
+                                            {[
+                                                { value: 'all', label: 'Todos los productos', countText: 'Sin límite' },
+                                                { value: 'with_stock', label: 'Con Stock actual', countText: 'Saldo > 0' },
+                                                { value: 'no_stock', label: 'Sin Stock (Agotados)', countText: 'Saldo = 0' }
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    onClick={() => setDataFilterStock(opt.value)}
+                                                    className={`group w-full flex items-center justify-between p-3 rounded-2xl cursor-pointer transition-all border select-none ${
+                                                        dataFilterStock === opt.value
+                                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-950 shadow-sm'
+                                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-305'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                                            dataFilterStock === opt.value
+                                                                ? 'bg-teal-600 border-teal-600 text-white scale-100'
+                                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                                        }`}>
+                                                            <Check className="h-3 w-3 stroke-[3]" />
+                                                        </div>
+                                                        <span className={`text-[11px] font-bold tracking-tight uppercase ${dataFilterStock === opt.value ? 'text-teal-950 font-black' : 'text-slate-700'}`}>{opt.label}</span>
+                                                    </div>
+                                                    <span className="text-[10px] text-slate-455 font-extrabold px-2 py-0.5 rounded-lg bg-slate-100/75 border border-slate-200/40">{opt.countText}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Tipo de Suministro */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Tipo de Suministro</h4>
+                                            </div>
+                                            {dataFilterTipsum !== 'all' && (
+                                                <button
+                                                    onClick={() => setDataFilterTipsum('all')}
+                                                    className="text-[10px] text-teal-600 hover:text-teal-700 font-extrabold uppercase hover:underline cursor-pointer"
+                                                >
+                                                    Todos
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {[
+                                                { value: 'all', label: 'Todos' },
+                                                ...availableTipsums.map(val => ({ value: val, label: val }))
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    onClick={() => setDataFilterTipsum(opt.value)}
+                                                    className={`group p-3 rounded-2xl cursor-pointer transition-all border text-left select-none ${
+                                                        dataFilterTipsum === opt.value
+                                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-950 shadow-sm'
+                                                            : 'bg-white border-slate-200/60 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                                            dataFilterTipsum === opt.value
+                                                                ? 'bg-teal-600 border-teal-600 text-white scale-100'
+                                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                                        }`}>
+                                                            <Check className="h-3 w-3 stroke-[3]" />
+                                                        </div>
+                                                        <span className={`text-[11px] font-bold tracking-tight uppercase ${dataFilterTipsum === opt.value ? 'text-teal-950 font-black' : 'text-slate-700'}`}>{opt.label}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Fuente de Financiamiento */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+                                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Fuente de Financiamiento</h4>
+                                            </div>
+                                            {dataFilterFFinan !== 'all' && (
+                                                <button
+                                                    onClick={() => setDataFilterFFinan('all')}
+                                                    className="text-[10px] text-teal-600 hover:text-teal-700 font-extrabold uppercase hover:underline cursor-pointer"
+                                                >
+                                                    Todos
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {[
+                                                { value: 'all', label: 'Todos' },
+                                                ...availableFFinans.map(val => ({ value: val, label: val }))
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    onClick={() => setDataFilterFFinan(opt.value)}
+                                                    className={`group p-3 rounded-2xl cursor-pointer transition-all border text-left select-none ${
+                                                        dataFilterFFinan === opt.value
+                                                            ? 'bg-teal-50/25 border-teal-500/35 text-slate-950 shadow-sm'
+                                                            : 'bg-white border-slate-200/60 text-slate-605 hover:bg-slate-50 hover:border-slate-300'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                                            dataFilterFFinan === opt.value
+                                                                ? 'bg-teal-600 border-teal-600 text-white scale-100'
+                                                                : 'border-slate-300 bg-white text-transparent group-hover:border-slate-400'
+                                                        }`}>
+                                                            <Check className="h-3 w-3 stroke-[3]" />
+                                                        </div>
+                                                        <span className={`text-[11px] font-bold tracking-tight uppercase ${dataFilterFFinan === opt.value ? 'text-teal-950 font-black' : 'text-slate-700'}`}>{opt.label}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Filter Section: Type */}
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between items-center w-full">
                                     <div className="flex items-center gap-2">
@@ -2933,13 +4392,13 @@ export const SheetSearchModule: React.FC = () => {
                                         <div className="flex items-center justify-between w-full">
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white shrink-0 shadow-sm animate-pulse" />
-                                                <span className={`text-xs font-bold transition-colors ${filter_emerald ? 'text-slate-900 font-black' : 'text-slate-700 font-semibold'}`}>Al día</span>
+                                                <span className={`text-xs font-bold transition-colors ${filter_emerald ? 'text-slate-900 font-black' : 'text-slate-700 font-semibold'}`}>En Línea</span>
                                             </div>
                                             <span className="text-[10px] text-slate-400 font-bold">&lt;1 hora sin actualizar</span>
                                         </div>
                                     </label>
 
-                                    {/* Pendiente */}
+                                    {/* Desconectados */}
                                     <label className={`group flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all border select-none ${
                                         filter_amber 
                                             ? 'bg-teal-50/25 border-teal-500/35 text-slate-900 shadow-sm' 
@@ -2961,9 +4420,9 @@ export const SheetSearchModule: React.FC = () => {
                                         <div className="flex items-center justify-between w-full">
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500 border border-white shrink-0 shadow-sm" />
-                                                <span className={`text-xs font-bold transition-colors ${filter_amber ? 'text-slate-900 font-black' : 'text-slate-700 font-semibold'}`}>Pendiente</span>
+                                                <span className={`text-xs font-bold transition-colors ${filter_amber ? 'text-slate-900 font-black' : 'text-slate-700 font-semibold'}`}>Desactualizados</span>
                                             </div>
-                                            <span className="text-[10px] text-slate-400 font-bold">&gt;1 hora sin actualizar</span>
+                                            <span className="text-[10px] text-slate-400 font-bold">&gt;1 y &lt;24 horas</span>
                                         </div>
                                     </label>
 
@@ -2989,7 +4448,7 @@ export const SheetSearchModule: React.FC = () => {
                                         <div className="flex items-center justify-between w-full">
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-red-500 border border-white shrink-0 shadow-sm" />
-                                                <span className={`text-xs font-bold transition-colors ${filter_red ? 'text-slate-900 font-black' : 'text-slate-700 font-semibold'}`}>Crítico</span>
+                                                <span className={`text-xs font-bold transition-colors ${filter_red ? 'text-slate-900 font-black' : 'text-slate-700 font-semibold'}`}>Fuera de Línea</span>
                                             </div>
                                             <span className="text-[10px] text-slate-400 font-bold">&gt;24 horas</span>
                                         </div>
@@ -3184,24 +4643,35 @@ export const SheetSearchModule: React.FC = () => {
                                     </div>
                                 </label>
                             </div>
+                                </>
+                            )}
                         </div>
 
                         {/* Footer Buttons */}
-                        <div className="px-6 py-5 border-t border-slate-100 bg-white/95 backdrop-blur-md flex items-center justify-between gap-3 sticky bottom-0 z-10 shrink-0 shadow-[0_-4px_15px_rgba(0,0,0,0.03)]">
+                        <div className="px-6 py-5 border-t border-slate-100 bg-white/95 backdrop-blur-md flex items-center justify-between gap-3 sticky bottom-0 z-20 shrink-0 shadow-[0_-4px_15px_rgba(0,0,0,0.03)]">
                             <button
                                 onClick={() => {
-                                    setFilter_CS(true);
-                                    setFilter_PS(true);
-                                    setFilter_ALM(true);
-                                    setFilter_HOSP(true);
-                                    setFilter_OTRO(true);
-                                    setFilter_emerald(true);
-                                    setFilter_amber(true);
-                                    setFilter_red(true);
-                                    setFilter_gray(true);
-                                    setFilterSortOrder('name_asc');
-                                    setFilterHasPendingExpirations(false);
-                                    setFilterDateLimit('all');
+                                    if (viewLevel === 'data') {
+                                        setDataFilterTipsum('all');
+                                        setDataFilterFFinan('all');
+                                        setDataFilterStock('all');
+                                        setDataFilterExpiration('all');
+                                        setDataFilterExpMonth('all');
+                                        setDataFilterExpYear('all');
+                                    } else {
+                                        setFilter_CS(true);
+                                        setFilter_PS(true);
+                                        setFilter_ALM(true);
+                                        setFilter_HOSP(true);
+                                        setFilter_OTRO(true);
+                                        setFilter_emerald(true);
+                                        setFilter_amber(true);
+                                        setFilter_red(true);
+                                        setFilter_gray(true);
+                                        setFilterSortOrder('name_asc');
+                                        setFilterHasPendingExpirations(false);
+                                        setFilterDateLimit('all');
+                                    }
                                 }}
                                 className="px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 font-extrabold text-[11px] uppercase tracking-wider rounded-xl border border-slate-200 shadow-sm transition-all shrink-0 active:scale-95"
                             >
@@ -3211,7 +4681,11 @@ export const SheetSearchModule: React.FC = () => {
                                 onClick={() => setIsAdvancedFiltersSidebarOpen(false)}
                                 className="flex-1 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-black text-[11px] uppercase tracking-widest rounded-xl shadow-lg shadow-teal-600/15 hover:shadow-teal-600/25 transition-all text-center active:scale-95"
                             >
-                                Aplicar ({filteredAndSortedSources.length} Est.)
+                                {viewLevel === 'data' ? (
+                                    `Aplicar (${filteredData.length} Prod.)`
+                                ) : (
+                                    `Aplicar (${filteredAndSortedSources.length} Est.)`
+                                )}
                             </button>
                         </div>
                     </div>
@@ -3430,7 +4904,7 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className="flex items-center gap-2 font-extrabold text-xs">
                                             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                                            <span className={exportEmerald ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-semibold'}>Al día (&lt;1h)</span>
+                                            <span className={exportEmerald ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-semibold'}>En Línea (&lt;1h)</span>
                                         </div>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportEmerald 
@@ -3455,7 +4929,7 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className="flex items-center gap-2 font-extrabold text-xs">
                                             <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-                                            <span className={exportAmber ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-semibold'}>Pendiente (&gt;1h)</span>
+                                            <span className={exportAmber ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-semibold'}>Desactualizados (&gt;1h)</span>
                                         </div>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportAmber 
@@ -3480,7 +4954,7 @@ export const SheetSearchModule: React.FC = () => {
                                         />
                                         <div className="flex items-center gap-2 font-extrabold text-xs">
                                             <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
-                                            <span className={exportRed ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-semibold'}>Crítico (&gt;24h)</span>
+                                            <span className={exportRed ? 'text-slate-900 font-extrabold' : 'text-slate-700 font-semibold'}>Fuera Línea (&gt;24h)</span>
                                         </div>
                                         <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
                                             exportRed 
@@ -3752,7 +5226,10 @@ export const SheetSearchModule: React.FC = () => {
                                                             </div>
                                                             {/* Mobile status indicator */}
                                                             <div className="sm:hidden mt-1.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-50 border border-slate-100 inline-flex">
-                                                                <span className={`w-1.5 h-1.5 rounded-full ${status.color}`}></span>
+                                                                <span className="relative flex h-1.5 w-1.5">
+                                                                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${status.color}`} />
+                                                                    <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${status.color}`} />
+                                                                </span>
                                                                 <span className="text-[9px] font-bold text-slate-600">{status.label}</span>
                                                             </div>
                                                             <div className="md:hidden mt-1.5 flex flex-col gap-0.5 w-full">
@@ -3768,7 +5245,10 @@ export const SheetSearchModule: React.FC = () => {
                                                         </td>
                                                         <td className="px-4 py-3 text-center hidden sm:table-cell">
                                                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200">
-                                                                <span className={`w-2 h-2 rounded-full ${status.color}`}></span>
+                                                                <span className="relative flex h-2 w-2">
+                                                                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${status.color}`} />
+                                                                    <span className={`relative inline-flex rounded-full h-2 w-2 ${status.color}`} />
+                                                                </span>
                                                                 <span className="text-[10px] font-bold text-slate-600 whitespace-nowrap">{status.label}</span>
                                                             </div>
                                                         </td>
