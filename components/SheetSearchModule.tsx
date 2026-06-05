@@ -3428,12 +3428,22 @@ export const SheetSearchModule: React.FC = () => {
                             <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto justify-end">
                                 {(() => {
                                     const modalDataStats = getExpirationStats(modalStockData);
-                                    return modalDataStats.expiringThisMonthCount > 0 ? (
-                                        <button onClick={() => { setSelectedSourceId(stockModalSourceId || ''); setExpirationModalType('expiring'); setIsExpirationModalOpen(true); }} className="flex items-center gap-1.5 bg-white hover:bg-amber-50 text-amber-600 px-4 py-2.5 rounded-xl border border-amber-200 text-sm font-bold transition-all shrink-0 shadow-sm">
-                                            <Clock className="h-4 w-4 text-amber-500 shrink-0" />
-                                            <span>{modalDataStats.expiringThisMonthCount} Por vencer</span>
-                                        </button>
-                                    ) : null;
+                                    return (
+                                        <>
+                                            {modalDataStats.expiredCount > 0 && (
+                                                <button onClick={() => { setSelectedSourceId(stockModalSourceId || ''); setExpirationModalType('expired'); setIsExpirationModalOpen(true); }} className="flex items-center gap-1.5 bg-white hover:bg-rose-50 text-rose-600 px-4 py-2.5 rounded-xl border border-rose-200 text-sm font-bold transition-all shrink-0 shadow-sm cursor-pointer">
+                                                    <AlertTriangle className="h-4 w-4 text-rose-500 shrink-0" />
+                                                    <span>{modalDataStats.expiredCount} Vencidos</span>
+                                                </button>
+                                            )}
+                                            {modalDataStats.expiringThisMonthCount > 0 && (
+                                                <button onClick={() => { setSelectedSourceId(stockModalSourceId || ''); setExpirationModalType('expiring'); setIsExpirationModalOpen(true); }} className="flex items-center gap-1.5 bg-white hover:bg-amber-50 text-amber-600 px-4 py-2.5 rounded-xl border border-amber-200 text-sm font-bold transition-all shrink-0 shadow-sm cursor-pointer">
+                                                    <Clock className="h-4 w-4 text-amber-500 shrink-0" />
+                                                    <span>{modalDataStats.expiringThisMonthCount} Por vencer</span>
+                                                </button>
+                                            )}
+                                        </>
+                                    );
                                 })()}
                                 <button onClick={exportModalStockToExcel} className="flex items-center gap-1.5 bg-white hover:bg-teal-50 text-teal-700 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-bold transition-all shrink-0 shadow-sm">
                                     <Download className="h-4 w-4 shrink-0" />
