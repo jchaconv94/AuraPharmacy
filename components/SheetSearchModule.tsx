@@ -345,7 +345,7 @@ const getExpirationStats = (records: SIGData[]) => {
         month = p1 - 1;
         day = p2;
       } else if (p2 > 1000 || p2 < 100) {
-        // format DD/MM/YYYY or MM/DD/YYYY
+        // format DD/MM/YYYY o MM/DD/YYYY
         year = p2 < 100 ? p2 + 2000 : p2;
         if (p0 > 12) {
           day = p0;

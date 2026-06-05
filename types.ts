@@ -197,3 +197,6 @@ export interface RedistributionItem {
   microred?: string;
   cpaMode?: 'ADJUSTED' | 'SIMPLE';
 }
+
+// Force sync
+export const FORCE_SYNC = true;
