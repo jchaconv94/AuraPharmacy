@@ -124,6 +124,3 @@ dist-ssr
 # OS
 .DS_Store
 Thumbs.db
-
-# GitHub Workflows
-.github/workflows/deploy.yml

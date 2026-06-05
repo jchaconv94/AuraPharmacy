@@ -11,7 +11,7 @@ export interface MedicationInput {
   id: string;
   name: string;
   currentStock: number;
-  monthlyConsumption: number[]; // Array of last 12 months
+  monthlyConsumption: number[]; // Array of last 12 meses
   unitPrice: number;
   medtip?: string;
   medpet?: string;
@@ -197,6 +197,3 @@ export interface RedistributionItem {
   microred?: string;
   cpaMode?: 'ADJUSTED' | 'SIMPLE';
 }
-
-// Force sync
-export const FORCE_SYNC = true;
