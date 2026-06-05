@@ -3518,6 +3518,7 @@ export const SheetSearchModule: React.FC = () => {
                                           onClick={(e) => e.stopPropagation()}
                                         >
                                           {(() => {
+                                            // Force trigger GitHub deployment
                                             if (isLoading || isSilentSyncing) {
                                               return (
                                                 <div className="flex items-center justify-between bg-white border border-slate-200/80 shadow-sm rounded-lg p-2">
