@@ -1,15 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
 // Supabase Connection Configuration
 // If environment variables are not yet provided, we will fail gracefully and allow offline or mock checks
 // @ts-ignore
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 // @ts-ignore
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
-export const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+export const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
 /**
  * Programmatically computes a quick, non-cryptographic checksum/hash representing
@@ -18,19 +19,22 @@ export const supabase = supabaseUrl && supabaseAnonKey
  */
 export const computeStockHash = (products: any[]): string => {
   const sortedSubset = [...products]
-    .filter(row => row && (row.ID_Producto || row.Nombre))
+    .filter((row) => row && (row.ID_Producto || row.Nombre))
     .sort((a, b) => {
-      const idA = String(a.ID_Producto || a.Nombre || '');
-      const idB = String(b.ID_Producto || b.Nombre || '');
+      const idA = String(a.ID_Producto || a.Nombre || "");
+      const idB = String(b.ID_Producto || b.Nombre || "");
       return idA.localeCompare(idB);
     });
 
-  let stateStr = '';
+  let stateStr = "";
   for (const item of sortedSubset) {
-    const id = item.ID_Producto || item.Nombre || '';
-    const qty = item.Saldo !== undefined ? item.Saldo : (item.Saldo_Fisico || item.Stock || 0);
-    const lot = item.Lote || '';
-    const exp = item.Fec_Vencim || '';
+    const id = item.ID_Producto || item.Nombre || "";
+    const qty =
+      item.Saldo !== undefined
+        ? item.Saldo
+        : item.Saldo_Fisico || item.Stock || 0;
+    const lot = item.Lote || "";
+    const exp = item.Fec_Vencim || "";
     stateStr += `${id}:${qty}:${lot}:${exp}|`;
   }
 
@@ -51,30 +55,38 @@ export interface StockDifference {
   previousQty: number;
   currentQty: number;
   change: number;
-  type: 'added' | 'removed' | 'modified';
+  type: "added" | "removed" | "modified";
 }
 
-export const compareStockLists = (prevList: any[], currList: any[]): StockDifference[] => {
+export const compareStockLists = (
+  prevList: any[],
+  currList: any[],
+): StockDifference[] => {
   const prevMap = new Map<string, any>();
-  prevList.forEach(item => {
-    const key = `${item.ID_Producto || item.Nombre || ''}:${item.Lote || ''}`;
+  prevList.forEach((item) => {
+    const key = `${item.ID_Producto || item.Nombre || ""}:${item.Lote || ""}`;
     prevMap.set(key, item);
   });
 
   const currMap = new Map<string, any>();
-  currList.forEach(item => {
-    const key = `${item.ID_Producto || item.Nombre || ''}:${item.Lote || ''}`;
+  currList.forEach((item) => {
+    const key = `${item.ID_Producto || item.Nombre || ""}:${item.Lote || ""}`;
     currMap.set(key, item);
   });
 
   const differences: StockDifference[] = [];
 
   // Find modifications and additions
-  currList.forEach(currItem => {
-    const key = `${currItem.ID_Producto || currItem.Nombre || ''}:${currItem.Lote || ''}`;
-    const currQty = Number(currItem.Saldo !== undefined ? currItem.Saldo : (currItem.Saldo_Fisico || currItem.Stock || 0));
-    const name = currItem.Nombre || currItem.Descripcion || 'Producto Desconocido';
-    const id = currItem.ID_Producto || currItem.Nombre || '';
+  currList.forEach((currItem) => {
+    const key = `${currItem.ID_Producto || currItem.Nombre || ""}:${currItem.Lote || ""}`;
+    const currQty = Number(
+      currItem.Saldo !== undefined
+        ? currItem.Saldo
+        : currItem.Saldo_Fisico || currItem.Stock || 0,
+    );
+    const name =
+      currItem.Nombre || currItem.Descripcion || "Producto Desconocido";
+    const id = currItem.ID_Producto || currItem.Nombre || "";
 
     if (!prevMap.has(key)) {
       differences.push({
@@ -83,11 +95,15 @@ export const compareStockLists = (prevList: any[], currList: any[]): StockDiffer
         previousQty: 0,
         currentQty: currQty,
         change: currQty,
-        type: 'added'
+        type: "added",
       });
     } else {
       const prevItem = prevMap.get(key);
-      const prevQty = Number(prevItem.Saldo !== undefined ? prevItem.Saldo : (prevItem.Saldo_Fisico || prevItem.Stock || 0));
+      const prevQty = Number(
+        prevItem.Saldo !== undefined
+          ? prevItem.Saldo
+          : prevItem.Saldo_Fisico || prevItem.Stock || 0,
+      );
       if (prevQty !== currQty) {
         differences.push({
           id,
@@ -95,26 +111,31 @@ export const compareStockLists = (prevList: any[], currList: any[]): StockDiffer
           previousQty: prevQty,
           currentQty: currQty,
           change: currQty - prevQty,
-          type: 'modified'
+          type: "modified",
         });
       }
     }
   });
 
   // Find removals
-  prevList.forEach(prevItem => {
-    const key = `${prevItem.ID_Producto || prevItem.Nombre || ''}:${prevItem.Lote || ''}`;
+  prevList.forEach((prevItem) => {
+    const key = `${prevItem.ID_Producto || prevItem.Nombre || ""}:${prevItem.Lote || ""}`;
     if (!currMap.has(key)) {
-      const prevQty = Number(prevItem.Saldo !== undefined ? prevItem.Saldo : (prevItem.Saldo_Fisico || prevItem.Stock || 0));
-      const name = prevItem.Nombre || prevItem.Descripcion || 'Producto Desconocido';
-      const id = prevItem.ID_Producto || prevItem.Nombre || '';
+      const prevQty = Number(
+        prevItem.Saldo !== undefined
+          ? prevItem.Saldo
+          : prevItem.Saldo_Fisico || prevItem.Stock || 0,
+      );
+      const name =
+        prevItem.Nombre || prevItem.Descripcion || "Producto Desconocido";
+      const id = prevItem.ID_Producto || prevItem.Nombre || "";
       differences.push({
         id,
         name,
         previousQty: prevQty,
         currentQty: 0,
         change: -prevQty,
-        type: 'removed'
+        type: "removed",
       });
     }
   });
@@ -145,34 +166,73 @@ export const supabaseService = {
   /**
    * Fetches the latest stock synchronization records for all establishments
    */
-  async getLatestSyncs(): Promise<Record<string, StockSyncRecord>> {
+  async getLatestSyncs(
+    establishmentIds?: string[],
+  ): Promise<Record<string, StockSyncRecord>> {
     if (!supabase) return {};
     try {
-      // Query the latest record for each establishment
+      const latestMap: Record<string, StockSyncRecord> = {};
+
+      if (establishmentIds && establishmentIds.length > 0) {
+        // Guaranteed to fetch the latest sync for EACH requested establishment
+        const promises = establishmentIds.map(async (id) => {
+          const { data, error } = await supabase!
+            .from("stock_sync_history")
+            .select("*")
+            .eq("establishment_id", id)
+            .order("sync_date", { ascending: false })
+            .limit(1);
+
+          if (!error && data && data.length > 0) {
+            return data[0];
+          }
+          return null;
+        });
+
+        const results = await Promise.all(promises);
+        results.forEach((row) => {
+          if (row) {
+            latestMap[row.establishment_id] = row;
+            if (
+              row.has_changes &&
+              !latestMap[row.establishment_id].last_modification_date
+            ) {
+              latestMap[row.establishment_id].last_modification_date =
+                row.sync_date;
+            }
+          }
+        });
+        return latestMap;
+      }
+
+      // Fallback: Query the latest records generally (this is unsafe if table is large, but kept for completeness if no IDs passed)
       const { data, error } = await supabase
-        .from('stock_sync_history')
-        .select('*')
-        .order('sync_date', { ascending: false })
+        .from("stock_sync_history")
+        .select("*")
+        .order("sync_date", { ascending: false })
         .limit(10000);
 
       if (error) throw error;
       if (!data) return {};
 
       // Map to an object keyed by establishment_id of the actual LATEST record
-      const latestMap: Record<string, StockSyncRecord> = {};
       data.forEach((row: StockSyncRecord) => {
         if (!latestMap[row.establishment_id]) {
           latestMap[row.establishment_id] = row;
         }
-        
+
         // Also keep track of the most recent actual modification date!
-        if (row.has_changes && !latestMap[row.establishment_id].last_modification_date) {
-            latestMap[row.establishment_id].last_modification_date = row.sync_date;
+        if (
+          row.has_changes &&
+          !latestMap[row.establishment_id].last_modification_date
+        ) {
+          latestMap[row.establishment_id].last_modification_date =
+            row.sync_date;
         }
       });
       return latestMap;
     } catch (e) {
-      console.warn('Error fetching latest syncs from Supabase:', e);
+      console.warn("Error fetching latest syncs from Supabase:", e);
       return {};
     }
   },
@@ -180,14 +240,17 @@ export const supabaseService = {
   /**
    * Fetch full sync history log for a single establishment
    */
-  async getHistoryForEstablishment(facilityId: string, limit = 15): Promise<StockSyncRecord[]> {
+  async getHistoryForEstablishment(
+    facilityId: string,
+    limit = 15,
+  ): Promise<StockSyncRecord[]> {
     if (!supabase) return [];
     try {
       const { data, error } = await supabase
-        .from('stock_sync_history')
-        .select('*')
-        .eq('establishment_id', facilityId)
-        .order('sync_date', { ascending: false })
+        .from("stock_sync_history")
+        .select("*")
+        .eq("establishment_id", facilityId)
+        .order("sync_date", { ascending: false })
         .limit(limit);
 
       if (error) throw error;
@@ -207,30 +270,41 @@ export const supabaseService = {
     establishmentName,
     currentStock,
     author,
-    sheetLastUpdateDate
+    sheetLastUpdateDate,
   }: {
     establishmentId: string;
     establishmentName: string;
     currentStock: any[];
     author: string;
     sheetLastUpdateDate?: string;
-  }): Promise<{ success: boolean; record?: StockSyncRecord; hasChangesSinceLast: boolean; message?: string }> {
+  }): Promise<{
+    success: boolean;
+    record?: StockSyncRecord;
+    hasChangesSinceLast: boolean;
+    message?: string;
+  }> {
     if (!supabase) {
-      return { success: false, hasChangesSinceLast: false, message: 'Supabase client not configured.' };
+      return {
+        success: false,
+        hasChangesSinceLast: false,
+        message: "Supabase client not configured.",
+      };
     }
 
     try {
       const stockHash = computeStockHash(currentStock);
-      
+
       // Determine the sync_date to use based on the sheet's actual last update time if provided
-      const finalSyncDate = sheetLastUpdateDate ? new Date(sheetLastUpdateDate).toISOString() : new Date().toISOString();
+      const finalSyncDate = sheetLastUpdateDate
+        ? new Date(sheetLastUpdateDate).toISOString()
+        : new Date().toISOString();
 
       // 1. Get the last record for this establishment from Supabase
       const { data: previousRecords, error: prevError } = await supabase
-        .from('stock_sync_history')
-        .select('*')
-        .eq('establishment_id', establishmentId)
-        .order('sync_date', { ascending: false })
+        .from("stock_sync_history")
+        .select("*")
+        .eq("establishment_id", establishmentId)
+        .order("sync_date", { ascending: false })
         .limit(1);
 
       if (prevError) throw prevError;
@@ -238,31 +312,87 @@ export const supabaseService = {
       const latestRecord = previousRecords && previousRecords[0];
       let hasChanges = false;
       let changedCount = 0;
-      let diffJson = '[]';
+      let diffJson = "[]";
 
-      const totalStock = currentStock.reduce((sum, item) => sum + (Number(item.Saldo !== undefined ? item.Saldo : (item.Saldo_Fisico || item.Stock || 0)) || 0), 0);
-      const totalValue = currentStock.reduce((sum, item) => sum + ((Number(item.Saldo !== undefined ? item.Saldo : (item.Saldo_Fisico || item.Stock || 0)) || 0) * (Number(item.Precio_Det || item.Precio_Cab || item.Precio || 0)) || 0), 0);
+      const totalStock = currentStock.reduce(
+        (sum, item) =>
+          sum +
+          (Number(
+            item.Saldo !== undefined
+              ? item.Saldo
+              : item.Saldo_Fisico || item.Stock || 0,
+          ) || 0),
+        0,
+      );
+      const totalValue = currentStock.reduce(
+        (sum, item) =>
+          sum +
+          ((Number(
+            item.Saldo !== undefined
+              ? item.Saldo
+              : item.Saldo_Fisico || item.Stock || 0,
+          ) || 0) *
+            Number(item.Precio_Det || item.Precio_Cab || item.Precio || 0) ||
+            0),
+        0,
+      );
 
       // Create a lightweight snapshot of current items to allow diffing on the next sync
-      const currentItemsSnapshot: Record<string, { name: string, qty: number, codigo?: string, lote?: string, vto?: string }> = {};
-      currentStock.forEach(item => {
-          const codSismed = String(item.ID_Producto || item.Codigo_Sismed || item.CODIGO_SISMED || item.CODIGO_SIG || item.Codigo || item.ID || item.Id || 'UNKNOWN');
-          const nombre = String(item.Nombre || item.Descripcion || item.Medicamento || 'UNKNOWN');
-          const lote = String(item.Lote || 'N/A');
-          const vto = String(item.Fec_Vencim || item.Fecha_Vencimiento || item.Vencimiento || 'N/A');
-          const tipsum = String(item.TIPSUM || 'N/A');
-          const ffinan = String(item.FFINAN || 'N/A');
-          
-          const itemId = `${codSismed}|${nombre}|${lote}|${vto}|${tipsum}|${ffinan}`;
-          const itemQty = Number(item.Saldo !== undefined ? item.Saldo : (item.Saldo_Fisico || item.Stock || 0)) || 0;
-          currentItemsSnapshot[itemId] = { name: nombre, qty: itemQty, codigo: codSismed, lote, vto };
+      const currentItemsSnapshot: Record<
+        string,
+        {
+          name: string;
+          qty: number;
+          codigo?: string;
+          lote?: string;
+          vto?: string;
+        }
+      > = {};
+      currentStock.forEach((item) => {
+        const codSismed = String(
+          item.ID_Producto ||
+            item.Codigo_Sismed ||
+            item.CODIGO_SISMED ||
+            item.CODIGO_SIG ||
+            item.Codigo ||
+            item.ID ||
+            item.Id ||
+            "UNKNOWN",
+        );
+        const nombre = String(
+          item.Nombre || item.Descripcion || item.Medicamento || "UNKNOWN",
+        );
+        const lote = String(item.Lote || "N/A");
+        const vto = String(
+          item.Fec_Vencim ||
+            item.Fecha_Vencimiento ||
+            item.Vencimiento ||
+            "N/A",
+        );
+        const tipsum = String(item.TIPSUM || "N/A");
+        const ffinan = String(item.FFINAN || "N/A");
+
+        const itemId = `${codSismed}|${nombre}|${lote}|${vto}|${tipsum}|${ffinan}`;
+        const itemQty =
+          Number(
+            item.Saldo !== undefined
+              ? item.Saldo
+              : item.Saldo_Fisico || item.Stock || 0,
+          ) || 0;
+        currentItemsSnapshot[itemId] = {
+          name: nombre,
+          qty: itemQty,
+          codigo: codSismed,
+          lote,
+          vto,
+        };
       });
 
       const metadataObj: any = {
         total_stock: totalStock,
         total_value: totalValue,
         changes: [],
-        items_snapshot: currentItemsSnapshot
+        items_snapshot: currentItemsSnapshot,
       };
 
       if (!latestRecord) {
@@ -272,61 +402,114 @@ export const supabaseService = {
       } else {
         // Compare with the previous recorded state
         hasChanges = latestRecord.stock_hash !== stockHash;
-        
+
         // If the sheet's update date is identical to the latest record's sync date AND there are no changes,
         // it means the Desktop app hasn't pushed anything new to the sheet since our last check.
         // We shouldn't record a useless duplicate log.
         if (!hasChanges && latestRecord.sync_date === finalSyncDate) {
-             return { success: true, record: latestRecord, hasChangesSinceLast: false, message: 'Skipped - exact same sheet state and timestamp.' };
+          return {
+            success: true,
+            record: latestRecord,
+            hasChangesSinceLast: false,
+            message: "Skipped - exact same sheet state and timestamp.",
+          };
         }
 
         if (hasChanges) {
           try {
-            let previousSnapshot: Record<string, { name: string, qty: number, codigo?: string, lote?: string, vto?: string }> = {};
-            if (latestRecord.changes_metadata) {
-                const prevMeta = JSON.parse(latestRecord.changes_metadata);
-                if (prevMeta && prevMeta.items_snapshot) {
-                    previousSnapshot = prevMeta.items_snapshot;
-                }
+            let previousSnapshot: Record<
+              string,
+              {
+                name: string;
+                qty: number;
+                codigo?: string;
+                lote?: string;
+                vto?: string;
+              }
+            > = {};
+            if (latestRecord && latestRecord.changes_metadata) {
+              const prevMeta = JSON.parse(latestRecord.changes_metadata);
+              if (prevMeta && prevMeta.items_snapshot) {
+                previousSnapshot = prevMeta.items_snapshot;
+              }
             }
 
             // Calculate diff
             const detailedChanges: any[] = [];
-            
+
             // Only calculate detailed diff if we have a valid previous snapshot
             if (Object.keys(previousSnapshot).length > 0) {
-                // Check for modified or added items
-                for (const [id, currentData] of Object.entries(currentItemsSnapshot)) {
-                    const prevData = previousSnapshot[id];
-                    if (!prevData) {
-                        if (currentData.qty !== 0) { // Only push if actual change
-                            detailedChanges.push({ id, name: currentData.name, codigo: currentData.codigo, lote: currentData.lote, vto: currentData.vto, previousQty: 0, currentQty: currentData.qty, change: currentData.qty });
-                        }
-                    } else if (prevData.qty !== currentData.qty) {
-                        detailedChanges.push({ id, name: currentData.name, codigo: currentData.codigo, lote: currentData.lote, vto: currentData.vto, previousQty: prevData.qty, currentQty: currentData.qty, change: currentData.qty - prevData.qty });
-                    }
+              // Check for modified or added items
+              for (const [id, currentData] of Object.entries(
+                currentItemsSnapshot,
+              )) {
+                const prevData = previousSnapshot[id];
+                if (!prevData) {
+                  if (currentData.qty !== 0) {
+                    // Only push if actual change
+                    detailedChanges.push({
+                      id,
+                      name: currentData.name,
+                      codigo: currentData.codigo,
+                      lote: currentData.lote,
+                      vto: currentData.vto,
+                      previousQty: 0,
+                      currentQty: currentData.qty,
+                      change: currentData.qty,
+                    });
+                  }
+                } else if (prevData.qty !== currentData.qty) {
+                  detailedChanges.push({
+                    id,
+                    name: currentData.name,
+                    codigo: currentData.codigo,
+                    lote: currentData.lote,
+                    vto: currentData.vto,
+                    previousQty: prevData.qty,
+                    currentQty: currentData.qty,
+                    change: currentData.qty - prevData.qty,
+                  });
                 }
-                
-                // Check for removed/zeroed items
-                for (const [id, prevData] of Object.entries(previousSnapshot)) {
-                    if (!currentItemsSnapshot[id]) {
-                        if (prevData.qty !== 0) { // Only push if it actually dropped from a non-zero value
-                            detailedChanges.push({ id, name: prevData.name, codigo: prevData.codigo, lote: prevData.lote, vto: prevData.vto, previousQty: prevData.qty, currentQty: 0, change: -prevData.qty });
-                        }
-                    }
-                }
-                
-                metadataObj.changes = detailedChanges;
-                changedCount = detailedChanges.length > 0 ? detailedChanges.length : 1; 
-            } else {
-                // We have changes (hash differs) but we don't have a previous snapshot to compare against
-                changedCount = 1;
-            }
+              }
 
+              // Check for removed/zeroed items
+              for (const [id, prevData] of Object.entries(previousSnapshot)) {
+                if (!currentItemsSnapshot[id]) {
+                  if (prevData.qty !== 0) {
+                    // Only push if it actually dropped from a non-zero value
+                    detailedChanges.push({
+                      id,
+                      name: prevData.name,
+                      codigo: prevData.codigo,
+                      lote: prevData.lote,
+                      vto: prevData.vto,
+                      previousQty: prevData.qty,
+                      currentQty: 0,
+                      change: -prevData.qty,
+                    });
+                  }
+                }
+              }
+
+              metadataObj.changes = detailedChanges;
+              changedCount =
+                detailedChanges.length > 0 ? detailedChanges.length : 1;
+            } else {
+              changedCount = 1;
+            }
           } catch (e) {
             console.warn("Failed to compute detailed diff", e);
             changedCount = 1;
           }
+        } else {
+          // IF THERE ARE NO CHANGES, WE DO NOT RECORD ANYTHING IN SUPABASE.
+          // This ensures our database ONLY holds actual movements.
+          return {
+            success: true,
+            record: latestRecord,
+            hasChangesSinceLast: false,
+            message: "No hay cambios en el stock. No se agregó registro.",
+          };
         }
       }
 
@@ -339,27 +522,54 @@ export const supabaseService = {
         stock_hash: stockHash,
         has_changes: hasChanges,
         changed_items_count: hasChanges ? changedCount : 0,
-        sync_author: author || 'Sistema',
-        changes_metadata: JSON.stringify(metadataObj)
+        sync_author: author || "Sistema",
+        changes_metadata: JSON.stringify(metadataObj).replace(/\u0000/g, ""), // remove null bytes for postgres
       };
 
       // 3. Write to Supabase table
-      const { data: inserted, error: insertError } = await supabase
-        .from('stock_sync_history')
-        .insert([payload])
-        .select();
+      let inserted;
+      try {
+        const { data, error } = await supabase
+          .from("stock_sync_history")
+          .insert([payload])
+          .select();
 
-      if (insertError) throw insertError;
+        if (error) throw error;
+        inserted = data;
+      } catch (insertError: any) {
+        console.warn(
+          `Error inserting full payload for ${establishmentId}, retrying without metadata:`,
+          insertError,
+        );
+        // If insert fails (e.g. metadata too large or invalid chars remaining), fallback to no metadata
+        payload.changes_metadata = undefined;
+        const { data, error } = await supabase
+          .from("stock_sync_history")
+          .insert([payload])
+          .select();
+
+        if (error) throw error;
+        inserted = data;
+      }
 
       return {
         success: true,
         record: inserted ? inserted[0] : payload,
         hasChangesSinceLast: hasChanges,
-        message: hasChanges ? 'Snapshot registrado (Se detectaron cambios de stock).' : 'Snapshot registrado (Sin cambios en el stock).'
+        message: hasChanges
+          ? "Snapshot registrado (Se detectaron cambios de stock)."
+          : "Snapshot registrado (Sin cambios en el stock).",
       };
     } catch (e: any) {
-      console.error('Error registering sync in Supabase:', e);
+      console.error(
+        "CRITICAL Error registering sync in Supabase for " +
+          establishmentId +
+          ":",
+        e,
+      );
+      // Even if there's a critical error (like network down), we don't want the UI to hang on "Sin verificar" forever
+      // if we at least read the local sheet correctly. But returning success: false is appropriate.
       return { success: false, hasChangesSinceLast: false, message: e.message };
     }
-  }
+  },
 };
