@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   // IMPORTANTE: Esto debe coincidir con el nombre de tu repositorio en GitHub
-  base: '/AuraPharmacy/', 
+  base: '/ToolkitSISMED/', 
   build: {
     outDir: 'dist',
     sourcemap: false,
