@@ -3332,11 +3332,23 @@ export const SheetSearchModule: React.FC = () => {
                                   <button
                                     key={sheet.id}
                                     onClick={() => handleSelectSheet(sheet.id)}
-                                    className="group relative bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer"
+                                    className="group relative bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer overflow-hidden"
                                   >
+                                    {lastGlobalSync === null && (isLoading || isSilentSyncing) && (
+                                      <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
+                                        <div className="flex flex-col items-center gap-1.5 p-4">
+                                          <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
+                                            <RefreshCw className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin text-teal-600" />
+                                          </div>
+                                          <span className="text-[9.5px] sm:text-[10.5px] font-black text-teal-700 uppercase tracking-widest text-center">
+                                            Actualizando...
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
                                     <div className="hidden sm:flex absolute top-4 right-4 sm:top-6 sm:right-6 flex-col gap-1.5 items-end z-10 p-1">
                                       {renderSyncStatusPill(
-                                        sheet.lastUpdateTime,
+                                        sheet.lastUpdateTime
                                       )}
                                       {expiredCount > 0 && (
                                         <div
@@ -3646,6 +3658,18 @@ export const SheetSearchModule: React.FC = () => {
                                     onClick={() => handleSelectSheet(sheet.id)}
                                     className="group relative bg-white border border-gray-200 p-4 sm:p-5 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left w-full cursor-pointer overflow-hidden"
                                   >
+                                    {lastGlobalSync === null && (isLoading || isSilentSyncing) && (
+                                      <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
+                                        <div className="flex flex-col items-center gap-1.5 p-4">
+                                          <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
+                                            <RefreshCw className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin text-teal-600" />
+                                          </div>
+                                          <span className="text-[9.5px] sm:text-[10.5px] font-black text-teal-700 uppercase tracking-widest text-center">
+                                            Actualizando...
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
                                     <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-4 w-full">
                                       {/* Column 1: Hospital Info & Status (Flexible width) */}
                                       <div className="flex items-center gap-3 md:gap-4 flex-[1_1_240px] min-w-[200px]">
@@ -3824,8 +3848,20 @@ export const SheetSearchModule: React.FC = () => {
                                   <button
                                     key={sheet.id}
                                     onClick={() => handleSelectSheet(sheet.id)}
-                                    className="group relative bg-white border border-gray-200 p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col justify-between h-full min-h-[175px] cursor-pointer"
+                                    className="group relative bg-white border border-gray-200 p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col justify-between h-full min-h-[175px] cursor-pointer overflow-hidden"
                                   >
+                                    {lastGlobalSync === null && (isLoading || isSilentSyncing) && (
+                                      <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
+                                        <div className="flex flex-col items-center gap-1.5 p-4">
+                                          <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
+                                            <RefreshCw className="h-4 w-4 animate-spin text-teal-600" />
+                                          </div>
+                                          <span className="text-[9px] font-black text-teal-700 uppercase tracking-widest text-center">
+                                            Actualizando...
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
                                     <div className="w-full">
                                       {/* Compact Top Row: SISMED code with Establishment style icon, and stats/status dot on the right */}
                                       <div className="flex items-center justify-between mb-3.5">
@@ -3944,6 +3980,18 @@ export const SheetSearchModule: React.FC = () => {
                             <div
                               className={`bg-white rounded-2xl border border-slate-200/50 relative overflow-hidden ${isTableFullscreen ? "shadow-lg border-slate-200/60 m-1 sm:m-2" : "shadow-sm animate-in fade-in duration-200"}`}
                             >
+                              {lastGlobalSync === null && (isLoading || isSilentSyncing) && (
+                                <div className="absolute inset-0 bg-white/85 backdrop-blur-[1.5px] flex flex-col items-center justify-center z-30 transition-all duration-300">
+                                  <div className="flex flex-col items-center gap-2 p-6">
+                                    <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl shrink-0 shadow-xs">
+                                      <RefreshCw className="h-6 w-6 animate-spin text-teal-600" />
+                                    </div>
+                                    <span className="text-xs font-black text-teal-700 uppercase tracking-widest text-center">
+                                      Actualizando listado de establecimientos...
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
                               <div className="overflow-auto scrollbar-thin">
                                 <table className="min-w-full divide-y divide-slate-100 text-left font-sans">
                                   <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-wider shadow-[0_1px_0_0_rgba(226,232,240,0.8)]">
