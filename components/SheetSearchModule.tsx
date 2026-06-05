@@ -584,7 +584,7 @@ export const SheetSearchModule: React.FC = () => {
     titleCell.alignment = { horizontal: "center", vertical: "middle" };
     ws.getRow(1).height = 40;
 
-    // Fila 2: En blanco para espaciado
+    // Filas 2: En blanco para espaciado
     ws.addRow([]);
     ws.getRow(2).height = 12;
 
