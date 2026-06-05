@@ -4149,6 +4149,12 @@ export const SheetSearchModule: React.FC = () => {
                                       </th>
                                       <th
                                         scope="col"
+                                        className="px-5 py-3 font-black text-center sticky top-0 bg-slate-50 z-10 text-slate-500 uppercase tracking-wider"
+                                      >
+                                        <span>Últimos Movimientos</span>
+                                      </th>
+                                      <th
+                                        scope="col"
                                         className="px-5 py-3 font-black text-center sticky top-0 bg-slate-50 z-10"
                                       >
                                         <button
@@ -4338,6 +4344,38 @@ export const SheetSearchModule: React.FC = () => {
                                               </span>
                                               {statusObj.label}
                                             </span>
+                                          </td>
+                                          <td className="px-5 py-3 whitespace-nowrap text-center">
+                                            {(() => {
+                                              const syncRecord =
+                                                supabaseSyncs[sheet.id];
+                                              if (!syncRecord) {
+                                                return (
+                                                  <span className="text-[10px] font-bold text-slate-400">
+                                                    -
+                                                  </span>
+                                                );
+                                              }
+                                              return (
+                                                <div
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleShowSyncHistory(
+                                                      sheet.id,
+                                                      sheet.name,
+                                                    );
+                                                  }}
+                                                  className="inline-flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                                                  title={`Último cambio: ${new Date(syncRecord.sync_date).toLocaleString("es-PE")}`}
+                                                >
+                                                  {renderSyncStatusPill(
+                                                    new Date(
+                                                      syncRecord.sync_date,
+                                                    ).getTime(),
+                                                  )}
+                                                </div>
+                                              );
+                                            })()}
                                           </td>
                                           <td className="px-5 py-3 text-center whitespace-nowrap">
                                             <div className="flex items-center justify-center gap-1.5">
