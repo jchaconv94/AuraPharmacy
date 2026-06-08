@@ -15,6 +15,7 @@ import {
   Copy,
   X,
   Plus,
+  Minus,
   Trash2,
   Building2,
   ChevronRight,
@@ -180,6 +181,108 @@ const getUpdateStatus = (timestamp?: number) => {
     label: `Hace ${days}d ${hrs}h`,
     fullLabel: `Hace ${days} día${days !== 1 ? "s" : ""} ${hrs} hora${hrs !== 1 ? "s" : ""}`,
   };
+};
+
+const renderRangeFilter = (
+  unit: "hours" | "days", setUnit: React.Dispatch<React.SetStateAction<"hours" | "days">>,
+  value: number, setValue: React.Dispatch<React.SetStateAction<number>>,
+  condition: "with" | "without", setCondition: React.Dispatch<React.SetStateAction<"with" | "without">>,
+  title: string,
+  onConditionLabel: string = "ACTUALIZADO",
+  offConditionLabel: string = "NO ACTUALIZADO",
+  onConditionFullLabel: string = "ACTUALIZADOS",
+  offConditionFullLabel: string = "NO ACTUALIZADOS"
+) => {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+           <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+           <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">{title}</h4>
+        </div>
+        <div className="flex flex-col gap-4 w-full pl-3.5 border-l-2 border-slate-100">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex rounded-lg border border-slate-200 bg-slate-100 overflow-hidden shadow-sm shadow-slate-200/50 p-1 w-full sm:w-auto">
+                  <button 
+                    type="button" 
+                    onClick={() => { setUnit("hours"); if (unit !== "hours") setValue(0); }} 
+                    className={`flex-1 px-4 py-1.5 min-w-[80px] text-[10px] font-black rounded-md transition-all ${unit === "hours" ? "bg-white text-teal-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
+                  >HORAS</button>
+                  <button 
+                    type="button" 
+                    onClick={() => { setUnit("days"); if (unit !== "days") setValue(0); }} 
+                    className={`flex-1 px-4 py-1.5 min-w-[80px] text-[10px] font-black rounded-md transition-all ${unit === "days" ? "bg-white text-teal-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
+                  >DÍAS</button>
+                </div>
+                
+                <div className="flex rounded-lg border border-slate-200 bg-slate-100 overflow-hidden shadow-sm shadow-slate-200/50 p-1 w-full sm:w-auto transition-all duration-300">
+                  <button 
+                    type="button" 
+                    onClick={() => setCondition("with")} 
+                    className={`flex-1 px-4 py-1.5 text-[10px] font-black tracking-tight rounded-md transition-all whitespace-nowrap ${condition === "with" ? "bg-white text-blue-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
+                  >{onConditionLabel}</button>
+                  <button 
+                    type="button" 
+                    onClick={() => setCondition("without")} 
+                    className={`flex-1 px-4 py-1.5 text-[10px] font-black tracking-tight rounded-md transition-all whitespace-nowrap ${condition === "without" ? "bg-white text-blue-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
+                  >{offConditionLabel}</button>
+                </div>
+            </div>
+
+            <div className="pt-5 pb-1 flex items-center gap-4 group">
+               <div className="flex-1 relative">
+                 <div className="absolute -top-7 left-0 w-full text-center pointer-events-none">
+                    <span className={`text-[10px] font-bold uppercase tracking-widest bg-white px-2.5 py-1 rounded-full border shadow-sm transition-all transform duration-300 ${value > 0 ? 'text-blue-600 border-blue-100 shadow-blue-100/50 -translate-y-1 opacity-100' : 'text-slate-400 border-slate-100 translate-y-0 opacity-0 group-hover:-translate-y-1 group-hover:opacity-100'}`}>
+                        {value === 0 ? "Filtro desactivado" : `${value} ${unit === "hours" ? "Hora" + (value !== 1 ? "s" : "") : "Día" + (value !== 1 ? "s" : "")}`}
+                    </span>
+                 </div>
+                 
+                 <div className="flex items-center gap-3">
+                   <button
+                     type="button"
+                     onClick={() => setValue(Math.max(0, value - 1))}
+                     className="p-1 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 shrink-0 shadow-sm bg-white border border-slate-200/60"
+                   >
+                     <Minus className="h-4 w-4" />
+                   </button>
+                   
+                   <input 
+                     type="range" 
+                     min="0" 
+                     max={unit === "hours" ? 23 : 30} 
+                     step="1"
+                     value={value} 
+                     onChange={(e) => setValue(parseInt(e.target.value))} 
+                     className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 hover:h-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20" 
+                   />
+                   
+                   <button
+                     type="button"
+                     onClick={() => setValue(Math.min(unit === "hours" ? 23 : 30, value + 1))}
+                     className="p-1 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 shrink-0 shadow-sm bg-white border border-slate-200/60"
+                   >
+                     <Plus className="h-4 w-4" />
+                   </button>
+                 </div>
+                 
+                 <div className="flex justify-between text-[10px] font-extrabold text-slate-400/80 tracking-wide uppercase px-8 select-none mt-2">
+                   <span>Todos</span>
+                   <span>{unit === "hours" ? "23 Horas" : "30 Días"}</span>
+                 </div>
+               </div>
+            </div>
+            
+            {value > 0 && (
+              <div className="-mt-1 flex justify-center animate-in fade-in zoom-in duration-300">
+                <div className="text-center text-[10px] font-bold text-blue-700 bg-blue-50/80 py-1.5 px-3 rounded-md border border-blue-100 shadow-xs">
+                  Establecimientos {condition === "with" ? onConditionFullLabel.toLowerCase() : offConditionFullLabel.toLowerCase()} hace {value} {unit === "hours" ? (value === 1 ? "hora" : "horas") : (value === 1 ? "día" : "días")}
+                </div>
+              </div>
+            )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const renderSyncStatusPill = (timestamp?: number) => {
@@ -451,15 +554,16 @@ export const SheetSearchModule: React.FC = () => {
   const [filterSortOrder, setFilterSortOrder] = useState<string>("name_asc");
   const [filterHasPendingExpirations, setFilterHasPendingExpirations] =
     useState<boolean>(false);
-  const [filterDateLimit, setFilterDateLimit] = useState<
-    "all" | "1h" | "12h" | "24h" | "3d" | "7d"
-  >("all");
+  const [filterDateUnit, setFilterDateUnit] = useState<"hours" | "days">("hours");
+  const [filterDateValue, setFilterDateValue] = useState<number>(0);
+  const [filterDateCondition, setFilterDateCondition] = useState<"with" | "without">("with");
+
+  const [filterMovementsUnit, setFilterMovementsUnit] = useState<"hours" | "days">("hours");
+  const [filterMovementsValue, setFilterMovementsValue] = useState<number>(0);
+  const [filterMovementsCondition, setFilterMovementsCondition] = useState<"with" | "without">("with");
 
   // Estados para dropdowns de filtros personalizados
-  const [isDateLimitDropdownOpen, setIsDateLimitDropdownOpen] = useState(false);
   const [isSortOrderDropdownOpen, setIsSortOrderDropdownOpen] = useState(false);
-  const [isExportDateLimitDropdownOpen, setIsExportDateLimitDropdownOpen] =
-    useState(false);
 
   // Navigation hierarchy
   const [viewLevel, setViewLevel] = useState<"ungets" | "sheets" | "data">(
@@ -735,9 +839,9 @@ export const SheetSearchModule: React.FC = () => {
   const [exportRed, setExportRed] = useState(true);
   const [exportGray, setExportGray] = useState(true);
 
-  const [exportDateLimit, setExportDateLimit] = useState<
-    "all" | "1h" | "12h" | "24h" | "3d" | "7d"
-  >("all");
+  const [exportDateUnit, setExportDateUnit] = useState<"hours" | "days">("hours");
+  const [exportDateValue, setExportDateValue] = useState<number>(0);
+  const [exportDateCondition, setExportDateCondition] = useState<"with" | "without">("with");
   const [exportHasPendingExpirations, setExportHasPendingExpirations] =
     useState<boolean>(false);
   const [exportScope, setExportScope] = useState<"single" | "all">("single");
@@ -1396,7 +1500,9 @@ export const SheetSearchModule: React.FC = () => {
     setExportGray(filter_gray);
 
     setExportHasPendingExpirations(filterHasPendingExpirations);
-    setExportDateLimit(filterDateLimit);
+    setExportDateUnit(filterDateUnit);
+    setExportDateValue(filterDateValue);
+    setExportDateCondition(filterDateCondition);
 
     setIsExportOptionsModalOpen(true);
   };
@@ -1423,17 +1529,19 @@ export const SheetSearchModule: React.FC = () => {
       if (colorValue === "bg-gray-400" && !exportGray) return false;
 
       // Date limit filter
-      if (exportDateLimit !== "all") {
-        if (!s.lastUpdateTime) return false;
-        const now = new Date().getTime();
-        const diffMs = now - s.lastUpdateTime;
-        const diffHours = diffMs / (1000 * 60 * 60);
+      if (exportDateValue > 0) {
+        let diffHours = Infinity;
+        if (s.lastUpdateTime) {
+          const now = new Date().getTime();
+          const diffMs = now - s.lastUpdateTime;
+          diffHours = diffMs / (1000 * 60 * 60);
+        }
 
-        if (exportDateLimit === "1h" && diffHours > 1) return false;
-        if (exportDateLimit === "12h" && diffHours > 12) return false;
-        if (exportDateLimit === "24h" && diffHours > 24) return false;
-        if (exportDateLimit === "3d" && diffHours > 72) return false;
-        if (exportDateLimit === "7d" && diffHours > 168) return false;
+        const maxHours = exportDateUnit === "hours" ? exportDateValue : exportDateValue * 24;
+        const isWithinLimit = diffHours <= maxHours;
+
+        if (exportDateCondition === "with" && !isWithinLimit) return false;
+        if (exportDateCondition === "without" && isWithinLimit) return false;
       }
 
       return true;
@@ -1451,7 +1559,9 @@ export const SheetSearchModule: React.FC = () => {
     exportAmber,
     exportRed,
     exportGray,
-    exportDateLimit,
+    exportDateUnit,
+    exportDateValue,
+    exportDateCondition,
   ]);
 
   const executeExportAllEstablishmentsToExcel = () => {
@@ -1478,18 +1588,19 @@ export const SheetSearchModule: React.FC = () => {
       if (colorValue === "bg-gray-400" && !exportGray) return false;
 
       // Date limit filter
-      if (exportDateLimit !== "all") {
-        if (!s.lastUpdateTime) return false;
+      if (exportDateValue > 0) {
+        let diffHours = Infinity;
+        if (s.lastUpdateTime) {
+          const now = new Date().getTime();
+          const diffMs = now - s.lastUpdateTime;
+          diffHours = diffMs / (1000 * 60 * 60);
+        }
 
-        const now = new Date().getTime();
-        const diffMs = now - s.lastUpdateTime;
-        const diffHours = diffMs / (1000 * 60 * 60);
+        const maxHours = exportDateUnit === "hours" ? exportDateValue : exportDateValue * 24;
+        const isWithinLimit = diffHours <= maxHours;
 
-        if (exportDateLimit === "1h" && diffHours > 1) return false;
-        if (exportDateLimit === "12h" && diffHours > 12) return false;
-        if (exportDateLimit === "24h" && diffHours > 24) return false;
-        if (exportDateLimit === "3d" && diffHours > 72) return false;
-        if (exportDateLimit === "7d" && diffHours > 168) return false;
+        if (exportDateCondition === "with" && !isWithinLimit) return false;
+        if (exportDateCondition === "without" && isWithinLimit) return false;
       }
 
       return true;
@@ -1594,7 +1705,9 @@ export const SheetSearchModule: React.FC = () => {
     setExportGray(filter_gray);
 
     setExportHasPendingExpirations(filterHasPendingExpirations);
-    setExportDateLimit(filterDateLimit);
+    setExportDateUnit(filterDateUnit);
+    setExportDateValue(filterDateValue);
+    setExportDateCondition(filterDateCondition);
 
     setIsExportOptionsModalOpen(true);
   };
@@ -1948,17 +2061,36 @@ export const SheetSearchModule: React.FC = () => {
       if (colorValue === "bg-gray-400" && !filter_gray) return false;
 
       // Date limit filter
-      if (filterDateLimit !== "all") {
-        if (!s.lastUpdateTime) return false;
-        const now = new Date().getTime();
-        const diffMs = now - s.lastUpdateTime;
-        const diffHours = diffMs / (1000 * 60 * 60);
+      if (filterDateValue > 0) {
+        let diffHours = Infinity;
+        if (s.lastUpdateTime) {
+          const now = new Date().getTime();
+          const diffMs = now - s.lastUpdateTime;
+          diffHours = diffMs / (1000 * 60 * 60);
+        }
 
-        if (filterDateLimit === "1h" && diffHours > 1) return false;
-        if (filterDateLimit === "12h" && diffHours > 12) return false;
-        if (filterDateLimit === "24h" && diffHours > 24) return false;
-        if (filterDateLimit === "3d" && diffHours > 72) return false;
-        if (filterDateLimit === "7d" && diffHours > 168) return false;
+        const maxHours = filterDateUnit === "hours" ? filterDateValue : filterDateValue * 24;
+        const isWithinLimit = diffHours <= maxHours;
+
+        if (filterDateCondition === "with" && !isWithinLimit) return false;
+        if (filterDateCondition === "without" && isWithinLimit) return false;
+      }
+
+      // Movements limit filter
+      if (filterMovementsValue > 0) {
+        const syncRecord = supabaseSyncs[s.id];
+        let diffHours = Infinity;
+        if (syncRecord && syncRecord.sync_date) {
+            const now = new Date().getTime();
+            const diffMs = now - new Date(syncRecord.sync_date).getTime();
+            diffHours = diffMs / (1000 * 60 * 60);
+        }
+
+        const maxHours = filterMovementsUnit === "hours" ? filterMovementsValue : filterMovementsValue * 24;
+        const isWithinLimit = diffHours <= maxHours;
+
+        if (filterMovementsCondition === "with" && !isWithinLimit) return false;
+        if (filterMovementsCondition === "without" && isWithinLimit) return false;
       }
 
       // Expiration filter
@@ -2089,7 +2221,13 @@ export const SheetSearchModule: React.FC = () => {
     filter_gray,
     filterSortOrder,
     filterHasPendingExpirations,
-    filterDateLimit,
+    filterDateUnit,
+    filterDateValue,
+    filterDateCondition,
+    filterMovementsUnit,
+    filterMovementsValue,
+    filterMovementsCondition,
+    supabaseSyncs,
   ]);
 
   const establishmentSummary = useMemo(() => {
@@ -2749,7 +2887,9 @@ export const SheetSearchModule: React.FC = () => {
                         !filter_red ||
                         !filter_gray ||
                         filterSortOrder !== "name_asc" ||
-                        filterHasPendingExpirations) && (
+                        filterHasPendingExpirations ||
+                        filterDateValue > 0 ||
+                        filterMovementsValue > 0) && (
                         <span className="absolute top-0 right-0 -mr-1 -mt-1 w-2.5 h-2.5 bg-teal-500 rounded-full border-2 border-white animate-pulse" />
                       )}
                     </button>
@@ -3306,7 +3446,12 @@ export const SheetSearchModule: React.FC = () => {
                               setFilter_gray(true);
                               setFilterSortOrder("name_asc");
                               setFilterHasPendingExpirations(false);
-                              setFilterDateLimit("all");
+                              setFilterDateUnit("hours");
+                              setFilterDateValue(0);
+                              setFilterDateCondition("with");
+                              setFilterMovementsUnit("hours");
+                              setFilterMovementsValue(0);
+                              setFilterMovementsCondition("with");
                             }}
                             className="mt-4 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm"
                           >
@@ -6421,103 +6566,24 @@ export const SheetSearchModule: React.FC = () => {
                   </div>
 
                   {/* Filter Section: Update Date Limit */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
-                      <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                        Antigüedad de Sincronización
-                      </h4>
-                    </div>
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsDateLimitDropdownOpen(!isDateLimitDropdownOpen);
-                          setIsSortOrderDropdownOpen(false);
-                        }}
-                        className="flex items-center justify-between w-full px-4 py-3 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500/15"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <Clock className="h-4 w-4 text-slate-400 shrink-0" />
-                          <span className="text-xs font-extrabold text-slate-700">
-                            {filterDateLimit === "all" &&
-                              "Sincronizados en cualquier fecha (Todos)"}
-                            {filterDateLimit === "1h" &&
-                              "Sincronizado hace menos de 1 hora"}
-                            {filterDateLimit === "12h" &&
-                              "Sincronizado en las últimas 12 horas"}
-                            {filterDateLimit === "24h" &&
-                              "Sincronizado en las últimas 24 horas (Hoy)"}
-                            {filterDateLimit === "3d" &&
-                              "Sincronizado en los últimos 3 días"}
-                            {filterDateLimit === "7d" &&
-                              "Sincronizado en los últimos 7 días"}
-                          </span>
-                        </div>
-                        <ChevronDown
-                          className={`h-4 w-4 text-slate-400 transition-transform duration-250 ${isDateLimitDropdownOpen ? "rotate-180 text-teal-600" : ""}`}
-                        />
-                      </button>
+                  {renderRangeFilter(
+                    filterDateUnit, setFilterDateUnit,
+                    filterDateValue, setFilterDateValue,
+                    filterDateCondition, setFilterDateCondition,
+                    "Antigüedad de Sincronización",
+                    "ACT.", "NO ACT.",
+                    "ACTUALIZADOS", "NO ACTUALIZADOS"
+                  )}
 
-                      {isDateLimitDropdownOpen && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-30"
-                            onClick={() => setIsDateLimitDropdownOpen(false)}
-                          />
-                          <div className="absolute left-0 right-0 bottom-full mb-2 bg-white border border-slate-100 rounded-2xl shadow-[0_-12px_30px_rgba(0,0,0,0.08)] z-40 overflow-hidden divide-y divide-slate-50 py-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                            {[
-                              {
-                                value: "all",
-                                label:
-                                  "Sincronizados en cualquier fecha (Todos)",
-                              },
-                              {
-                                value: "1h",
-                                label: "Sincronizado hace menos de 1 hora",
-                              },
-                              {
-                                value: "12h",
-                                label: "Sincronizado en las últimas 12 horas",
-                              },
-                              {
-                                value: "24h",
-                                label:
-                                  "Sincronizado en las últimas 24 horas (Hoy)",
-                              },
-                              {
-                                value: "3d",
-                                label: "Sincronizado en los últimos 3 días",
-                              },
-                              {
-                                value: "7d",
-                                label: "Sincronizado en los últimos 7 días",
-                              },
-                            ].map((option) => (
-                              <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => {
-                                  setFilterDateLimit(option.value as any);
-                                  setIsDateLimitDropdownOpen(false);
-                                }}
-                                className={`flex items-center justify-between w-full px-4 py-3 text-left text-xs font-extrabold transition-all cursor-pointer ${
-                                  filterDateLimit === option.value
-                                    ? "bg-teal-50/65 text-teal-950 font-black"
-                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                                }`}
-                              >
-                                <span>{option.label}</span>
-                                {filterDateLimit === option.value && (
-                                  <Check className="h-3.5 w-3.5 text-teal-600 stroke-[3]" />
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
+                  {/* Filter Section: Movements Date Limit */}
+                  {renderRangeFilter(
+                    filterMovementsUnit, setFilterMovementsUnit,
+                    filterMovementsValue, setFilterMovementsValue,
+                    filterMovementsCondition, setFilterMovementsCondition,
+                    "Antigüedad de Últimos Movimientos",
+                    "CON MOV.", "SIN MOV.",
+                    "CON MOVIMIENTOS", "SIN MOVIMIENTOS"
+                  )}
 
                   {/* Filter Section: Sorting */}
                   <div className="space-y-3">
@@ -6532,7 +6598,6 @@ export const SheetSearchModule: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setIsSortOrderDropdownOpen(!isSortOrderDropdownOpen);
-                          setIsDateLimitDropdownOpen(false);
                         }}
                         className="flex items-center justify-between w-full px-4 py-3 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500/15"
                       >
@@ -6682,7 +6747,12 @@ export const SheetSearchModule: React.FC = () => {
                     setFilter_gray(true);
                     setFilterSortOrder("name_asc");
                     setFilterHasPendingExpirations(false);
-                    setFilterDateLimit("all");
+                    setFilterDateUnit("hours");
+                    setFilterDateValue(0);
+                    setFilterDateCondition("with");
+                    setFilterMovementsUnit("hours");
+                    setFilterMovementsValue(0);
+                    setFilterMovementsCondition("with");
                   }
                 }}
                 className="px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 font-extrabold text-[11px] uppercase tracking-wider rounded-xl border border-slate-200 shadow-sm transition-all shrink-0 active:scale-95"
@@ -7124,102 +7194,14 @@ export const SheetSearchModule: React.FC = () => {
               </div>
 
               {/* Section: Update Date Limit */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
-                  <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                    Antigüedad de Sincronización
-                  </h4>
-                </div>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsExportDateLimitDropdownOpen(
-                        !isExportDateLimitDropdownOpen,
-                      );
-                    }}
-                    className="flex items-center justify-between w-full px-4 py-3 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-500/15"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Clock className="h-4 w-4 text-slate-400 shrink-0" />
-                      <span className="text-xs font-extrabold text-slate-700">
-                        {exportDateLimit === "all" &&
-                          "Sincronizados en cualquier fecha (Todos)"}
-                        {exportDateLimit === "1h" &&
-                          "Sincronizado hace menos de 1 hora"}
-                        {exportDateLimit === "12h" &&
-                          "Sincronizado en las últimas 12 horas"}
-                        {exportDateLimit === "24h" &&
-                          "Sincronizado en las últimas 24 horas (Hoy)"}
-                        {exportDateLimit === "3d" &&
-                          "Sincronizado en los últimos 3 días"}
-                        {exportDateLimit === "7d" &&
-                          "Sincronizado en los últimos 7 días"}
-                      </span>
-                    </div>
-                    <ChevronDown
-                      className={`h-4 w-4 text-slate-400 transition-transform duration-250 ${isExportDateLimitDropdownOpen ? "rotate-180 text-teal-600" : ""}`}
-                    />
-                  </button>
-
-                  {isExportDateLimitDropdownOpen && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-30"
-                        onClick={() => setIsExportDateLimitDropdownOpen(false)}
-                      />
-                      <div className="absolute left-0 right-0 bottom-full mb-2 bg-white border border-slate-100 rounded-2xl shadow-[0_-12px_30px_rgba(0,0,0,0.08)] z-40 overflow-hidden divide-y divide-slate-50 py-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                        {[
-                          {
-                            value: "all",
-                            label: "Sincronizados en cualquier fecha (Todos)",
-                          },
-                          {
-                            value: "1h",
-                            label: "Sincronizado hace menos de 1 hora",
-                          },
-                          {
-                            value: "12h",
-                            label: "Sincronizado en las últimas 12 horas",
-                          },
-                          {
-                            value: "24h",
-                            label: "Sincronizado en las últimas 24 horas (Hoy)",
-                          },
-                          {
-                            value: "3d",
-                            label: "Sincronizado en los últimos 3 días",
-                          },
-                          {
-                            value: "7d",
-                            label: "Sincronizado en los últimos 7 días",
-                          },
-                        ].map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => {
-                              setExportDateLimit(option.value as any);
-                              setIsExportDateLimitDropdownOpen(false);
-                            }}
-                            className={`flex items-center justify-between w-full px-4 py-3 text-left text-xs font-extrabold transition-all cursor-pointer ${
-                              exportDateLimit === option.value
-                                ? "bg-teal-50/65 text-teal-950 font-black"
-                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                            }`}
-                          >
-                            <span>{option.label}</span>
-                            {exportDateLimit === option.value && (
-                              <Check className="h-3.5 w-3.5 text-teal-600 stroke-[3]" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
+              {renderRangeFilter(
+                exportDateUnit, setExportDateUnit,
+                exportDateValue, setExportDateValue,
+                exportDateCondition, setExportDateCondition,
+                "Antigüedad de Sincronización",
+                "ACT.", "NO ACT.",
+                "ACTUALIZADOS", "NO ACTUALIZADOS"
+              )}
 
               {/* Section: Expirations filter */}
               <div className="space-y-3">
