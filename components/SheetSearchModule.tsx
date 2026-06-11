@@ -921,7 +921,25 @@ export const SheetSearchModule: React.FC = () => {
       try {
         const remoteConfigs = await api.getUngetConfigs(user.username);
         if (remoteConfigs && remoteConfigs.length > 0) {
-          setScriptUrls(remoteConfigs);
+          let visibleConfigs = remoteConfigs;
+          // Filter if not ADMIN/UNGET so they only see their own facility's URL/sheet
+          if (user.role !== 'ADMIN' && user.role !== 'UNGET' && user.role !== 'DIRESA') {
+             visibleConfigs = remoteConfigs.map((config: any) => {
+                 // For each URL configuration, filter the individual sheets
+                 if (config.sheets && Array.isArray(config.sheets)) {
+                     // Try to match the exact string or code in sheet names
+                     const myFacilitySheets = config.sheets.filter((s: any) => {
+                         const facName = (user.facilityData?.name || '').toUpperCase();
+                         const facCode = (user.facilityData?.code || '').toUpperCase();
+                         const sName = s.name.toUpperCase();
+                         return sName.includes(facName) || sName.includes(facCode) || s.id === facCode;
+                     });
+                     return { ...config, sheets: myFacilitySheets };
+                 }
+                 return config;
+             }).filter((config: any) => config.sheets && config.sheets.length > 0);
+          }
+          setScriptUrls(visibleConfigs);
         } else if (savedUrls) {
           // Si no hay remoto pero sí local, intentar migrar al servidor
           try {
@@ -2818,7 +2836,7 @@ export const SheetSearchModule: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white sm:rounded-[1.25rem] border-y sm:border border-slate-200 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex-1 flex flex-col min-h-[300px] overflow-hidden mx-0 sm:mx-10 lg:mx-14 xl:mx-16">
+      <div className={`bg-white sm:rounded-[1.25rem] border-y sm:border border-slate-200 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden mx-0 sm:mx-10 lg:mx-14 xl:mx-16 ${viewLevel === "data" ? "h-auto shrink-0 mb-8" : "flex-1 min-h-[300px]"}`}>
         {/* TOOLBAR */}
         <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col gap-4">
           {/* Search & Actions */}
@@ -3116,7 +3134,7 @@ export const SheetSearchModule: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="p-4 sm:p-6 pb-32 sm:pb-6 flex flex-col gap-6">
+            <div className={`p-4 sm:p-6 flex flex-col gap-6 ${viewLevel === "data" ? "pb-4 sm:pb-4" : "pb-32 sm:pb-6"}`}>
               {/* LEVEL 1: UNGET CARDS */}
               {viewLevel === "ungets" && (
                 <div className="animate-in fade-in zoom-in-95 duration-300">
@@ -4800,7 +4818,7 @@ export const SheetSearchModule: React.FC = () => {
               {/* LEVEL 3: DATA TABLE */}
               {viewLevel === "data" && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 -mx-4 md:-mx-6 -mt-4 md:-mt-6 font-sans">
-                  <div className="bg-transparent sm:bg-white sm:border-t border-gray-100 overflow-y-auto overflow-x-auto min-h-[500px] md:min-h-[650px] max-h-[600px] md:max-h-[750px] lg:max-h-[850px] custom-scrollbar pb-6 px-4 sm:px-0 pt-4 sm:pt-0 relative block">
+                  <div className="bg-transparent sm:bg-white sm:border-t border-gray-100 overflow-y-auto overflow-x-auto max-h-[calc(100vh-420px)] custom-scrollbar pb-4 px-4 sm:px-0 pt-4 sm:pt-0 relative block">
                     <table className="min-w-full block sm:table">
                       <thead className="hidden sm:table-header-group sticky top-0 z-30 shadow-xs border-b border-slate-200">
                         <tr className="bg-slate-50">

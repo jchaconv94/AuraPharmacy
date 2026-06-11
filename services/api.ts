@@ -1,364 +1,957 @@
+import { User, UserRole, Personnel, HealthFacility, RoleConfig, SystemConfig, Unget, Diresa, Ogess, Microred } from "../types";
+import { supabase } from "./supabaseClient";
+import bcrypt from "bcryptjs";
 
-import { User, UserRole, Personnel, HealthFacility, RoleConfig, SystemConfig } from "../types";
-
-// URL DE ARRANQUE (BOOTSTRAP)
-// Esta URL se usa SOLO para la primera conexión y pedir la configuración.
-// Si cambias el script, puedes actualizar la URL nueva en el Panel de Admin (BD) y la app la usará.
-const BOOTSTRAP_URL = "https://script.google.com/macros/s/AKfycbzxolzhHYg1U2geauXStygZ5ITD8zkOY17MM_4Ylzy6yPvsaXFWCdM4IWTjJUelEee8/exec"; 
-
-// Variable mutable para almacenar la URL activa
-let activeApiUrl = BOOTSTRAP_URL;
-
-// --- CACHÉ EN MEMORIA ---
-// Esto evita llamadas repetitivas a Google Apps Script
-let usersCache: any[] | null = null;
-
-// --- MOCK DATA (Respaldo en caso de error de conexión) ---
+// MOCK DATA (Respaldo en caso de error de conexión/sin supabase)
 const MOCK_DB = {
     users: [
         { username: 'admin', password: '123', role: 'ADMIN', personnelId: 'P001', isActive: true },
         { username: 'farmacia', password: '123', role: 'FARMACIA', personnelId: 'P002', isActive: true },
     ],
     personnel: [
-        { id: 'P001', firstName: 'Aura', lastName: 'Admin', dni: '00000001', facilityCode: '00001', email: 'admin@aura.pe' },
-        { id: 'P002', firstName: 'Juan', lastName: 'Perez', dni: '12345678', facilityCode: '00002', email: 'juan@redsalud.pe' },
+        { id: 'P001', firstName: 'Aura', lastName: 'Admin', dni: '00000001', facilityCode: '00001', email: 'admin@aura.pe', phone: '987654321', laborRegime: 'D.L. 276', laborRegimeId: 'LR-276', professionId: 'PROF-QFAR' },
+        { id: 'P002', firstName: 'Juan', lastName: 'Perez', dni: '12345678', facilityCode: '00002', email: 'juan@redsalud.pe', phone: '912345678', laborRegime: 'D.L. 1057 (CAS)', laborRegimeId: 'LR-1057', professionId: 'PROF-TECF' },
     ],
     facilities: [
         { code: '00001', name: 'DIRESA SEDE CENTRAL', category: 'ADM' },
         { code: '00002', name: 'C.S. MIRAFLORES', category: 'I-3' },
     ],
-    roles: (() => {
-        try {
-            const saved = localStorage.getItem('aura_mock_roles');
-            return saved ? JSON.parse(saved) : [
-                { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 10 },
-                { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 1 }
-            ];
-        } catch (e) {
-            return [
-                { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 10 },
-                { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 1 }
-            ];
-        }
-    })(),
-    // Default System Config (Solo si falla la red totalmente)
+    roles: [
+        { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 10 },
+        { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 1 }
+    ],
+    laborRegimes: [
+        { id: 'LR-276', name: 'D.L. 276', description: 'Sector Público - Régimen de Carrera Administrativa' },
+        { id: 'LR-1057', name: 'D.L. 1057 (CAS)', description: 'Contrato Administrativo de Servicios' },
+        { id: 'LR-1153', name: 'D.L. 1153', description: 'Régimen de Personal de la Salud' },
+        { id: 'LR-728', name: 'D.L. 728', description: 'Régimen de la Actividad Privada' },
+        { id: 'LR-LOC', name: 'Locación de Servicios', description: 'Contratación de Terceros / Locadores' }
+    ],
+    professions: [
+        { id: 'PROF-MED', name: 'Médico Cirujano', description: 'Profesional de la medicina' },
+        { id: 'PROF-QFAR', name: 'Químico Farmacéutico', description: 'Especialista en medicamentos esenciales' },
+        { id: 'PROF-ENF', name: 'Lic. Enfermería', description: 'Cuidado quirúrgico o primario' },
+        { id: 'PROF-OBST', name: 'Lic. Obstetricia', description: 'Atención obstétrica' },
+        { id: 'PROF-TECF', name: 'Técnico en Farmacia', description: 'Apoyo en dispensación y almacén' }
+    ],
     defaultConfig: {
         verificationDelaySeconds: 5,
-        apiUrl: BOOTSTRAP_URL
+        apiUrl: ""
     } as SystemConfig
 };
 
-// --- HELPER PARA CONEXIÓN A GOOGLE APPS SCRIPT ---
-const sendRequest = async (action: string, payload: any = {}) => {
-    // Usamos la URL activa (puede ser la de bootstrap o la que vino de la BD)
-    const targetUrl = activeApiUrl || BOOTSTRAP_URL;
-
-    // Usamos POST con cuerpo JSON string.
-    const response = await fetch(targetUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'text/plain;charset=utf-8',
-        },
-        body: JSON.stringify({ action, ...payload })
-    });
-
-    if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-    }
-
-    const json = await response.json();
-    return json;
-};
+// Variable cache
+let usersCache: any[] | null = null;
 
 export const api = {
-    
     login: async (username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> => {
         try {
-            const result = await sendRequest('login', { username, password });
-            
-            // PATCH: Ensure permissions match the local definition for the role
-            // This ensures new modules appear even if the backend is outdated
-            if (result.success && result.user) {
-                 const localRole = MOCK_DB.roles.find((r: any) => r.role === result.user.role);
-                 if (localRole) {
-                     result.user.permissions = localRole.allowedModules;
-                 }
-            }
-            
-            return result;
-        } catch (e) {
-            console.warn("Error conectando al backend, intentando modo offline...", e);
-            
-            // MOCK LOGIC UPDATE
-            const authUser = MOCK_DB.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-            
-            if (authUser) {
-                // Check Password
-                if (authUser.password === password) {
-                    // Check Active
-                    if (authUser.isActive) {
-                        const personnel = MOCK_DB.personnel.find(p => p.id === authUser.personnelId);
-                        const facility = MOCK_DB.facilities.find(f => f.code === personnel?.facilityCode);
-                        const roleConfig = MOCK_DB.roles.find((r: any) => r.role === authUser.role);
+            if (supabase) {
+                const { data: userRecord, error } = await supabase
+                    .from("users")
+                    .select("*, personnel:personnel_id(*, facilities:facility_code(*), labor_regimes:labor_regime_id(*), professions:profession_id(*)), roles_config:role(*)")
+                    .eq("username", username)
+                    .single();
 
-                        return {
-                            success: true,
-                            user: {
-                                username: authUser.username,
-                                role: authUser.role as UserRole,
-                                personnelId: authUser.personnelId,
-                                isActive: authUser.isActive,
-                                personnelData: personnel as Personnel,
-                                facilityData: facility as HealthFacility,
-                                permissions: roleConfig ? roleConfig.allowedModules as any : []
-                            },
-                            message: "Modo Offline / Demo" 
-                        };
-                    } else {
-                        return { success: false, message: "Su cuenta ha sido desactivada. Contacte al administrador." };
+                if (error || !userRecord) return { success: false, message: "Usuario o contraseña incorrectos." };
+
+                if (!userRecord.is_active) {
+                    return { success: false, message: "Su cuenta ha sido desactivada. Contacte al administrador." };
+                }
+
+                const isValid = bcrypt.compareSync(password, userRecord.password_hash);
+                if (!isValid) return { success: false, message: "Usuario o contraseña incorrectos." };
+
+                const personnelData = Array.isArray(userRecord.personnel) ? userRecord.personnel[0] : userRecord.personnel;
+                const roleConfig = Array.isArray(userRecord.roles_config) ? userRecord.roles_config[0] : userRecord.roles_config;
+                const facilityData = personnelData ? (Array.isArray(personnelData.facilities) ? personnelData.facilities[0] : personnelData.facilities) : null;
+
+                return {
+                    success: true,
+                    user: {
+                        username: userRecord.username,
+                        role: userRecord.role,
+                        personnelId: userRecord.personnel_id,
+                        isActive: userRecord.is_active,
+                        personnelData: personnelData ? {
+                            id: personnelData.id,
+                            firstName: personnelData.first_name,
+                            lastName: personnelData.last_name,
+                            dni: personnelData.dni,
+                            phone: personnelData.phone,
+                            email: personnelData.email,
+                            laborRegime: personnelData.labor_regime,
+                            laborRegimeId: personnelData.labor_regime_id,
+                            professionId: personnelData.profession_id,
+                            laborRegimeData: personnelData.labor_regimes ? (Array.isArray(personnelData.labor_regimes) ? personnelData.labor_regimes[0] : personnelData.labor_regimes) : undefined,
+                            professionData: personnelData.professions ? (Array.isArray(personnelData.professions) ? personnelData.professions[0] : personnelData.professions) : undefined,
+                            facilityCode: personnelData.facility_code,
+                            diresaId: personnelData.diresa_id,
+                            ogessId: personnelData.ogess_id,
+                            ungetId: personnelData.unget_id,
+                            microredId: personnelData.microred_id
+                        } : undefined as any,
+                        facilityData: facilityData ? {
+                            code: facilityData.code,
+                            name: facilityData.name,
+                            category: facilityData.category,
+                            ungetId: facilityData.unget_id,
+                            diresaId: facilityData.diresa_id,
+                            ogessId: facilityData.ogess_id,
+                            microredId: facilityData.microred_id
+                        } : undefined as any,
+                        permissions: roleConfig ? roleConfig.allowed_modules : [],
+                        maxUrlsAllowed: roleConfig ? roleConfig.max_urls_allowed : 0
                     }
-                } else {
-                    return { success: false, message: "Usuario o contraseña incorrectos." };
+                };
+            }
+            throw new Error("Supabase is missing");
+        } catch (e) {
+            console.warn("Offline fallback login:", e);
+            const authUser = MOCK_DB.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+            if (authUser && authUser.password === password) {
+                if (authUser.isActive) {
+                    const personnel = MOCK_DB.personnel.find(p => p.id === authUser.personnelId);
+                    const facility = MOCK_DB.facilities.find(f => f.code === personnel?.facilityCode);
+                    const roleConfig = MOCK_DB.roles.find(r => r.role === authUser.role);
+                    return {
+                        success: true,
+                        user: {
+                            username: authUser.username,
+                            role: authUser.role as UserRole,
+                            personnelId: authUser.personnelId,
+                            isActive: authUser.isActive,
+                            personnelData: personnel as Personnel,
+                            facilityData: facility as HealthFacility,
+                            permissions: roleConfig ? roleConfig.allowedModules as any : []
+                        },
+                        message: "Modo Offline"
+                    };
                 }
             }
-            
-            // If user not found in mock or connection failed completely
-            return { success: false, message: "Error de conexión. Verifique su internet o la URL del script." };
+            return { success: false, message: "Error conectando al servidor." };
         }
     },
 
     refreshSession: async (username: string): Promise<{ success: boolean; user?: User; message?: string }> => {
         try {
-            const result = await sendRequest('refreshUser', { username });
-            
-            // PATCH: Ensure permissions match the local definition for the role
-            if (result.success && result.user) {
-                 const localRole = MOCK_DB.roles.find((r: any) => r.role === result.user.role);
-                 if (localRole) {
-                     result.user.permissions = localRole.allowedModules;
-                 }
-            }
-            
-            return result;
-        } catch (e) {
-            console.warn("Error refrescando sesión, usando caché local...", e);
-            
-            // MOCK Fallback for refresh
-            const authUser = MOCK_DB.users.find(u => u.username === username);
-            if (authUser) {
-                 const personnel = MOCK_DB.personnel.find(p => p.id === authUser.personnelId);
-                 const facility = MOCK_DB.facilities.find(f => f.code === personnel?.facilityCode);
-                 const roleConfig = MOCK_DB.roles.find((r: any) => r.role === authUser.role);
-                 return {
+            if (supabase) {
+                const { data: userRecord, error } = await supabase
+                    .from("users")
+                    .select("*, personnel:personnel_id(*, facilities:facility_code(*), labor_regimes:labor_regime_id(*), professions:profession_id(*)), roles_config:role(*)")
+                    .eq("username", username)
+                    .single();
+
+                if (error || !userRecord) return { success: false, message: "User not found" };
+
+                const personnelData = Array.isArray(userRecord.personnel) ? userRecord.personnel[0] : userRecord.personnel;
+                const roleConfig = Array.isArray(userRecord.roles_config) ? userRecord.roles_config[0] : userRecord.roles_config;
+                const facilityData = personnelData ? (Array.isArray(personnelData.facilities) ? personnelData.facilities[0] : personnelData.facilities) : null;
+
+                return {
                     success: true,
                     user: {
-                        username: authUser.username,
-                        role: authUser.role as UserRole,
-                        personnelId: authUser.personnelId,
-                        isActive: authUser.isActive,
-                        personnelData: personnel as Personnel,
-                        facilityData: facility as HealthFacility,
-                        permissions: roleConfig ? roleConfig.allowedModules as any : []
+                        username: userRecord.username,
+                        role: userRecord.role,
+                        personnelId: userRecord.personnel_id,
+                        isActive: userRecord.is_active,
+                        personnelData: personnelData ? {
+                            id: personnelData.id,
+                            firstName: personnelData.first_name,
+                            lastName: personnelData.last_name,
+                            dni: personnelData.dni,
+                            phone: personnelData.phone,
+                            email: personnelData.email,
+                            laborRegime: personnelData.labor_regime,
+                            laborRegimeId: personnelData.labor_regime_id,
+                            professionId: personnelData.profession_id,
+                            laborRegimeData: personnelData.labor_regimes ? (Array.isArray(personnelData.labor_regimes) ? personnelData.labor_regimes[0] : personnelData.labor_regimes) : undefined,
+                            professionData: personnelData.professions ? (Array.isArray(personnelData.professions) ? personnelData.professions[0] : personnelData.professions) : undefined,
+                            facilityCode: personnelData.facility_code,
+                            diresaId: personnelData.diresa_id,
+                            ogessId: personnelData.ogess_id,
+                            ungetId: personnelData.unget_id,
+                            microredId: personnelData.microred_id
+                        } : undefined as any,
+                        facilityData: facilityData ? {
+                            code: facilityData.code,
+                            name: facilityData.name,
+                            category: facilityData.category,
+                            ungetId: facilityData.unget_id,
+                            diresaId: facilityData.diresa_id,
+                            ogessId: facilityData.ogess_id,
+                            microredId: facilityData.microred_id
+                        } : undefined as any,
+                        permissions: roleConfig ? roleConfig.allowed_modules : [],
+                        maxUrlsAllowed: roleConfig ? roleConfig.max_urls_allowed : 0
                     }
-                 };
+                };
             }
-
-            return { success: false, message: "No se pudo actualizar sesión" };
+        } catch (e) {
+            console.warn("Refresh fallback", e);
         }
+        return { success: false };
     },
 
     updateProfile: async (personnelId: string, data: any) => {
         try {
-            // Invalidamos caché para forzar recarga la próxima vez si editamos un usuario
-            usersCache = null; 
-            return await sendRequest('updateProfile', { personnelId, data });
-        } catch (e) {
-            console.error(e);
-            return { success: false, message: "Error al guardar en la nube." };
+            usersCache = null;
+            if (supabase) {
+                const { error: pError } = await supabase.from('personnel').update({
+                    first_name: data.firstName,
+                    last_name: data.lastName,
+                    dni: data.dni,
+                    phone: data.phone,
+                    email: data.email
+                }).eq('id', personnelId);
+                
+                const userUpdateData: any = {};
+                if (data.username) {
+                    userUpdateData.username = data.username;
+                }
+                if (data.password) {
+                    const salt = bcrypt.genSaltSync(10);
+                    const pt = typeof data.password === 'string' ? data.password : String(data.password);
+                    userUpdateData.password_hash = bcrypt.hashSync(pt, salt);
+                }
+                
+                if (Object.keys(userUpdateData).length > 0) {
+                    await supabase.from('users').update(userUpdateData).eq('personnel_id', personnelId);
+                }
+                
+                if (!pError) return { success: true };
+            }
+            return { success: false, message: "Error al actualizar." };
+        } catch(e) {
+            return { success: false, message: "Error local." };
         }
     },
 
     getUsers: async (forceRefresh = false) => {
-        // 1. Si tenemos datos en memoria y no forzamos refresco, retornamos INSTANTÁNEAMENTE
-        if (usersCache && !forceRefresh) {
-            return usersCache;
-        }
-
+        if (usersCache && !forceRefresh) return usersCache;
         try {
-            const result = await sendRequest('getUsers');
-            if (result.success) {
-                // NORMALIZACIÓN DE DATOS (CRÍTICO)
-                // Asegura que isActive sea siempre un booleano real, no el string "TRUE"/"FALSE" de Google Sheets
-                const normalizedUsers = result.data.map((u: any) => ({
-                    ...u,
-                    isActive: u.isActive === true || String(u.isActive).toLowerCase() === 'true'
-                }));
-                
-                usersCache = normalizedUsers; // Guardamos en memoria normalizado
-                return normalizedUsers;
+            if (supabase) {
+                const { data, error } = await supabase
+                    .from("users")
+                    .select("*, personnel:personnel_id(*, facilities:facility_code(*), labor_regimes:labor_regime_id(*), professions:profession_id(*)), roles_config:role(*)");
+                if (!error && data) {
+                    const normalized = data.map(u => {
+                        const p = Array.isArray(u.personnel) ? u.personnel[0] : u.personnel;
+                        const roleCfg = Array.isArray(u.roles_config) ? u.roles_config[0] : u.roles_config;
+                        const f = p && p.facilities ? (Array.isArray(p.facilities) ? p.facilities[0] : p.facilities) : null;
+                        return {
+                            username: u.username,
+                            role: u.role,
+                            isActive: u.is_active,
+                            personnelId: u.personnel_id,
+                            personnel: p ? {
+                                id: p.id,
+                                firstName: p.first_name,
+                                lastName: p.last_name,
+                                dni: p.dni,
+                                phone: p.phone,
+                                email: p.email,
+                                laborRegime: p.labor_regime || undefined,
+                                laborRegimeId: p.labor_regime_id || undefined,
+                                professionId: p.profession_id || undefined,
+                                laborRegimeData: p.labor_regimes ? (Array.isArray(p.labor_regimes) ? p.labor_regimes[0] : p.labor_regimes) : undefined,
+                                professionData: p.professions ? (Array.isArray(p.professions) ? p.professions[0] : p.professions) : undefined,
+                                facilityCode: p.facility_code,
+                                diresaId: p.diresa_id || undefined,
+                                ogessId: p.ogess_id || undefined,
+                                ungetId: p.unget_id || undefined,
+                                microredId: p.microred_id || undefined
+                            } : null,
+                            facilityData: f ? {
+                                code: f.code,
+                                name: f.name,
+                                category: f.category,
+                                ungetId: f.unget_id,
+                                type: f.type,
+                                diresaId: f.diresa_id,
+                                ogessId: f.ogess_id,
+                                microredId: f.microred_id
+                            } : null,
+                            permissions: roleCfg ? roleCfg.allowed_modules : [],
+                            maxUrlsAllowed: roleCfg ? roleCfg.max_urls_allowed : 0,
+                            created_at: u.created_at
+                        };
+                    });
+                    usersCache = normalized;
+                    return normalized;
+                }
             }
-            return [];
-        } catch (e) {
-            console.warn("Offline mode (getUsers): Using mock data.");
-             return MOCK_DB.users.map(u => ({
-                ...u,
-                personnel: MOCK_DB.personnel.find(p => p.id === u.personnelId)
-            }));
-        }
+        } catch(e) {}
+        return Object.values(MOCK_DB.users).map(u => ({ ...u, personnel: MOCK_DB.personnel.find(p => p.id === u.personnelId) }));
     },
-
-    // --- NEW ADMIN METHODS ---
 
     adminSaveUser: async (userData: any): Promise<{ success: boolean; message?: string }> => {
         try {
-            usersCache = null; // Invalidate Cache
-            const result = await sendRequest('adminSaveUser', { userData });
-            return result;
-        } catch (e) {
-            console.error("Error admin save user:", e);
-            // Mock Implementation for offline test
-            if (userData.isNew) {
-                const newId = 'P' + Date.now();
-                MOCK_DB.personnel.push({
-                    id: newId,
-                    firstName: userData.firstName,
-                    lastName: userData.lastName,
+            usersCache = null;
+            if (supabase) {
+                const targetPersonnelId = userData.personnelId || ('P' + Date.now() + Math.floor(Math.random() * 1000));
+                
+                // Upsert Personnel
+                const { error: pError } = await supabase.from('personnel').upsert({
+                    id: targetPersonnelId,
+                    first_name: userData.firstName,
+                    last_name: userData.lastName,
                     dni: userData.dni,
+                    phone: userData.phone || null,
                     email: userData.email,
-                    facilityCode: userData.facilityCode
-                } as any);
-                MOCK_DB.users.push({
-                    username: userData.username,
-                    password: userData.password,
-                    role: userData.role,
-                    personnelId: newId,
-                    isActive: true
+                    labor_regime: userData.laborRegime || null,
+                    labor_regime_id: userData.laborRegimeId || null,
+                    profession_id: userData.professionId || null,
+                    facility_code: userData.facilityCode || null,
+                    diresa_id: userData.diresaId || null,
+                    ogess_id: userData.ogessId || null,
+                    unget_id: userData.ungetId || null,
+                    microred_id: userData.microredId || null
                 });
+
+                if (pError) throw pError;
+
+                let pwUpdate = {};
+                if (userData.password) {
+                    const salt = bcrypt.genSaltSync(10);
+                    const pt = typeof userData.password === 'string' ? userData.password : String(userData.password);
+                    pwUpdate = { password_hash: bcrypt.hashSync(pt, salt) };
+                } else if (userData.isNew) {
+                    const salt = bcrypt.genSaltSync(10);
+                    pwUpdate = { password_hash: bcrypt.hashSync('Temporal2026*', salt) };
+                }
+
+                if (userData.isNew) {
+                    const { error: uError } = await supabase.from('users').insert({
+                        username: userData.username,
+                        role: userData.role,
+                        personnel_id: targetPersonnelId,
+                        is_active: userData.isActive !== undefined ? userData.isActive : true,
+                        ...pwUpdate
+                    });
+                    if (uError) throw uError;
+                } else {
+                    const { error: uError } = await supabase.from('users').update({
+                        role: userData.role,
+                        personnel_id: targetPersonnelId,
+                        is_active: userData.isActive !== undefined ? userData.isActive : true,
+                        ...pwUpdate
+                    }).eq('username', userData.username);
+                    if (uError) throw uError;
+                }
+                return { success: true };
             }
-            return { success: true, message: "Guardado en modo Offline (Mock)" };
+            return { success: false, message: "No Supabase connected" };
+        } catch(e: any) {
+            return { success: false, message: e.message || "Error saving user" };
         }
     },
 
     toggleUserStatus: async (username: string, status: boolean): Promise<{ success: boolean; message?: string }> => {
         try {
-            usersCache = null; // Invalidate Cache
-            const result = await sendRequest('toggleUserStatus', { username, status });
-            return result;
-        } catch (e) {
-            console.error("Error toggle status:", e);
-            // Mock Implementation
-            const u = MOCK_DB.users.find(user => user.username === username);
-            if (u) u.isActive = status;
-            return { success: true, message: "Estado actualizado en Offline" };
+            usersCache = null;
+            if (supabase) {
+                const { error } = await supabase.from('users').update({ is_active: status }).eq('username', username);
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e) {}
+        return { success: false };
+    },
+
+    adminDeleteUser: async (username: string, personnelId: string | null): Promise<{ success: boolean; message?: string }> => {
+        try {
+            usersCache = null;
+            if (supabase) {
+                const { error: uError } = await supabase.from('users').delete().eq('username', username);
+                if (uError) throw uError;
+                
+                if (personnelId) {
+                    const { error: pError } = await supabase.from('personnel').delete().eq('id', personnelId);
+                    if (pError) {
+                        console.warn('Could not delete personnel, but successfully deleted user account:', pError);
+                    }
+                }
+                return { success: true };
+            }
+            return { success: false, message: "No Supabase connected" };
+        } catch(e: any) {
+            return { success: false, message: e.message || "Error deleting user" };
         }
     },
 
-    // --- FACILITIES ---
+    // --- DIRESA ---
+    getDiresas: async (): Promise<Diresa[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('diresas').select('*');
+                if (!error && data) {
+                    return data.map(d => ({
+                        id: d.id,
+                        name: d.name,
+                        ruc: d.ruc,
+                        department: d.department,
+                        province: d.province,
+                        district: d.district,
+                        legalAddress: d.legal_address,
+                        website: d.website,
+                        socialMedia: d.social_media,
+                        phone: d.phone,
+                        email: d.email
+                    }));
+                }
+            }
+        } catch(e){}
+        return [];
+    },
+
+    saveDiresa: async (diresa: Partial<Diresa>): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('diresas').upsert({
+                    id: diresa.id,
+                    name: diresa.name,
+                    ruc: diresa.ruc,
+                    department: diresa.department,
+                    province: diresa.province,
+                    district: diresa.district,
+                    legal_address: diresa.legalAddress,
+                    website: diresa.website,
+                    social_media: diresa.socialMedia,
+                    phone: diresa.phone,
+                    email: diresa.email
+                });
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
+    },
+
+    deleteDiresa: async (id: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('diresas').delete().eq('id', id);
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
+    },
+
+    // --- OGESS ---
+    getOgess: async (): Promise<Ogess[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('ogess').select('*');
+                if (!error && data) {
+                    return data.map(o => ({
+                        id: o.id,
+                        name: o.name,
+                        diresaId: o.diresa_id,
+                        code: o.code,
+                        ruc: o.ruc,
+                        department: o.department,
+                        province: o.province,
+                        district: o.district,
+                        legalAddress: o.legal_address,
+                        website: o.website,
+                        socialMedia: o.social_media,
+                        phone: o.phone,
+                        email: o.email
+                    }));
+                }
+            }
+        } catch(e){}
+        return [];
+    },
+
+    saveOgess: async (ogess: Partial<Ogess>): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('ogess').upsert({
+                    id: ogess.id,
+                    name: ogess.name,
+                    diresa_id: ogess.diresaId,
+                    code: ogess.code,
+                    ruc: ogess.ruc,
+                    department: ogess.department,
+                    province: ogess.province,
+                    district: ogess.district,
+                    legal_address: ogess.legalAddress,
+                    website: ogess.website,
+                    social_media: ogess.socialMedia,
+                    phone: ogess.phone,
+                    email: ogess.email
+                });
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
+    },
+
+    deleteOgess: async (id: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('ogess').delete().eq('id', id);
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
+    },
+
+    // --- MICROREDES ---
+    getMicroredes: async (): Promise<Microred[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('microredes').select('*');
+                if (!error && data) {
+                    return data.map(m => ({
+                        id: m.id,
+                        name: m.name,
+                        ungetId: m.unget_id,
+                        location: m.location,
+                        legalAddress: m.legal_address,
+                        website: m.website,
+                        socialMedia: m.social_media,
+                        phone: m.phone,
+                        email: m.email
+                    }));
+                }
+            }
+        } catch(e){}
+        return [];
+    },
+
+    saveMicrored: async (microred: Partial<Microred>): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('microredes').upsert({
+                    id: microred.id,
+                    name: microred.name,
+                    unget_id: microred.ungetId,
+                    location: microred.location,
+                    legal_address: microred.legalAddress,
+                    website: microred.website,
+                    social_media: microred.socialMedia,
+                    phone: microred.phone,
+                    email: microred.email
+                });
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
+    },
+
+    deleteMicrored: async (id: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('microredes').delete().eq('id', id);
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
+    },
+
     getFacilities: async (): Promise<HealthFacility[]> => {
         try {
-            const result = await sendRequest('getFacilities');
-            if (result.success) return result.data;
-            return [];
-        } catch (e) {
-            console.warn("Offline mode (getFacilities): Using mock data.");
-            return MOCK_DB.facilities;
+            if (supabase) {
+                const { data, error } = await supabase.from('facilities').select('*');
+                if (!error && data) {
+                    return data.map(f => ({
+                        code: f.code,
+                        name: f.name,
+                        category: f.category,
+                        type: f.type,
+                        ungetId: f.unget_id,
+                        microredId: f.microred_id,
+                        ogessId: f.ogess_id,
+                        diresaId: f.diresa_id,
+                        legalAddress: f.legal_address,
+                        website: f.website,
+                        socialMedia: f.social_media,
+                        phone: f.phone,
+                        email: f.email,
+                        department: f.department,
+                        province: f.province,
+                        district: f.district
+                    }));
+                }
+            }
+        } catch(e){}
+        return MOCK_DB.facilities;
+    },
+
+    saveFacility: async (facility: HealthFacility): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('facilities').upsert({
+                    code: facility.code,
+                    name: facility.name,
+                    category: facility.category,
+                    type: facility.type || null,
+                    unget_id: facility.ungetId || null,
+                    microred_id: facility.microredId || null,
+                    ogess_id: facility.ogessId || null,
+                    diresa_id: facility.diresaId || null,
+                    legal_address: facility.legalAddress || null,
+                    website: facility.website || null,
+                    social_media: facility.socialMedia || null,
+                    phone: facility.phone || null,
+                    email: facility.email || null,
+                    department: facility.department || null,
+                    province: facility.province || null,
+                    district: facility.district || null
+                });
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
         }
+        return { success: false, message: "No Supabase connected" };
+    },
+
+    deleteFacility: async (code: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('facilities').delete().eq('code', code);
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
+    },
+
+    getUngets: async (): Promise<Unget[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('ungets').select('*');
+                if (!error && data) {
+                    return data.map(u => ({
+                        id: u.id,
+                        name: u.name,
+                        region: u.region,
+                        ogessId: u.ogess_id,
+                        diresaId: u.diresa_id,
+                        legalAddress: u.legal_address,
+                        website: u.website,
+                        socialMedia: u.social_media,
+                        phone: u.phone,
+                        email: u.email,
+                        department: u.department,
+                        province: u.province,
+                        district: u.district
+                    }));
+                }
+            }
+        } catch(e){}
+        return [];
+    },
+
+    saveUnget: async (unget: Partial<Unget>): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('ungets').upsert({
+                    id: unget.id,
+                    name: unget.name,
+                    region: unget.region,
+                    ogess_id: unget.ogessId || null,
+                    diresa_id: unget.diresaId || null,
+                    legal_address: unget.legalAddress || null,
+                    website: unget.website || null,
+                    social_media: unget.socialMedia || null,
+                    phone: unget.phone || null,
+                    email: unget.email || null,
+                    department: unget.department || null,
+                    province: unget.province || null,
+                    district: unget.district || null
+                });
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
+    },
+
+    deleteUnget: async (id: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('ungets').delete().eq('id', id);
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
     },
 
     getRolesConfig: async (): Promise<RoleConfig[]> => {
         try {
-            const result = await sendRequest('getRolesConfig');
-            if (result.success && result.data) {
-                // Update local mock to sync
-                MOCK_DB.roles = result.data;
-                return result.data;
+            if (supabase) {
+                const { data, error } = await supabase.from('roles_config').select('*');
+                if (!error && data) {
+                    return data.map(r => ({
+                        role: r.role,
+                        label: r.label,
+                        allowedModules: r.allowed_modules,
+                        maxUrlsAllowed: r.max_urls_allowed,
+                        jurisdictionLevel: r.jurisdiction_level
+                    }));
+                }
             }
-            return MOCK_DB.roles as RoleConfig[];
-        } catch (e) {
-            console.warn("Offline mode (getRolesConfig): Using mock data.");
-            return MOCK_DB.roles as RoleConfig[];
-        }
+        } catch(e) {}
+        return MOCK_DB.roles as RoleConfig[];
     },
 
     updateRoleConfig: async (roleConfig: RoleConfig): Promise<{ success: boolean; message?: string }> => {
         try {
-            const result = await sendRequest('updateRoleConfig', { roleConfig });
-            return result;
-        } catch (e) {
-            console.error("Error updating role config:", e);
-            return { success: false, message: "Error de conexión: No se pudo actualizar el rol en el servidor." };
-        }
-    },
-
-    // --- SYSTEM CONFIG METHODS ---
-    
-    getSystemConfig: async (): Promise<SystemConfig> => {
-        try {
-            const result = await sendRequest('getSystemConfig');
-            
-            if (result.success && result.data) {
-                const config = {
-                    verificationDelaySeconds: Number(result.data.verificationDelaySeconds) || 5,
-                    apiUrl: result.data.apiUrl || BOOTSTRAP_URL,
-                    warehouseCode: result.data.warehouseCode || '',
-                    warehouseName: result.data.warehouseName || ''
-                };
-
-                // CRITICAL: Update the active URL immediately if one is found in the DB
-                if (config.apiUrl && config.apiUrl.startsWith('http')) {
-                    activeApiUrl = config.apiUrl;
-                    console.log("Aura API URL updated from Remote Config:", activeApiUrl);
+            if (supabase) {
+                // If the role was renamed, try to update the primary key first
+                if (roleConfig.oldRole && roleConfig.oldRole !== roleConfig.role) {
+                    const { error: renameError } = await supabase
+                        .from('roles_config')
+                        .update({ role: roleConfig.role })
+                        .eq('role', roleConfig.oldRole);
+                        
+                    if (renameError) {
+                        console.error('Error renaming role:', renameError);
+                        // Optional fallback: maybe we have users attached resulting in a constraint error.
+                        // We will just throw the error to be handled by the UI.
+                        throw renameError;
+                    }
                 }
 
-                return config;
+                const { error } = await supabase.from('roles_config').upsert({
+                    role: roleConfig.role,
+                    label: roleConfig.label,
+                    allowed_modules: roleConfig.allowedModules,
+                    max_urls_allowed: roleConfig.maxUrlsAllowed,
+                    jurisdiction_level: roleConfig.jurisdictionLevel
+                });
+                if (error) throw error;
+                return { success: true };
             }
-            
-            return MOCK_DB.defaultConfig;
-        } catch (e) {
-            console.warn("Offline mode (getSystemConfig): Using default config.");
-            return MOCK_DB.defaultConfig;
+        } catch(e: any) {
+            return { success: false, message: e.message };
         }
+        return { success: false };
+    },
+
+    getSystemConfig: async (): Promise<SystemConfig> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('system_config').select('*');
+                if (!error && data) {
+                    const cfg: any = {};
+                    data.forEach(d => {
+                        cfg[d.key] = d.value;
+                    });
+                    const merged = { ...MOCK_DB.defaultConfig, ...cfg };
+                    return merged;
+                }
+            }
+        } catch(e) {}
+        return MOCK_DB.defaultConfig;
     },
 
     updateSystemConfig: async (newConfig: SystemConfig): Promise<{ success: boolean; message?: string }> => {
         try {
-             // Si el usuario está actualizando la URL, actualizamos la variable local inmediatamente también
-             if (newConfig.apiUrl && newConfig.apiUrl.startsWith('http')) {
-                 activeApiUrl = newConfig.apiUrl;
-             }
-
-             const result = await sendRequest('updateSystemConfig', { config: newConfig });
-             return result;
-        } catch (e) {
-            console.error("Error guardando configuración global:", e);
-            return { success: false, message: "Error de conexión: No se pudo guardar la configuración global." };
+            if (supabase) {
+                const keys = Object.keys(newConfig);
+                for (const k of keys) {
+                    await supabase.from('system_config').upsert({ key: k, value: (newConfig as any)[k] });
+                }
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
         }
+        return { success: false };
     },
 
-    // --- UNGET CONFIGURATIONS ---
-    
     getUngetConfigs: async (username: string): Promise<any[]> => {
         try {
-            const result = await sendRequest('getUngetConfigs', { username });
-            if (result.success) return result.data;
-            return [];
-        } catch (e) {
-            console.warn("Offline mode (getUngetConfigs): Using local storage fallback.");
-            const saved = localStorage.getItem(`aura_sig_ungets_${username}`);
-            return saved ? JSON.parse(saved) : [];
-        }
+            if (supabase) {
+                const { data, error } = await supabase.from('unget_configs').select('*').eq('username', username);
+                if (!error && data) {
+                    return data.map(d => ({
+                        name: d.unget_name,
+                        url: d.url
+                    }));
+                }
+            }
+        } catch(e) {}
+        
+        const saved = localStorage.getItem(`aura_sig_ungets_${username}`);
+        return saved ? JSON.parse(saved) : [];
     },
 
     saveUngetConfigs: async (username: string, configs: any[]): Promise<{ success: boolean; message?: string }> => {
         try {
-            const result = await sendRequest('saveUngetConfigs', { username, configs });
-            // Sincronizamos con localStorage por redundancia
+            if (supabase) {
+                await supabase.from('unget_configs').delete().eq('username', username);
+                for(const c of configs) {
+                    await supabase.from('unget_configs').insert({
+                        username,
+                        unget_name: c.name,
+                        url: c.url
+                    });
+                }
+            }
             localStorage.setItem(`aura_sig_ungets_${username}`, JSON.stringify(configs));
-            return result;
+            return { success: true };
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+    },
+
+    // --- DYNAMIC LABOR REGIMES (CRUD) ---
+    getLaborRegimes: async (): Promise<any[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('labor_regimes').select('*').order('name');
+                if (!error && data) {
+                    return data.map(r => ({
+                        id: r.id,
+                        name: r.name,
+                        description: r.description || ''
+                    }));
+                }
+            }
         } catch (e) {
-            console.error("Error saving unget configs:", e);
-            localStorage.setItem(`aura_sig_ungets_${username}`, JSON.stringify(configs));
-            return { success: false, message: "Guardado solo localmente (Error de conexión)" };
+            console.warn("Offline fallback for labor_regimes", e);
+        }
+
+        const cached = localStorage.getItem('aura_labor_regimes');
+        if (cached) return JSON.parse(cached);
+        return MOCK_DB.laborRegimes;
+    },
+
+    saveLaborRegime: async (item: any): Promise<{ success: boolean; message?: string }> => {
+        try {
+            const targetId = item.id || ('LR-' + Date.now());
+            if (supabase) {
+                const { error } = await supabase.from('labor_regimes').upsert({
+                    id: targetId,
+                    name: item.name,
+                    description: item.description || null
+                });
+                if (error) throw error;
+            }
+            
+            const current = await api.getLaborRegimes();
+            const exists = current.find(c => c.id === targetId);
+            let updatedList;
+            if (exists) {
+                updatedList = current.map(c => c.id === targetId ? { ...c, name: item.name, description: item.description || '' } : c);
+            } else {
+                updatedList = [...current, { id: targetId, name: item.name, description: item.description || '' }];
+            }
+            localStorage.setItem('aura_labor_regimes', JSON.stringify(updatedList));
+            return { success: true };
+        } catch (e: any) {
+            return { success: false, message: e.message };
+        }
+    },
+
+    deleteLaborRegime: async (id: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('labor_regimes').delete().eq('id', id);
+                if (error) throw error;
+            }
+            const current = await api.getLaborRegimes();
+            const updatedList = current.filter(c => c.id !== id);
+            localStorage.setItem('aura_labor_regimes', JSON.stringify(updatedList));
+            return { success: true };
+        } catch (e: any) {
+            return { success: false, message: e.message };
+        }
+    },
+
+    // --- DYNAMIC PROFESSIONS (CRUD) ---
+    getProfessions: async (): Promise<any[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('professions').select('*').order('name');
+                if (!error && data) {
+                    return data.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        description: p.description || ''
+                    }));
+                }
+            }
+        } catch (e) {
+            console.warn("Offline fallback for professions", e);
+        }
+
+        const cached = localStorage.getItem('aura_professions');
+        if (cached) return JSON.parse(cached);
+        return MOCK_DB.professions;
+    },
+
+    saveProfession: async (item: any): Promise<{ success: boolean; message?: string }> => {
+        try {
+            const targetId = item.id || ('PROF-' + Date.now());
+            if (supabase) {
+                const { error } = await supabase.from('professions').upsert({
+                    id: targetId,
+                    name: item.name,
+                    description: item.description || null
+                });
+                if (error) throw error;
+            }
+            
+            const current = await api.getProfessions();
+            const exists = current.find(c => c.id === targetId);
+            let updatedList;
+            if (exists) {
+                updatedList = current.map(c => c.id === targetId ? { ...c, name: item.name, description: item.description || '' } : c);
+            } else {
+                updatedList = [...current, { id: targetId, name: item.name, description: item.description || '' }];
+            }
+            localStorage.setItem('aura_professions', JSON.stringify(updatedList));
+            return { success: true };
+        } catch (e: any) {
+            return { success: false, message: e.message };
+        }
+    },
+
+    deleteProfession: async (id: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('professions').delete().eq('id', id);
+                if (error) throw error;
+            }
+            const current = await api.getProfessions();
+            const updatedList = current.filter(c => c.id !== id);
+            localStorage.setItem('aura_professions', JSON.stringify(updatedList));
+            return { success: true };
+        } catch (e: any) {
+            return { success: false, message: e.message };
         }
     }
 };

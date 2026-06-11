@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Filter, ChevronRight } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useDropdownPosition } from '../hooks/useDropdownPosition';
+import { CustomSelect } from './ui/CustomSelect';
 
 export type NumberFilterCondition = 'EQUALS' | 'NOT_EQUALS' | 'GREATER_THAN' | 'GREATER_THAN_OR_EQUAL' | 'LESS_THAN' | 'LESS_THAN_OR_EQUAL' | 'BETWEEN' | 'NONE';
 
@@ -164,20 +165,21 @@ export const NumberFilter = ({
                     {/* Condition Builder */}
                     {showConditionMenu && (
                         <div className="p-2 bg-slate-50 rounded-lg border border-slate-200 space-y-2 mb-2">
-                            <select 
-                                className="w-full p-2 border border-slate-300 rounded-lg text-xs bg-white"
+                            <CustomSelect
+                                className="w-full bg-white text-xs border border-slate-300 rounded-lg"
                                 value={tempState.condition}
-                                onChange={(e) => setCondition(e.target.value as NumberFilterCondition)}
-                            >
-                                <option value="NONE">Ninguno</option>
-                                <option value="EQUALS">Es igual a...</option>
-                                <option value="NOT_EQUALS">No es igual a...</option>
-                                <option value="GREATER_THAN">Mayor que...</option>
-                                <option value="GREATER_THAN_OR_EQUAL">Mayor o igual que...</option>
-                                <option value="LESS_THAN">Menor que...</option>
-                                <option value="LESS_THAN_OR_EQUAL">Menor o igual que...</option>
-                                <option value="BETWEEN">Entre...</option>
-                            </select>
+                                onChange={(val) => setCondition(val as NumberFilterCondition)}
+                                options={[
+                                    { value: 'NONE', label: 'Ninguno' },
+                                    { value: 'EQUALS', label: 'Es igual a...' },
+                                    { value: 'NOT_EQUALS', label: 'No es igual a...' },
+                                    { value: 'GREATER_THAN', label: 'Mayor que...' },
+                                    { value: 'GREATER_THAN_OR_EQUAL', label: 'Mayor o igual que...' },
+                                    { value: 'LESS_THAN', label: 'Menor que...' },
+                                    { value: 'LESS_THAN_OR_EQUAL', label: 'Menor o igual que...' },
+                                    { value: 'BETWEEN', label: 'Entre...' }
+                                ]}
+                            />
 
                             {tempState.condition !== 'NONE' && (
                                 <div className="space-y-2 mt-2">

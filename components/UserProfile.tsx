@@ -19,8 +19,12 @@ import {
   ShieldCheck,
   KeyRound,
   Shield,
-  RefreshCw
+  RefreshCw,
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
 import { api } from '../services/api';
 
 export const UserProfile: React.FC = () => {
@@ -30,7 +34,13 @@ export const UserProfile: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [diresas, setDiresas] = useState<any[]>([]);
+  const [ogess, setOgess] = useState<any[]>([]);
+  const [ungets, setUngets] = useState<any[]>([]);
+  const [microredes, setMicroredes] = useState<any[]>([]);
+
   // Form State
+  const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
       firstName: '',
       lastName: '',
@@ -42,6 +52,27 @@ export const UserProfile: React.FC = () => {
       newPassword: '',
       confirmPassword: ''
   });
+
+  // Load organization lookups
+  useEffect(() => {
+    const loadLookups = async () => {
+      try {
+        const [dList, oList, uList, mList] = await Promise.all([
+          api.getDiresas(),
+          api.getOgess(),
+          api.getUngets(),
+          api.getMicroredes()
+        ]);
+        setDiresas(dList || []);
+        setOgess(oList || []);
+        setUngets(uList || []);
+        setMicroredes(mList || []);
+      } catch (e) {
+        console.warn("Error loading organization catalogs", e);
+      }
+    };
+    loadLookups();
+  }, []);
 
   // AUTO REFRESH ON MOUNT: Get latest data from DB immediately when opening profile
   useEffect(() => {
@@ -68,6 +99,7 @@ export const UserProfile: React.FC = () => {
             confirmPassword: ''
         });
         setError(null);
+        setCurrentStep(1);
     }
   }, [isEditModalOpen, user]);
 
@@ -134,14 +166,51 @@ export const UserProfile: React.FC = () => {
           });
           
           // 2. CRITICAL: Force full refresh from DB immediately to update Header/Session
-          await refreshUserData();
+          await refreshUserData(formData.username);
 
           setIsEditModalOpen(false);
+          toast.success("Perfil actualizado con éxito");
       } else {
           setError(response.message || "Error al guardar los cambios.");
       }
 
       setIsSaving(false);
+  };
+
+  const handleNextStep = () => {
+      setError(null);
+      if (currentStep === 1) {
+          if (!formData.firstName.trim()) {
+              setError("Nombres son obligatorios.");
+              return;
+          }
+          if (!formData.lastName.trim()) {
+              setError("Apellidos son obligatorios.");
+              return;
+          }
+          if (!formData.dni.trim()) {
+              setError("DNI es obligatorio.");
+              return;
+          }
+          if (formData.dni.trim().length !== 8) {
+              setError("El DNI debe tener exactamente 8 dígitos.");
+              return;
+          }
+          setCurrentStep(2);
+      } else if (currentStep === 2) {
+          if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+              setError("El formato de correo electrónico es inválido.");
+              return;
+          }
+          setCurrentStep(3);
+      }
+  };
+
+  const handlePrevStep = () => {
+      setError(null);
+      if (currentStep > 1) {
+          setCurrentStep(currentStep - 1);
+      }
   };
 
   return (
@@ -221,50 +290,43 @@ export const UserProfile: React.FC = () => {
         {/* Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
             
-            {/* Left Column: Work Info */}
+            {/* Left Column: Contact & Security Info */}
             <div className="space-y-6">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 2xl:p-6 overflow-hidden relative">
                     <div className="absolute top-0 right-0 p-4 opacity-5">
-                        <Building2 className="h-20 w-20 2xl:h-24 2xl:w-24" />
+                        <Phone className="h-20 w-20 2xl:h-24 2xl:w-24 text-gray-300" />
                     </div>
-                    <h3 className="text-[10px] 2xl:text-xs font-bold text-teal-600 uppercase tracking-widest mb-3 2xl:mb-4 flex items-center gap-2">
-                        <Briefcase className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
-                        Información Laboral
+                    <h3 className="text-[10px] 2xl:text-xs font-bold text-teal-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Phone className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
+                        Detalles de Contacto
                     </h3>
                     
-                    <div className="space-y-3 2xl:space-y-4 relative z-10">
-                        <div>
-                            <label className="text-[10px] 2xl:text-xs text-gray-400 font-bold uppercase">Establecimiento</label>
-                            {isRefreshing ? (
-                                <div className="h-6 w-3/4 bg-gray-100 animate-pulse rounded mt-1"></div>
-                            ) : (
-                                <p className="text-base 2xl:text-lg font-bold text-gray-900 leading-tight mt-0.5">
-                                    {user.facilityData?.name || 'No Asignado'}
-                                </p>
-                            )}
-                        </div>
-                        
-                        <div className="flex gap-4">
-                            <div>
-                                <label className="text-[10px] 2xl:text-xs text-gray-400 font-bold uppercase">Código IPRESS</label>
-                                <p className="text-xs 2xl:text-sm font-mono font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded w-fit mt-0.5">
-                                    {user.facilityData?.code || '---'}
-                                </p>
+                    <div className="space-y-4 2xl:space-y-5 relative z-10">
+                        <div className="flex gap-3 items-start">
+                            <div className="bg-blue-50 p-2 rounded-xl text-blue-600 shrink-0">
+                                <Phone className="h-4 w-4" />
                             </div>
                             <div>
-                                <label className="text-[10px] 2xl:text-xs text-gray-400 font-bold uppercase">Categoría</label>
-                                <p className="text-xs 2xl:text-sm font-medium text-gray-700 bg-gray-50 px-2 py-1 rounded w-fit mt-0.5">
-                                    {user.facilityData?.category || '---'}
+                                <label className="block text-[10px] 2xl:text-xs font-bold text-gray-400 uppercase tracking-wider">Teléfono Celular</label>
+                                <p className="text-xs font-semibold text-gray-800 leading-relaxed mt-0.5">
+                                    {user.personnelData.phone || <span className="text-gray-400 italic font-normal text-xs">No registrado</span>}
                                 </p>
                             </div>
                         </div>
 
-                        <div className="pt-3 2xl:pt-4 mt-2 border-t border-gray-100">
-                             <div className="flex items-center gap-2 text-xs text-gray-500">
-                                <MapPin className="h-3.5 w-3.5" />
-                                <span>Red de Salud Bellavista</span>
-                             </div>
+                        <div className="flex gap-3 items-start">
+                            <div className="bg-purple-50 p-2 rounded-xl text-purple-600 shrink-0">
+                                <Mail className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <label className="block text-[10px] 2xl:text-xs font-bold text-gray-400 uppercase tracking-wider">Correo Electrónico</label>
+                                <p className="text-xs font-semibold text-gray-800 leading-relaxed break-all mt-0.5">
+                                    {user.personnelData.email || <span className="text-gray-400 italic font-normal text-xs">No registrado</span>}
+                                </p>
+                            </div>
                         </div>
+
+
                     </div>
                 </div>
 
@@ -279,63 +341,111 @@ export const UserProfile: React.FC = () => {
                         </div>
                         <div>
                             <label className="text-[10px] text-gray-400 font-bold uppercase">Usuario de Sistema</label>
-                            <p className="text-xs 2xl:text-sm font-mono font-bold text-gray-900">{user.username}</p>
+                            <p className="text-xs font-semibold text-gray-800 leading-relaxed font-mono">{user.username}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Middle & Right Column merged for Contact Info */}
+            {/* Middle & Right Column: Labor Information */}
             <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 2xl:p-8 h-full">
-                    <h3 className="text-[10px] 2xl:text-xs font-bold text-teal-600 uppercase tracking-widest mb-4 2xl:mb-6 flex items-center gap-2">
-                        <UserIcon className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
-                        Detalles de Contacto
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 2xl:p-8 h-fit relative">
+                    <div className="absolute top-6 right-6 opacity-5 hidden sm:block">
+                        <Briefcase className="h-24 w-24 text-gray-300" />
+                    </div>
+                    <h3 className="text-[10px] 2xl:text-xs font-bold text-teal-600 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <Briefcase className="h-3.5 w-3.5 2xl:h-4 2xl:w-4" />
+                        Información Laboral
                     </h3>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 2xl:gap-y-8 gap-x-12">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-8">
+                        {/* Establishments banner/block */}
+                        <div className="sm:col-span-2 flex gap-4 items-start bg-gray-50/55 p-4 rounded-xl border border-gray-100">
+                            <div className="bg-teal-50 p-2.5 rounded-xl text-teal-600 shrink-0 hidden sm:block">
+                                <Building2 className="h-5 w-5" />
+                            </div>
+                            <div className="flex-1 min-w-0 space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-start pb-3.5 border-b border-gray-100">
+                                    <div className="sm:col-span-4 space-y-1 pt-0.5">
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Establecimiento</label>
+                                        {isRefreshing ? (
+                                            <div className="h-6 w-3/4 bg-gray-100 animate-pulse rounded mt-1"></div>
+                                        ) : (
+                                            <p className="text-xs font-semibold text-gray-800 leading-relaxed whitespace-normal break-words">
+                                                {user.facilityData?.code ? `${user.facilityData.code} | ` : ''}{user.facilityData?.name || <span className="text-gray-400 italic font-normal">No asignado</span>}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Category */}
+                                    <div className="sm:col-span-4 space-y-1">
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Categoría</label>
+                                        <p className="text-xs font-semibold text-gray-800 leading-relaxed whitespace-normal break-words">
+                                            {user.facilityData?.category || '---'}
+                                        </p>
+                                    </div>
+
+                                    {/* Microred */}
+                                    <div className="sm:col-span-4 space-y-1">
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Microred</label>
+                                        <p className="text-xs font-semibold text-gray-800 leading-relaxed whitespace-normal break-words uppercase">
+                                            {microredes.find(m => m.id === (user.personnelData?.microredId || user.facilityData?.microredId))?.name || <span className="text-gray-400 italic font-normal text-xs normal-case">No asignada</span>}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Row for UNGET, OGESS, and DIRESA side-by-side */}
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-start">
+                                    <div className="sm:col-span-4 space-y-0.5">
+                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">UNGET</span>
+                                        <p className="text-xs font-semibold text-gray-800 leading-relaxed whitespace-normal break-words">
+                                            {ungets.find(u => u.id === (user.personnelData?.ungetId || user.facilityData?.ungetId))?.name || <span className="text-gray-400 italic font-normal">No asignada</span>}
+                                        </p>
+                                    </div>
+                                    <div className="sm:col-span-4 space-y-0.5">
+                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">OGESS</span>
+                                        <p className="text-xs font-semibold text-gray-800 leading-relaxed whitespace-normal break-words">
+                                            {ogess.find(o => o.id === (user.personnelData?.ogessId || user.facilityData?.ogessId))?.name || <span className="text-gray-400 italic font-normal">No asignada</span>}
+                                        </p>
+                                    </div>
+                                    <div className="sm:col-span-4 space-y-0.5">
+                                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">DIRESA</span>
+                                        <p className="text-xs font-semibold text-gray-800 leading-relaxed whitespace-normal break-words">
+                                            {diresas.find(d => d.id === (user.personnelData?.diresaId || user.facilityData?.diresaId))?.name || <span className="text-gray-400 italic font-normal">No asignada</span>}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Régimen Laboral */}
                         <div className="flex gap-4 items-start">
-                            <div className="bg-blue-50 p-2 2xl:p-2.5 rounded-xl text-blue-600 shrink-0">
-                                <Phone className="h-4 w-4 2xl:h-5 2xl:w-5" />
+                            <div className="bg-emerald-50 p-2.5 rounded-xl text-emerald-600 shrink-0">
+                                <Briefcase className="h-5 w-5" />
                             </div>
                             <div>
-                                <label className="block text-[10px] 2xl:text-xs font-bold text-gray-400 uppercase mb-1">Teléfono Celular</label>
-                                <p className="text-sm 2xl:text-base font-medium text-gray-900">
-                                    {user.personnelData.phone || <span className="text-gray-400 italic">No registrado</span>}
+                                <label className="block text-[10px] 2xl:text-xs font-bold text-[#9ca3af] uppercase mb-1">Régimen Laboral</label>
+                                <p className="text-xs font-semibold text-gray-800 leading-relaxed mt-0.5">
+                                    {user.personnelData?.laborRegimeData?.name || user.personnelData?.laborRegime || <span className="text-gray-400 italic font-normal text-xs">No registrado</span>}
                                 </p>
                             </div>
                         </div>
 
+                        {/* Profesión */}
                         <div className="flex gap-4 items-start">
-                            <div className="bg-purple-50 p-2 2xl:p-2.5 rounded-xl text-purple-600 shrink-0">
-                                <Mail className="h-4 w-4 2xl:h-5 2xl:w-5" />
+                            <div className="bg-cyan-50 p-2.5 rounded-xl text-cyan-600 shrink-0">
+                                <UserIcon className="h-5 w-5" />
                             </div>
                             <div>
-                                <label className="block text-[10px] 2xl:text-xs font-bold text-gray-400 uppercase mb-1">Correo Electrónico</label>
-                                <p className="text-sm 2xl:text-base font-medium text-gray-900 break-all">
-                                    {user.personnelData.email || <span className="text-gray-400 italic">No registrado</span>}
+                                <label className="block text-[10px] 2xl:text-xs font-bold text-gray-400 uppercase mb-1">Profesión</label>
+                                <p className="text-xs font-semibold text-gray-800 leading-relaxed mt-0.5">
+                                    {user.personnelData?.professionData?.name || <span className="text-gray-400 italic font-normal">No registrada</span>}
                                 </p>
                             </div>
                         </div>
-
-                        <div className="flex gap-4 items-start">
-                            <div className="bg-orange-50 p-2 2xl:p-2.5 rounded-xl text-orange-600 shrink-0">
-                                <Calendar className="h-4 w-4 2xl:h-5 2xl:w-5" />
-                            </div>
-                            <div>
-                                <label className="block text-[10px] 2xl:text-xs font-bold text-gray-400 uppercase mb-1">Fecha de Nacimiento</label>
-                                <p className="text-sm 2xl:text-base font-medium text-gray-900">
-                                    {user.personnelData.birthDate ? (
-                                        // Convert YYYY-MM-DD to DD/MM/YYYY
-                                        user.personnelData.birthDate.split('-').reverse().join('/')
-                                    ) : (
-                                        <span className="text-gray-400 italic">No registrado</span>
-                                    )}
-                                </p>
-                            </div>
-                        </div>
-                        
                     </div>
+
+
                 </div>
             </div>
         </div>
@@ -354,7 +464,7 @@ export const UserProfile: React.FC = () => {
                         </div>
                         <div>
                             <h3 className="text-lg font-bold">Editar Perfil</h3>
-                            <p className="text-xs text-gray-400">Actualice sus datos personales y credenciales.</p>
+                            <p className="text-xs text-gray-400">Actualice sus datos personales y credenciales en tres sencillos pasos.</p>
                         </div>
                     </div>
                     <button 
@@ -365,8 +475,88 @@ export const UserProfile: React.FC = () => {
                     </button>
                 </div>
 
+                {/* Progress Stepper Accent */}
+                <div className="bg-gray-50 border-b border-gray-150 px-6 py-4 shrink-0">
+                    <div className="flex items-center justify-between relative max-w-md mx-auto">
+                        {/* Stepper Line Container to prevent line sticking out of the circles */}
+                        <div className="absolute left-[16px] right-[16px] top-[16px] h-0.5 z-0 pointer-events-none">
+                            {/* Stepper Base Line */}
+                            <div className="absolute inset-0 bg-gray-200" />
+                            {/* Stepper Active Line Progress */}
+                            <div 
+                                className="absolute left-0 top-0 bottom-0 bg-teal-600 transition-all duration-500 ease-out" 
+                                style={{ width: `${currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%'}` }}
+                            />
+                        </div>
+                        
+                        {/* Step 1 Button */}
+                        <button 
+                            type="button"
+                            onClick={() => setCurrentStep(1)}
+                            className="relative z-10 flex flex-col items-center focus:outline-none"
+                        >
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-300 ${
+                                currentStep >= 1 
+                                    ? 'bg-teal-600 text-white ring-4 ring-teal-100 shadow-sm' 
+                                    : 'bg-white text-gray-400 border border-gray-200'
+                            }`}>
+                                <UserIcon className="h-4 w-4" />
+                            </div>
+                            <span className={`text-[10px] font-bold mt-1 transition-colors duration-200 ${currentStep === 1 ? 'text-teal-600 font-extrabold' : 'text-gray-400'}`}>
+                                Personales
+                            </span>
+                        </button>
+
+                        {/* Step 2 Button */}
+                        <button 
+                            type="button"
+                            onClick={() => {
+                                if (formData.firstName.trim() && formData.lastName.trim() && formData.dni.trim().length === 8) {
+                                    setCurrentStep(2);
+                                }
+                            }}
+                            className="relative z-10 flex flex-col items-center focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!formData.firstName.trim() || !formData.lastName.trim() || formData.dni.trim().length !== 8}
+                        >
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-300 ${
+                                currentStep >= 2 
+                                    ? 'bg-teal-600 text-white ring-4 ring-teal-100 shadow-sm' 
+                                    : 'bg-white text-gray-400 border border-gray-200'
+                            }`}>
+                                <Phone className="h-4 w-4" />
+                            </div>
+                            <span className={`text-[10px] font-bold mt-1 transition-colors duration-200 ${currentStep === 2 ? 'text-teal-600 font-extrabold' : 'text-gray-400'}`}>
+                                Contacto
+                            </span>
+                        </button>
+
+                        {/* Step 3 Button */}
+                        <button 
+                            type="button"
+                            onClick={() => {
+                                if (formData.firstName.trim() && formData.lastName.trim() && formData.dni.trim().length === 8 && (!formData.email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim()))) {
+                                    setCurrentStep(3);
+                                }
+                            }}
+                            className="relative z-10 flex flex-col items-center focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!formData.firstName.trim() || !formData.lastName.trim() || formData.dni.trim().length !== 8}
+                        >
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-300 ${
+                                currentStep >= 3 
+                                    ? 'bg-teal-600 text-white ring-4 ring-teal-100 shadow-sm' 
+                                    : 'bg-white text-gray-400 border border-gray-200'
+                            }`}>
+                                <KeyRound className="h-4 w-4" />
+                            </div>
+                            <span className={`text-[10px] font-bold mt-1 transition-colors duration-200 ${currentStep === 3 ? 'text-teal-600 font-extrabold' : 'text-gray-400'}`}>
+                                Seguridad
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
                 {/* Modal Body */}
-                <div className="p-6 overflow-y-auto custom-scrollbar">
+                <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
                     
                     {error && (
                         <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded text-red-700 text-sm font-medium flex items-center gap-2">
@@ -375,147 +565,203 @@ export const UserProfile: React.FC = () => {
                         </div>
                     )}
 
-                    <div className="space-y-6">
-                        
-                        {/* Section 1: Personal Data */}
-                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-4 flex items-center gap-2">
-                                <Fingerprint className="h-4 w-4" /> Datos Personales
-                            </h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Nombres <span className="text-red-500">*</span></label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none bg-white text-gray-900"
-                                        value={formData.firstName}
-                                        onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Apellidos <span className="text-red-500">*</span></label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none bg-white text-gray-900"
-                                        value={formData.lastName}
-                                        onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-                                    />
-                                </div>
-                                <div className="sm:col-span-2">
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">DNI <span className="text-red-500">*</span></label>
-                                    <input 
-                                        type="text" 
-                                        maxLength={8}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none font-mono bg-white text-gray-900"
-                                        value={formData.dni}
-                                        onChange={(e) => setFormData({...formData, dni: e.target.value})}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Section 2: Contact */}
-                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-4 flex items-center gap-2">
-                                <Phone className="h-4 w-4" /> Contacto
-                            </h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Teléfono</label>
-                                    <input 
-                                        type="tel" 
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none bg-white text-gray-900"
-                                        value={formData.phone}
-                                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                                        placeholder="999 999 999"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Fecha Nacimiento</label>
-                                    <input 
-                                        type="date" 
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none bg-white text-gray-900"
-                                        value={formData.birthDate}
-                                        onChange={(e) => setFormData({...formData, birthDate: e.target.value})}
-                                    />
-                                </div>
-                                <div className="sm:col-span-2">
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Email</label>
-                                    <input 
-                                        type="email" 
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none bg-white text-gray-900"
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                        placeholder="usuario@ejemplo.com"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Section 3: Security */}
-                        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
-                            <h4 className="text-xs font-bold text-yellow-700 uppercase mb-4 flex items-center gap-2">
-                                <KeyRound className="h-4 w-4" /> Seguridad de Cuenta
-                            </h4>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Nombre de Usuario <span className="text-red-500">*</span></label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-500 outline-none bg-white text-gray-900 font-mono"
-                                        value={formData.username}
-                                        onChange={(e) => setFormData({...formData, username: e.target.value})}
-                                    />
-                                </div>
-                                
-                                <div className="pt-2 border-t border-yellow-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="col-span-2 text-[10px] text-gray-500 font-medium">
-                                        Deje los campos de contraseña vacíos si no desea cambiarla.
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={currentStep}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                        >
+                            {currentStep === 1 && (
+                                <div className="space-y-4">
+                                    <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-100/80 mb-2">
+                                        <h4 className="text-sm font-bold text-teal-800 flex items-center gap-2">
+                                            <Fingerprint className="h-4 w-4" /> Paso 1: Datos Personales de Identidad
+                                        </h4>
+                                        <p className="text-xs text-teal-600 mt-1">Por favor ingrese su información oficial como se muestra en su documento de identidad.</p>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-1">Nueva Contraseña</label>
-                                        <input 
-                                            type="password" 
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-500 outline-none bg-white text-gray-900"
-                                            value={formData.newPassword}
-                                            onChange={(e) => setFormData({...formData, newPassword: e.target.value})}
-                                            autoComplete="new-password"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-700 mb-1">Confirmar</label>
-                                        <input 
-                                            type="password" 
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-500 outline-none bg-white text-gray-900"
-                                            value={formData.confirmPassword}
-                                            onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                                            autoComplete="new-password"
-                                        />
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Nombres <span className="text-red-500">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
+                                                value={formData.firstName}
+                                                onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                                                placeholder="Ej. Shirley Ariceli"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Apellidos <span className="text-red-500">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
+                                                value={formData.lastName}
+                                                onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                                                placeholder="Ej. Fasabi Paredes"
+                                            />
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Documento Nacional de Identidad (DNI) <span className="text-red-500">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                maxLength={8}
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none font-mono bg-white text-gray-900 transition-shadow"
+                                                value={formData.dni}
+                                                onChange={(e) => setFormData({...formData, dni: e.target.value.replace(/\D/g, '')})}
+                                                placeholder="8 dígitos numéricos"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+                            )}
 
-                    </div>
+                            {currentStep === 2 && (
+                                <div className="space-y-4">
+                                    <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-100/80 mb-2">
+                                        <h4 className="text-sm font-bold text-teal-800 flex items-center gap-2">
+                                            <Phone className="h-4 w-4" /> Paso 2: Información de Contacto
+                                        </h4>
+                                        <p className="text-xs text-teal-600 mt-1">Facilite sus vías de comunicación para el envío de alertas farmacéuticas y coordinaciones de stock.</p>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Teléfono Móvil</label>
+                                            <input 
+                                                type="tel" 
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
+                                                value={formData.phone}
+                                                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                                placeholder="Ej. 956958745"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Correo Electrónico de Trabajo</label>
+                                            <input 
+                                                type="email" 
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
+                                                value={formData.email}
+                                                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                                placeholder="Ej. farmacia.barranca@gmail.com"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {currentStep === 3 && (
+                                <div className="space-y-4">
+                                    <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200/60 mb-2">
+                                        <h4 className="text-sm font-bold text-yellow-800 flex items-center gap-2">
+                                            <KeyRound className="h-4 w-4" /> Paso 3: Credenciales y Seguridad
+                                        </h4>
+                                        <p className="text-xs text-yellow-700 mt-1">Configure su nombre de usuario único y actualice su contraseña secreta si así lo requiere.</p>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Nombre de Usuario <span className="text-red-500">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 font-mono transition-shadow"
+                                                value={formData.username}
+                                                onChange={(e) => setFormData({...formData, username: e.target.value})}
+                                            />
+                                        </div>
+                                        
+                                        <div className="pt-4 border-t border-gray-150 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="col-span-2 text-[11px] text-gray-500 font-medium">
+                                                Deje los campos de contraseña vacíos si no desea cambiar su clave de acceso.
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Nueva Contraseña</label>
+                                                <input 
+                                                    type="password" 
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
+                                                    value={formData.newPassword}
+                                                    onChange={(e) => setFormData({...formData, newPassword: e.target.value})}
+                                                    autoComplete="new-password"
+                                                    placeholder="Mínimo 4 caracteres"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Confirmar Nueva Contraseña</label>
+                                                <input 
+                                                    type="password" 
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
+                                                    value={formData.confirmPassword}
+                                                    onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                                                    autoComplete="new-password"
+                                                    placeholder="Repita la clave"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
 
                 {/* Modal Footer */}
-                <div className="p-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 shrink-0">
-                    <button 
-                        onClick={() => setIsEditModalOpen(false)}
-                        className="px-5 py-2.5 text-sm font-bold text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                        disabled={isSaving}
-                    >
-                        Cancelar
-                    </button>
-                    <button 
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className="bg-gray-900 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:bg-black transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                        Guardar Cambios
-                    </button>
+                <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between shrink-0">
+                    <div>
+                        {currentStep > 1 ? (
+                            <button 
+                                type="button"
+                                onClick={handlePrevStep}
+                                className="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-2"
+                                disabled={isSaving}
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                                Atrás
+                            </button>
+                        ) : (
+                            <button 
+                                type="button"
+                                onClick={() => setIsEditModalOpen(false)}
+                                className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                                disabled={isSaving}
+                            >
+                                Cancelar
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="flex gap-3">
+                        {currentStep > 1 && (
+                            <button 
+                                type="button"
+                                onClick={() => setIsEditModalOpen(false)}
+                                className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                                disabled={isSaving}
+                            >
+                                Cancelar
+                            </button>
+                        )}
+                        
+                        {currentStep < 3 ? (
+                            <button 
+                                type="button"
+                                onClick={handleNextStep}
+                                className="bg-gray-900 hover:bg-black text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-all flex items-center gap-2 text-sm"
+                                disabled={isSaving}
+                            >
+                                Siguiente
+                                <ArrowRight className="h-4 w-4" />
+                            </button>
+                        ) : (
+                            <button 
+                                type="button"
+                                onClick={handleSave}
+                                disabled={isSaving}
+                                className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-all flex items-center gap-2 text-sm disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                Guardar Cambios
+                            </button>
+                        )}
+                    </div>
                 </div>
 
             </div>

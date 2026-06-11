@@ -92,6 +92,22 @@ const AuthenticatedApp: React.FC = () => {
         }
     }, [isAuthenticated, isLoading, user]);
 
+    // Ensure currentView is allowed, if not switch to an allowed module
+    useEffect(() => {
+        if (isAuthenticated && !isLoading && user && !hasPermission(currentView)) {
+            if (hasPermission('DASHBOARD')) setCurrentView('DASHBOARD');
+            else if (hasPermission('REDISTRIBUTION')) setCurrentView('REDISTRIBUTION');
+            else if (hasPermission('SIG_SEARCH')) setCurrentView('SIG_SEARCH');
+            else if (hasPermission('ADMIN_USERS')) setCurrentView('ADMIN_USERS');
+            else if (hasPermission('ADMIN_ROLES')) setCurrentView('ADMIN_ROLES');
+            else if (hasPermission('ADMIN_FACILITIES')) setCurrentView('ADMIN_FACILITIES');
+            else if (hasPermission('ADMIN_CATALOGS')) setCurrentView('ADMIN_CATALOGS');
+            else if (hasPermission('ADMIN_PARAMS')) setCurrentView('ADMIN_PARAMS');
+            else if (hasPermission('ADMIN_MIGRATION')) setCurrentView('ADMIN_MIGRATION');
+            else if (hasPermission('PROFILE')) setCurrentView('PROFILE');
+        }
+    }, [currentView, isAuthenticated, isLoading, user, hasPermission]);
+
     // If loading, show spinner
     if (isLoading) {
         return (
@@ -143,7 +159,7 @@ const AuthenticatedApp: React.FC = () => {
                      </div>
                      <div className="flex items-center gap-3 text-xs sm:text-sm text-gray-500 font-medium bg-gray-100/80 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-gray-200 shadow-inner">
                          <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-teal-500 animate-[pulse_2s_ease-in-out_infinite] shadow-[0_0_8px_rgba(20,184,166,0.6)]"></span>
-                         <span className="truncate max-w-[150px] sm:max-w-[200px]">{user?.facilityData?.name || 'Logística Farmacéutica'}</span>
+                         <span className="truncate max-w-[150px] sm:max-w-[200px]">{user?.facilityData?.name || 'ToolKit SISMED'}</span>
                      </div>
                 </header>
 
@@ -155,7 +171,7 @@ const AuthenticatedApp: React.FC = () => {
                                 {currentView === 'DASHBOARD' && <AnalysisModule />}
                                 {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
                                 {currentView === 'SIG_SEARCH' && <SheetSearchModule />}
-                                {(currentView === 'ADMIN_USERS' || currentView === 'ADMIN_ROLES') && <AdminPanel />}
+                                {currentView.startsWith('ADMIN') && <AdminPanel />}
                                 {currentView === 'PROFILE' && <UserProfile />}
                             </Suspense>
                         </ErrorBoundary>
@@ -354,8 +370,7 @@ const AnalysisModule: React.FC = () => {
   }, [handleToggleFullScreen]);
 
   // UPDATED HANDLER: Now accepts CPA Mode and Excluded Indices
-  const handleMedicationUpdate = (id: string, newQuantity: number, mode?: 'ADJUSTED' | 'SIMPLE', excludedIndices?: number[]) => {
-    if (!result) return;
+  const handleMedicationUpdate = useCallback((id: string, newQuantity: number, mode?: 'ADJUSTED' | 'SIMPLE', excludedIndices?: number[]) => {
     setResult((prev) => {
       if (!prev) return null;
       const updatedMedications = prev.medications.map((m) =>
@@ -374,16 +389,16 @@ const AnalysisModule: React.FC = () => {
         medications: updatedMedications,
       };
     });
-  };
+  }, []);
 
-  const handleToggleReview = (id: string, isReviewed: boolean) => {
+  const handleToggleReview = useCallback((id: string, isReviewed: boolean) => {
       setReviewedIds(prev => {
           const next = new Set(prev);
           if (isReviewed) next.add(id);
           else next.delete(id);
           return next;
       });
-  };
+  }, []);
 
   const handleAddAdditionalItem = (item: AdditionalItem) => {
       setAdditionalItems(prev => [...prev, item]);

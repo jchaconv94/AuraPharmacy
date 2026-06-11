@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { User, AuthState, AppModule, SystemConfig } from '../types';
 import { api } from '../services/api';
 
@@ -9,7 +9,7 @@ interface AuthContextType extends AuthState {
   hasPermission: (module: AppModule) => boolean;
   updateUserContext: (data: Partial<User>) => void;
   updateSystemConfigContext: (config: SystemConfig) => void;
-  refreshUserData: () => Promise<void>; // Nueva función expuesta
+  refreshUserData: (customUsername?: string) => Promise<void>; // Nueva función expuesta
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,14 +23,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   // Función centralizada para refrescar datos desde el servidor
-  const refreshUserData = async () => {
-      if (!state.user) return;
+  const refreshUserData = async (customUsername?: string) => {
+      const targetUsername = customUsername || state.user?.username;
+      if (!targetUsername) return;
       try {
           // Forzamos la llamada al backend
-          const freshData = await api.refreshSession(state.user.username);
+          const freshData = await api.refreshSession(targetUsername);
           if (freshData.success && freshData.user) {
               const updatedUser = freshData.user as User;
-              localStorage.setItem('aura_auth_user', JSON.stringify(updatedUser));
+              sessionStorage.setItem('aura_auth_user', JSON.stringify(updatedUser));
               setState(prev => ({ ...prev, user: updatedUser }));
               console.log("Datos de usuario sincronizados con BD");
           }
@@ -121,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState(prev => ({ ...prev, user: null, isAuthenticated: false, isLoading: false }));
   };
 
-  const hasPermission = (module: AppModule): boolean => {
+  const hasPermission = useCallback((module: AppModule): boolean => {
       if (!state.user || !state.user.permissions) return false;
       try {
           return Array.isArray(state.user.permissions) && state.user.permissions.includes(module);
@@ -129,7 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error("Error checking permission:", e);
           return false;
       }
-  };
+  }, [state.user]);
 
   // --- INACTIVITY TIMEOUT ---
   useEffect(() => {
@@ -171,8 +172,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setState(prev => ({ ...prev, systemConfig: config }));
   };
 
+  const contextValue = useMemo(() => ({
+      ...state, login, logout, hasPermission, updateUserContext, updateSystemConfigContext, refreshUserData
+  }), [state, hasPermission]);
+
   return (
-    <AuthContext.Provider value={{ ...state, login, logout, hasPermission, updateUserContext, updateSystemConfigContext, refreshUserData }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

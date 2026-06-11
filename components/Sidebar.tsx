@@ -126,9 +126,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         )}
 
-        {(hasPermission('ADMIN_USERS') || hasPermission('ADMIN_ROLES')) && (
+        {(hasPermission('ADMIN_USERS') || hasPermission('ADMIN_ROLES') || hasPermission('ADMIN_FACILITIES') || hasPermission('ADMIN_PARAMS') || hasPermission('ADMIN_MIGRATION') || hasPermission('ADMIN_CATALOGS')) && (
           <button
-            onClick={() => setCurrentView('ADMIN_USERS')}
+            onClick={() => {
+              if (hasPermission('ADMIN_USERS')) setCurrentView('ADMIN_USERS');
+              else if (hasPermission('ADMIN_ROLES')) setCurrentView('ADMIN_ROLES');
+              else if (hasPermission('ADMIN_FACILITIES')) setCurrentView('ADMIN_FACILITIES');
+              else if (hasPermission('ADMIN_CATALOGS')) setCurrentView('ADMIN_CATALOGS');
+              else if (hasPermission('ADMIN_PARAMS')) setCurrentView('ADMIN_PARAMS');
+              else setCurrentView('ADMIN_MIGRATION');
+            }}
             className={`w-full flex items-center gap-3 py-3 rounded-xl transition-all duration-300 group ${
               currentView.startsWith('ADMIN')
                 ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'

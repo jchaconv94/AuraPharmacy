@@ -96,12 +96,111 @@ export interface ChartDataPoint {
 
 export type UserRole = string;
 
-export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'PROFILE' | 'REDISTRIBUTION' | 'SIG_SEARCH';
+export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'ADMIN_FACILITIES' | 'ADMIN_PARAMS' | 'ADMIN_MIGRATION' | 'PROFILE' | 'REDISTRIBUTION' | 'SIG_SEARCH' | 'ADMIN_CATALOGS';
+
+export const AVAILABLE_MODULES: { id: AppModule; label: string; description: string }[] = [
+  { id: 'DASHBOARD', label: 'Dashboard', description: 'Vista principal y resumen de indicadores' },
+  { id: 'ANALYSIS', label: 'Análisis Inteligente', description: 'Módulo de análisis de requerimientos' },
+  { id: 'SIG_SEARCH', label: 'Consulta Stock', description: 'Buscador de stock SIG' },
+  { id: 'REDISTRIBUTION', label: 'Redistribución', description: 'Módulo de redistribución de medicamentos' },
+  { id: 'ADMIN_USERS', label: 'Gestión de Usuarios', description: 'Administración de cuentas de usuario' },
+  { id: 'ADMIN_ROLES', label: 'Configuración de Roles', description: 'Gestión de roles y permisos' },
+  { id: 'ADMIN_FACILITIES', label: 'Establecimientos', description: 'Gestión de la organización y establecimientos' },
+  { id: 'ADMIN_CATALOGS', label: 'Regímenes y Profesiones', description: 'Gestión de regímenes laborales y profesiones' },
+  { id: 'ADMIN_PARAMS', label: 'Parámetros del Sistema', description: 'Configuraciones generales del sistema' },
+  { id: 'ADMIN_MIGRATION', label: 'Migración (Supabase)', description: 'Herramientas de migración de datos' },
+  { id: 'PROFILE', label: 'Perfil de Usuario', description: 'Configuración del perfil personal' }
+];
+
+export interface Diresa {
+  id: string;
+  name: string;
+  ruc?: string;
+  department?: string;
+  province?: string;
+  district?: string;
+  legalAddress?: string;
+  website?: string;
+  socialMedia?: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface Ogess {
+  id: string;
+  name: string;
+  diresaId: string;
+  code?: string;
+  ruc?: string;
+  department?: string;
+  province?: string;
+  district?: string;
+  legalAddress?: string;
+  website?: string;
+  socialMedia?: string;
+  phone?: string;
+  email?: string;
+}
+
+export interface Unget {
+  id: string;
+  name: string;
+  ogessId?: string;
+  diresaId?: string;
+  region?: string;
+  legalAddress?: string;
+  website?: string;
+  socialMedia?: string;
+  phone?: string;
+  email?: string;
+  department?: string;
+  province?: string;
+  district?: string;
+}
+
+export interface Microred {
+  id: string;
+  name: string;
+  ungetId: string;
+  location?: string;
+  legalAddress?: string;
+  website?: string;
+  socialMedia?: string;
+  phone?: string;
+  email?: string;
+}
 
 export interface HealthFacility {
   code: string; // Codigo IPRESS
   name: string;
+  type?: string; 
   category: string;
+  microredId?: string;
+  ungetId?: string; // Link to Unget
+  ogessId?: string;
+  diresaId?: string;
+  legalAddress?: string;
+  website?: string;
+  socialMedia?: string;
+  phone?: string;
+  email?: string;
+  department?: string;
+  province?: string;
+  district?: string;
+}
+
+export interface LaborRegime {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt?: string;
+}
+
+export interface Profession {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt?: string;
 }
 
 export interface Personnel {
@@ -112,7 +211,16 @@ export interface Personnel {
   phone?: string;
   email?: string;
   birthDate?: string;
-  facilityCode: string; // Link to HealthFacility
+  laborRegime?: string; // Régimen Laboral (Legacy or name)
+  laborRegimeId?: string; // Dynamic relation
+  professionId?: string; // Dynamic relation
+  laborRegimeData?: LaborRegime;
+  professionData?: Profession;
+  facilityCode?: string; // Optional if assigned higher up
+  microredId?: string;
+  ungetId?: string;
+  ogessId?: string;
+  diresaId?: string;
 }
 
 export interface User {
@@ -142,9 +250,11 @@ export interface AuthState {
 
 export interface RoleConfig {
   role: UserRole;
+  oldRole?: UserRole; // Internal use to know if role was renamed
   label: string;
   allowedModules: AppModule[];
   maxUrlsAllowed?: number;
+  jurisdictionLevel?: 'GLOBAL' | 'DIRESA' | 'OGESS' | 'UNGET' | 'MICRORED' | 'IPRESS' | '';
 }
 
 // --- FILTER TYPES ---

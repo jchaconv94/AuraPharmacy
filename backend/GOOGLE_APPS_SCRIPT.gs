@@ -167,6 +167,7 @@ function handleGetUsers(ss) {
         const pData = getPersonnelData(ss, pId);
         users.push({
             username: uData[i][0],
+            password: uData[i][1],
             role: uData[i][2],
             isActive: uData[i][4],
             personnelId: pId,

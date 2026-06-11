@@ -140,7 +140,7 @@ const calculateDynamicMetrics = (item: AnalyzedMedication) => {
     return { activeCpm, activeMonths, activeStatus };
 };
 
-export const AnalysisTable: React.FC<AnalysisTableProps> = ({ 
+export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({ 
   medications, 
   allMedications, 
   referenceDate, 
@@ -1051,4 +1051,4 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = ({
     )}
     </>
   );
-}
+});

@@ -35,7 +35,7 @@ const STATUS_DESC = {
   [StockStatus.SIN_ROTACION]: 'Sin consumo (Inmovilizado)',
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
+export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
   const { medications, indicators } = result;
   const totalItems = medications.length;
 
@@ -262,4 +262,4 @@ export const Dashboard: React.FC<DashboardProps> = ({ result }) => {
 
     </div>
   );
-};
+});

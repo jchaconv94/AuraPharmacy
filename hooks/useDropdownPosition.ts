@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { DropdownPositioningService } from '../services/DropdownPositioningService';
 
-export const useDropdownPosition = (isOpen: boolean) => {
+export const useDropdownPosition = (
+    isOpen: boolean,
+    options?: {
+        align?: 'left' | 'center' | 'right';
+        customWidth?: number;
+    }
+) => {
     const triggerRef = useRef<HTMLDivElement>(null);
     const [menuStyles, setMenuStyles] = useState<React.CSSProperties>({});
 
@@ -9,9 +15,10 @@ export const useDropdownPosition = (isOpen: boolean) => {
         const updatePosition = () => {
             if (isOpen && triggerRef.current) {
                 const rect = triggerRef.current.getBoundingClientRect();
-                // Usamos 240 como ancho por defecto, o podríamos pasarlo como parámetro
+                const width = options?.customWidth ?? rect.width ?? 240;
+                const align = options?.align ?? 'center';
                 const styles = DropdownPositioningService.calculatePosition(
-                    rect, 240, window.innerWidth, window.innerHeight
+                    rect, width, window.innerWidth, window.innerHeight, 60, align
                 );
                 setMenuStyles(styles);
             }
@@ -27,7 +34,7 @@ export const useDropdownPosition = (isOpen: boolean) => {
             window.removeEventListener('scroll', updatePosition, true);
             window.removeEventListener('resize', updatePosition);
         };
-    }, [isOpen]);
+    }, [isOpen, options?.align, options?.customWidth]);
 
     return { triggerRef, menuStyles };
 };

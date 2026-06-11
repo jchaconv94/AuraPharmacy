@@ -4,9 +4,17 @@ export class DropdownPositioningService {
         dropdownWidth: number,
         viewportWidth: number,
         viewportHeight: number,
-        headerHeight: number = 60 // Altura estimada del menú
+        headerHeight: number = 60, // Altura estimada del menú
+        align: 'left' | 'center' | 'right' = 'center'
     ): React.CSSProperties {
-        let left = triggerRect.left + triggerRect.width / 2 - dropdownWidth / 2;
+        let left: number;
+        if (align === 'left') {
+            left = triggerRect.left;
+        } else if (align === 'right') {
+            left = triggerRect.right - dropdownWidth;
+        } else {
+            left = triggerRect.left + triggerRect.width / 2 - dropdownWidth / 2;
+        }
         
         // Ajustes de límites laterales
         if (left < 16) left = 16;
