@@ -171,7 +171,7 @@ const AuthenticatedApp: React.FC = () => {
                                 {currentView === 'DASHBOARD' && <AnalysisModule />}
                                 {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
                                 {currentView === 'SIG_SEARCH' && <SheetSearchModule />}
-                                {currentView.startsWith('ADMIN') && <AdminPanel />}
+                                {currentView.startsWith('ADMIN') && <AdminPanel currentView={currentView} />}
                                 {currentView === 'PROFILE' && <UserProfile />}
                             </Suspense>
                         </ErrorBoundary>

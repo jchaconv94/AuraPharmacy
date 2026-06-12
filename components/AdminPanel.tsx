@@ -11,8 +11,9 @@ import { AdminOrganizationModule } from './AdminOrganizationModule';
 import { AdminCatalogsModule } from './AdminCatalogsModule';
 import { CustomSelect } from './ui/CustomSelect';
 
-export const AdminPanel: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'USERS' | 'ROLES' | 'PARAMS' | 'MIGRATION' | 'FACILITIES' | 'CATALOGS'>('USERS');
+export const AdminPanel: React.FC<{ currentView?: string }> = ({ currentView }) => {
+  const activeTab = currentView ? currentView.replace('ADMIN_', '') as 'USERS' | 'ROLES' | 'PARAMS' | 'MIGRATION' | 'FACILITIES' | 'CATALOGS' : 'USERS';
+  
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<RoleConfig[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
@@ -83,16 +84,7 @@ export const AdminPanel: React.FC = () => {
 
   const [isRolesLoading, setIsRolesLoading] = useState(true);
 
-  // Set default active tab based on permissions
-  useEffect(() => {
-     if (!hasPermission('ADMIN_USERS') && activeTab === 'USERS') {
-         if (hasPermission('ADMIN_ROLES')) setActiveTab('ROLES');
-         else if (hasPermission('ADMIN_FACILITIES')) setActiveTab('FACILITIES');
-         else if (hasPermission('ADMIN_PARAMS')) setActiveTab('PARAMS');
-         else if (hasPermission('ADMIN_CATALOGS')) setActiveTab('CATALOGS');
-         else if (hasPermission('ADMIN_MIGRATION')) setActiveTab('MIGRATION');
-     }
-  }, [hasPermission, activeTab]);
+  // Default tab logic is now handled by the parent component passing currentView
 
   useEffect(() => {
     // Initial load (uses cache if available)
@@ -256,6 +248,16 @@ export const AdminPanel: React.FC = () => {
       users, isSuperAdmin, userDiresaId, userOgessId, userUngetId, userMicroredId, userFacilityCode,
       searchTerm, filterProfession, filterRole, filterStatus, filterDiresa, filterOgess, filterUnget
   ]);
+
+  const HIERARCHY_WEIGHTS: Record<string, number> = {
+      'GLOBAL': 100,
+      'DIRESA': 80,
+      'OGESS': 60,
+      'UNGET': 40,
+      'MICRORED': 20,
+      'IPRESS': 0,
+      '': -1
+  };
 
   const getLevelForRole = (roleKey: string): 'GLOBAL' | 'DIRESA' | 'OGESS' | 'UNGET' | 'MICRORED' | 'IPRESS' | '' => {
       const config = roles.find(r => r.role === roleKey);
@@ -711,120 +713,6 @@ export const AdminPanel: React.FC = () => {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8 items-start">
-            {/* High-End Refined Sidebar */}
-            <div className="w-full lg:w-80 shrink-0">
-                <div className="bg-white rounded-2xl border border-gray-200/80 shadow-[0_5px_20px_rgba(0,0,0,0.015)] p-5 space-y-4 sticky top-24">
-                    <div className="px-3 py-2.5 bg-gray-50/80 rounded-xl">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.12em]">Administración</p>
-                        <p className="text-xs text-gray-500 mt-0.5 font-medium">Panel de Control</p>
-                    </div>
-
-                    <div className="space-y-1">
-                            {hasPermission('ADMIN_USERS') && (
-                                <button 
-                                    onClick={() => setActiveTab('USERS')}
-                                    className={`w-full flex items-center justify-between px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 cursor-pointer ${
-                                        activeTab === 'USERS' 
-                                        ? 'text-teal-900 bg-teal-50 hover:bg-teal-50/90 border border-teal-500/25 shadow-[0_4px_12px_rgba(13,148,136,0.04)] scale-[1.01]' 
-                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <Users className={`h-4.5 w-4.5 transition-colors ${activeTab === 'USERS' ? 'text-teal-600' : 'text-gray-400'}`} />
-                                        <span>Gestión de Usuarios</span>
-                                    </div>
-                                    <ChevronRight className={`h-4 w-4 transition-all ${activeTab === 'USERS' ? 'text-teal-600 translate-x-1 opacity-100' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`} />
-                                </button>
-                            )}
-
-                            {hasPermission('ADMIN_ROLES') && (
-                                <button 
-                                    onClick={() => setActiveTab('ROLES')}
-                                    className={`w-full flex items-center justify-between px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 cursor-pointer ${
-                                        activeTab === 'ROLES' 
-                                        ? 'text-teal-900 bg-teal-50 hover:bg-teal-50/90 border border-teal-500/25 shadow-[0_4px_12px_rgba(13,148,136,0.04)] scale-[1.01]' 
-                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <Shield className={`h-4.5 w-4.5 transition-colors ${activeTab === 'ROLES' ? 'text-teal-600' : 'text-gray-400'}`} />
-                                        <span>Configuración de Roles</span>
-                                    </div>
-                                    <ChevronRight className={`h-4 w-4 transition-all ${activeTab === 'ROLES' ? 'text-teal-600 translate-x-1 opacity-100' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`} />
-                                </button>
-                            )}
-
-                            {hasPermission('ADMIN_FACILITIES') && (
-                                <button 
-                                    onClick={() => setActiveTab('FACILITIES')}
-                                    className={`w-full flex items-center justify-between px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 cursor-pointer ${
-                                        activeTab === 'FACILITIES' 
-                                        ? 'text-teal-900 bg-teal-50 hover:bg-teal-50/90 border border-teal-500/25 shadow-[0_4px_12px_rgba(13,148,136,0.04)] scale-[1.01]' 
-                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <Building2 className={`h-4.5 w-4.5 transition-colors ${activeTab === 'FACILITIES' ? 'text-teal-600' : 'text-gray-400'}`} />
-                                        <span>Establecimientos</span>
-                                    </div>
-                                    <ChevronRight className={`h-4 w-4 transition-all ${activeTab === 'FACILITIES' ? 'text-teal-600 translate-x-1 opacity-100' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`} />
-                                </button>
-                            )}
-
-                            {hasPermission('ADMIN_PARAMS') && (
-                                <button 
-                                    onClick={() => setActiveTab('PARAMS')}
-                                    className={`w-full flex items-center justify-between px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 cursor-pointer ${
-                                        activeTab === 'PARAMS' 
-                                        ? 'text-teal-900 bg-teal-50 hover:bg-teal-50/90 border border-teal-500/25 shadow-[0_4px_12px_rgba(13,148,136,0.04)] scale-[1.01]' 
-                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <Sliders className={`h-4.5 w-4.5 transition-colors ${activeTab === 'PARAMS' ? 'text-teal-600' : 'text-gray-400'}`} />
-                                        <span>Parámetros Sistema</span>
-                                    </div>
-                                    <ChevronRight className={`h-4 w-4 transition-all ${activeTab === 'PARAMS' ? 'text-teal-600 translate-x-1 opacity-100' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`} />
-                                </button>
-                            )}
-
-                            {hasPermission('ADMIN_CATALOGS') && (
-                                <button 
-                                    onClick={() => setActiveTab('CATALOGS')}
-                                    className={`w-full flex items-center justify-between px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 cursor-pointer ${
-                                        activeTab === 'CATALOGS' 
-                                        ? 'text-teal-900 bg-teal-50 hover:bg-teal-50/90 border border-teal-500/25 shadow-[0_4px_12px_rgba(13,148,136,0.04)] scale-[1.01]' 
-                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <Briefcase className={`h-4.5 w-4.5 transition-colors ${activeTab === 'CATALOGS' ? 'text-teal-600' : 'text-gray-400'}`} />
-                                        <span>Regímenes y Profesiones</span>
-                                    </div>
-                                    <ChevronRight className={`h-4 w-4 transition-all ${activeTab === 'CATALOGS' ? 'text-teal-600 translate-x-1 opacity-100' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`} />
-                                </button>
-                            )}
-
-                            {hasPermission('ADMIN_MIGRATION') && (
-                                <button 
-                                    onClick={() => setActiveTab('MIGRATION')}
-                                    className={`w-full flex items-center justify-between px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 cursor-pointer ${
-                                        activeTab === 'MIGRATION' 
-                                        ? 'text-amber-900 bg-amber-50 hover:bg-amber-50/90 border border-amber-500/25 shadow-[0_4px_12px_rgba(245,158,11,0.04)] scale-[1.01]' 
-                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50 border border-transparent'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <Database className={`h-4.5 w-4.5 transition-colors ${activeTab === 'MIGRATION' ? 'text-amber-600' : 'text-gray-400'}`} />
-                                        <span>Migrar Datos (Supabase)</span>
-                                    </div>
-                                    <ChevronRight className={`h-4 w-4 transition-all ${activeTab === 'MIGRATION' ? 'text-amber-600 translate-x-1 opacity-100' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`} />
-                                </button>
-                            )}
-                        </div>
-                </div>
-            </div>
-
             {/* Premium Spacious Content Container */}
             <div className="flex-1 bg-white rounded-2xl shadow-[0_5px_30px_rgba(0,0,0,0.018)] border border-gray-200/80 p-6 sm:p-8 overflow-hidden min-w-0 w-full animate-in fade-in duration-300">
                 {activeTab === 'USERS' && (
@@ -1696,38 +1584,34 @@ export const AdminPanel: React.FC = () => {
                                             <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Nivel de Privilegios</h5>
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-700 mb-1">Rol de Permisos *</label>
-                                                {isSuperAdmin ? (
-                                                    <CustomSelect
-                                                        className="w-full border border-gray-300 rounded-lg text-gray-900 font-bold"
-                                                        value={userForm.role}
-                                                        onChange={roleVal => {
-                                                            const newLvl = getLevelForRole(roleVal);
-                                                            setUserModalLevel(newLvl);
-                                                            setUserForm(prev => ({
-                                                                ...prev,
-                                                                role: roleVal,
-                                                                diresaId: '',
-                                                                ogessId: '',
-                                                                ungetId: '',
-                                                                microredId: '',
-                                                                facilityCode: ''
-                                                            }));
-                                                        }}
-                                                        options={roles.map(r => ({ value: r.role, label: r.label || r.role }))}
-                                                    />
-                                                ) : (
-                                                    <div className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold text-gray-600 flex items-center justify-between shadow-sm">
-                                                        <span>{roles.find(r => r.role === userForm.role)?.label || userForm.role}</span>
-                                                        <Lock className="h-4 w-4 text-gray-400" />
-                                                    </div>
-                                                )}
+                                                <CustomSelect
+                                                    className="w-full border border-gray-300 rounded-lg text-gray-900 font-bold"
+                                                    value={userForm.role}
+                                                    onChange={roleVal => {
+                                                        const newLvl = getLevelForRole(roleVal);
+                                                        setUserModalLevel(newLvl);
+                                                        setUserForm(prev => ({
+                                                            ...prev,
+                                                            role: roleVal,
+                                                            diresaId: '',
+                                                            ogessId: '',
+                                                            ungetId: '',
+                                                            microredId: '',
+                                                            facilityCode: ''
+                                                        }));
+                                                    }}
+                                                    options={roles
+                                                        .filter(r => {
+                                                            if (isSuperAdmin) return true;
+                                                            const currentUserLevel = getLevelForRole(currentUser?.role || '');
+                                                            const currentUserWeight = HIERARCHY_WEIGHTS[currentUserLevel] ?? -1;
+                                                            const optionLevel = getLevelForRole(r.role);
+                                                            const optionWeight = HIERARCHY_WEIGHTS[optionLevel] ?? -1;
+                                                            return optionWeight <= currentUserWeight && optionWeight < 100 && optionWeight >= 0;
+                                                        })
+                                                        .map(r => ({ value: r.role, label: r.label || r.role }))}
+                                                />
                                             </div>
-                                            {!isSuperAdmin && (
-                                                <div className="bg-amber-50 rounded-lg p-3 border border-amber-100 flex items-start gap-2">
-                                                    <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                                                    <p className="text-[10px] text-amber-800 font-medium">Solo los administradores globales (Super Admin) pueden modificar el ámbito de privilegios de este usuario.</p>
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 </div>

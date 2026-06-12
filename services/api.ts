@@ -202,7 +202,9 @@ export const api = {
                     last_name: data.lastName,
                     dni: data.dni,
                     phone: data.phone,
-                    email: data.email
+                    email: data.email,
+                    labor_regime_id: data.laborRegimeId || null,
+                    profession_id: data.professionId || null
                 }).eq('id', personnelId);
                 
                 const userUpdateData: any = {};

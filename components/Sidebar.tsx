@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart2, 
   ArrowRightLeft, 
@@ -6,10 +6,16 @@ import {
   ShieldCheck, 
   ChevronLeft, 
   ChevronRight,
+  ChevronDown,
   UserCircle,
   LogOut,
   Layers,
-  Database
+  Database,
+  Users,
+  Shield,
+  Building2,
+  Sliders,
+  Briefcase
 } from 'lucide-react';
 import { AppModule, User } from '../types';
 
@@ -32,7 +38,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   logout,
   hasPermission
 }) => {
+  const [isAdminExpanded, setIsAdminExpanded] = useState(false);
+  
+  useEffect(() => {
+    if (currentView.startsWith('ADMIN') && !isCollapsed) {
+      setIsAdminExpanded(true);
+    }
+  }, [currentView, isCollapsed]);
+
   const toggleCollapse = () => setIsCollapsed(!isCollapsed);
+
+  const toggleAdmin = () => {
+    if (isCollapsed) {
+      setIsCollapsed(false);
+      setIsAdminExpanded(true);
+    } else {
+      setIsAdminExpanded(!isAdminExpanded);
+    }
+  };
 
   return (
     <div 
@@ -127,25 +150,111 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {(hasPermission('ADMIN_USERS') || hasPermission('ADMIN_ROLES') || hasPermission('ADMIN_FACILITIES') || hasPermission('ADMIN_PARAMS') || hasPermission('ADMIN_MIGRATION') || hasPermission('ADMIN_CATALOGS')) && (
-          <button
-            onClick={() => {
-              if (hasPermission('ADMIN_USERS')) setCurrentView('ADMIN_USERS');
-              else if (hasPermission('ADMIN_ROLES')) setCurrentView('ADMIN_ROLES');
-              else if (hasPermission('ADMIN_FACILITIES')) setCurrentView('ADMIN_FACILITIES');
-              else if (hasPermission('ADMIN_CATALOGS')) setCurrentView('ADMIN_CATALOGS');
-              else if (hasPermission('ADMIN_PARAMS')) setCurrentView('ADMIN_PARAMS');
-              else setCurrentView('ADMIN_MIGRATION');
-            }}
-            className={`w-full flex items-center gap-3 py-3 rounded-xl transition-all duration-300 group ${
-              currentView.startsWith('ADMIN')
-                ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
-                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
-            } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
-             title={isCollapsed ? "Admin" : ""}
-          >
-            <Settings className={`h-5 w-5 shrink-0 ${currentView.startsWith('ADMIN') ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
-            {!isCollapsed && <span className="font-semibold text-sm">Admin</span>}
-          </button>
+          <div className="flex flex-col gap-1">
+            <button
+              onClick={toggleAdmin}
+              className={`w-full flex items-center justify-between py-3 rounded-xl transition-all duration-300 group ${
+                currentView.startsWith('ADMIN')
+                  ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+              } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
+               title={isCollapsed ? "Administración" : ""}
+            >
+              <div className="flex items-center gap-3">
+                <Settings className={`h-5 w-5 shrink-0 ${currentView.startsWith('ADMIN') ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
+                {!isCollapsed && <span className="font-semibold text-sm">Administración</span>}
+              </div>
+              {!isCollapsed && (
+                <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isAdminExpanded ? 'rotate-180 text-teal-400' : 'text-gray-500 group-hover:text-gray-400'}`} />
+              )}
+            </button>
+            
+            {/* Sub-menu */}
+            {!isCollapsed && isAdminExpanded && (
+              <div className="flex flex-col gap-1 pl-4 mt-1 animate-in slide-in-from-top-2 fade-in duration-200">
+                <div className="pl-3 border-l-2 border-white/10 flex flex-col gap-1">
+                  {hasPermission('ADMIN_USERS') && (
+                    <button
+                      onClick={() => setCurrentView('ADMIN_USERS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'ADMIN_USERS'
+                          ? 'text-teal-400 bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Users className="h-4 w-4 shrink-0" />
+                      Gestión de Usuarios
+                    </button>
+                  )}
+                  {hasPermission('ADMIN_ROLES') && (
+                    <button
+                      onClick={() => setCurrentView('ADMIN_ROLES')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'ADMIN_ROLES'
+                          ? 'text-teal-400 bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Shield className="h-4 w-4 shrink-0" />
+                      Configuración de Roles
+                    </button>
+                  )}
+                  {hasPermission('ADMIN_FACILITIES') && (
+                    <button
+                      onClick={() => setCurrentView('ADMIN_FACILITIES')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'ADMIN_FACILITIES'
+                          ? 'text-teal-400 bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Building2 className="h-4 w-4 shrink-0" />
+                      Establecimientos
+                    </button>
+                  )}
+                  {hasPermission('ADMIN_PARAMS') && (
+                    <button
+                      onClick={() => setCurrentView('ADMIN_PARAMS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'ADMIN_PARAMS'
+                          ? 'text-teal-400 bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Sliders className="h-4 w-4 shrink-0" />
+                      Parámetros Sistema
+                    </button>
+                  )}
+                  {hasPermission('ADMIN_CATALOGS') && (
+                    <button
+                      onClick={() => setCurrentView('ADMIN_CATALOGS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'ADMIN_CATALOGS'
+                          ? 'text-teal-400 bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Briefcase className="h-4 w-4 shrink-0" />
+                      Regímenes y Profesiones
+                    </button>
+                  )}
+                  {hasPermission('ADMIN_MIGRATION') && (
+                    <button
+                      onClick={() => setCurrentView('ADMIN_MIGRATION')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'ADMIN_MIGRATION'
+                          ? 'text-teal-400 bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Database className="h-4 w-4 shrink-0" />
+                      Migrar Datos (Supabase)
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

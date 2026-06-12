@@ -38,6 +38,8 @@ export const UserProfile: React.FC = () => {
   const [ogess, setOgess] = useState<any[]>([]);
   const [ungets, setUngets] = useState<any[]>([]);
   const [microredes, setMicroredes] = useState<any[]>([]);
+  const [laborRegimes, setLaborRegimes] = useState<any[]>([]);
+  const [professions, setProfessions] = useState<any[]>([]);
 
   // Form State
   const [currentStep, setCurrentStep] = useState(1);
@@ -50,23 +52,29 @@ export const UserProfile: React.FC = () => {
       birthDate: '',
       username: '',
       newPassword: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      laborRegimeId: '',
+      professionId: ''
   });
 
   // Load organization lookups
   useEffect(() => {
     const loadLookups = async () => {
       try {
-        const [dList, oList, uList, mList] = await Promise.all([
+        const [dList, oList, uList, mList, rList, pList] = await Promise.all([
           api.getDiresas(),
           api.getOgess(),
           api.getUngets(),
-          api.getMicroredes()
+          api.getMicroredes(),
+          api.getLaborRegimes(),
+          api.getProfessions()
         ]);
         setDiresas(dList || []);
         setOgess(oList || []);
         setUngets(uList || []);
         setMicroredes(mList || []);
+        setLaborRegimes(rList || []);
+        setProfessions(pList || []);
       } catch (e) {
         console.warn("Error loading organization catalogs", e);
       }
@@ -96,12 +104,14 @@ export const UserProfile: React.FC = () => {
             birthDate: user.personnelData.birthDate || '',
             username: user.username,
             newPassword: '',
-            confirmPassword: ''
+            confirmPassword: '',
+            laborRegimeId: user.personnelData.laborRegimeId || '',
+            professionId: user.personnelData.professionId || ''
         });
         setError(null);
         setCurrentStep(1);
     }
-  }, [isEditModalOpen, user]);
+  }, [isEditModalOpen]); // Removed user from dependency array to prevent resetting form and step on save
 
   if (!user || !user.personnelData) return null;
 
@@ -111,25 +121,45 @@ export const UserProfile: React.FC = () => {
       setIsRefreshing(false);
   };
 
-  const handleSave = async () => {
+  const executeSave = async (isFinalStep: boolean = false) => {
       setError(null);
 
       // Basic Validations
       if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.dni.trim() || !formData.username.trim()) {
           setError("Los campos Nombre, Apellido, DNI y Usuario son obligatorios.");
-          return;
+          return false;
       }
 
       // Password Validation
       if (formData.newPassword || formData.confirmPassword) {
           if (formData.newPassword !== formData.confirmPassword) {
               setError("Las nuevas contraseñas no coinciden.");
-              return;
+              return false;
           }
           if (formData.newPassword.length < 4) {
               setError("La contraseña es muy corta.");
-              return;
+              return false;
           }
+      }
+
+      const hasChanges = (
+          formData.firstName !== (user?.personnelData?.firstName || '') ||
+          formData.lastName !== (user?.personnelData?.lastName || '') ||
+          formData.dni !== (user?.personnelData?.dni || '') ||
+          formData.phone !== (user?.personnelData?.phone || '') ||
+          formData.email !== (user?.personnelData?.email || '') ||
+          formData.birthDate !== (user?.personnelData?.birthDate || '') ||
+          formData.username !== user?.username ||
+          formData.laborRegimeId !== (user?.personnelData?.laborRegimeId || '') ||
+          formData.professionId !== (user?.personnelData?.professionId || '') ||
+          formData.newPassword !== ''
+      );
+
+      if (!hasChanges) {
+          if (isFinalStep) {
+              setIsEditModalOpen(false);
+          }
+          return true;
       }
 
       setIsSaving(true);
@@ -141,7 +171,9 @@ export const UserProfile: React.FC = () => {
           phone: formData.phone,
           email: formData.email,
           birthDate: formData.birthDate,
-          username: formData.username
+          username: formData.username,
+          laborRegimeId: formData.laborRegimeId,
+          professionId: formData.professionId
       };
 
       if (formData.newPassword) {
@@ -161,23 +193,34 @@ export const UserProfile: React.FC = () => {
                   dni: formData.dni,
                   phone: formData.phone,
                   email: formData.email,
-                  birthDate: formData.birthDate
+                  birthDate: formData.birthDate,
+                  laborRegimeId: formData.laborRegimeId,
+                  professionId: formData.professionId
               }
           });
           
           // 2. CRITICAL: Force full refresh from DB immediately to update Header/Session
           await refreshUserData(formData.username);
 
-          setIsEditModalOpen(false);
-          toast.success("Perfil actualizado con éxito");
+          if (isFinalStep) {
+              setIsEditModalOpen(false);
+              toast.success("Perfil actualizado con éxito");
+          } else {
+              toast.success("Los datos se actualizaron correctamente");
+          }
       } else {
           setError(response.message || "Error al guardar los cambios.");
       }
 
       setIsSaving(false);
+      return response.success;
   };
 
-  const handleNextStep = () => {
+  const handleSave = async () => {
+      await executeSave(true);
+  };
+
+  const handleNextStep = async () => {
       setError(null);
       if (currentStep === 1) {
           if (!formData.firstName.trim()) {
@@ -196,13 +239,15 @@ export const UserProfile: React.FC = () => {
               setError("El DNI debe tener exactamente 8 dígitos.");
               return;
           }
-          setCurrentStep(2);
+          const saved = await executeSave(false);
+          if (saved) setCurrentStep(2);
       } else if (currentStep === 2) {
           if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
               setError("El formato de correo electrónico es inválido.");
               return;
           }
-          setCurrentStep(3);
+          const saved = await executeSave(false);
+          if (saved) setCurrentStep(3);
       }
   };
 
@@ -526,7 +571,7 @@ export const UserProfile: React.FC = () => {
                                 <Phone className="h-4 w-4" />
                             </div>
                             <span className={`text-[10px] font-bold mt-1 transition-colors duration-200 ${currentStep === 2 ? 'text-teal-600 font-extrabold' : 'text-gray-400'}`}>
-                                Contacto
+                                Contacto y Laboral
                             </span>
                         </button>
 
@@ -602,16 +647,18 @@ export const UserProfile: React.FC = () => {
                                                 placeholder="Ej. Fasabi Paredes"
                                             />
                                         </div>
-                                        <div className="sm:col-span-2">
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">Documento Nacional de Identidad (DNI) <span className="text-red-500">*</span></label>
-                                            <input 
-                                                type="text" 
-                                                maxLength={8}
-                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none font-mono bg-white text-gray-900 transition-shadow"
-                                                value={formData.dni}
-                                                onChange={(e) => setFormData({...formData, dni: e.target.value.replace(/\D/g, '')})}
-                                                placeholder="8 dígitos numéricos"
-                                            />
+                                        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Documento Nacional de Identidad (DNI) <span className="text-red-500">*</span></label>
+                                                <input 
+                                                    type="text" 
+                                                    maxLength={8}
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none font-mono bg-white text-gray-900 transition-shadow"
+                                                    value={formData.dni}
+                                                    onChange={(e) => setFormData({...formData, dni: e.target.value.replace(/\D/g, '')})}
+                                                    placeholder="8 dígitos numéricos"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -621,9 +668,9 @@ export const UserProfile: React.FC = () => {
                                 <div className="space-y-4">
                                     <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-100/80 mb-2">
                                         <h4 className="text-sm font-bold text-teal-800 flex items-center gap-2">
-                                            <Phone className="h-4 w-4" /> Paso 2: Información de Contacto
+                                            <Phone className="h-4 w-4" /> Paso 2: Contacto y Laboral
                                         </h4>
-                                        <p className="text-xs text-teal-600 mt-1">Facilite sus vías de comunicación para el envío de alertas farmacéuticas y coordinaciones de stock.</p>
+                                        <p className="text-xs text-teal-600 mt-1">Facilite sus vías de comunicación e información laboral para coordinaciones farmacéuticas.</p>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
@@ -643,8 +690,36 @@ export const UserProfile: React.FC = () => {
                                                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
                                                 value={formData.email}
                                                 onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                                placeholder="Ej. farmacia.barranca@gmail.com"
+                                                placeholder="Ej. farmacia@gmail.com"
                                             />
+                                        </div>
+                                        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-gray-150 pt-4 mt-2">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Régimen Laboral</label>
+                                                <select 
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
+                                                    value={formData.laborRegimeId}
+                                                    onChange={(e) => setFormData({...formData, laborRegimeId: e.target.value})}
+                                                >
+                                                    <option value="">Seleccione Régimen...</option>
+                                                    {laborRegimes.map(r => (
+                                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Profesión</label>
+                                                <select 
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
+                                                    value={formData.professionId}
+                                                    onChange={(e) => setFormData({...formData, professionId: e.target.value})}
+                                                >
+                                                    <option value="">Seleccione Profesión...</option>
+                                                    {professions.map(p => (
+                                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
