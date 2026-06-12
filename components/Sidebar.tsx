@@ -153,19 +153,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex flex-col gap-1">
             <button
               onClick={toggleAdmin}
-              className={`w-full flex items-center justify-between py-3 rounded-xl transition-all duration-300 group ${
+              className={`w-full flex items-center py-3 rounded-xl transition-all duration-300 group ${
                 currentView.startsWith('ADMIN')
                   ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
                   : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
-              } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
+              } ${isCollapsed ? 'justify-center px-0' : 'justify-between px-3'}`}
                title={isCollapsed ? "Administración" : ""}
             >
-              <div className="flex items-center gap-3">
+              {isCollapsed ? (
                 <Settings className={`h-5 w-5 shrink-0 ${currentView.startsWith('ADMIN') ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
-                {!isCollapsed && <span className="font-semibold text-sm">Administración</span>}
-              </div>
-              {!isCollapsed && (
-                <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isAdminExpanded ? 'rotate-180 text-teal-400' : 'text-gray-500 group-hover:text-gray-400'}`} />
+              ) : (
+                <>
+                  <div className="flex items-center gap-3">
+                    <Settings className={`h-5 w-5 shrink-0 ${currentView.startsWith('ADMIN') ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
+                    <span className="font-semibold text-sm">Administración</span>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isAdminExpanded ? 'rotate-180 text-teal-400' : 'text-gray-500 group-hover:text-gray-400'}`} />
+                </>
               )}
             </button>
             
