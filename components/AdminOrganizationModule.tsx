@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../services/api';
 import { HealthFacility, Unget, Diresa, Ogess, Microred } from '../types';
-import { Building2, Plus, Edit, Trash2, MapPin, Search, ChevronLeft, ChevronRight, Save, X, Network, Globe } from 'lucide-react';
+import { Building2, Plus, Edit, Trash2, MapPin, Search, ChevronLeft, ChevronRight, Save, X, Network, Globe, Filter, FilterX, Eye, Info, ChevronDown, ChevronUp, Copy, Check, Hash, Phone, Mail, Activity, ArrowRight, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { CustomSelect } from './ui/CustomSelect';
@@ -37,6 +37,23 @@ export const AdminOrganizationModule: React.FC = () => {
     }, [availableTabs, activeTab]);
 
     const [searchQuery, setSearchQuery] = useState('');
+
+    // New Advanced Filters States
+    const [filterDiresaId, setFilterDiresaId] = useState('');
+    const [filterOgessId, setFilterOgessId] = useState('');
+    const [filterUngetId, setFilterUngetId] = useState('');
+    const [filterMicroredId, setFilterMicroredId] = useState('');
+    const [filterType, setFilterType] = useState('');
+    const [filterCategory, setFilterCategory] = useState('');
+    const [filterDepartment, setFilterDepartment] = useState('');
+    const [filterProvince, setFilterProvince] = useState('');
+    const [filterDistrict, setFilterDistrict] = useState('');
+    const [isFilterPaneOpen, setIsFilterPaneOpen] = useState(false);
+
+    // New Detail Explorer Modal States
+    const [selectedDetailItem, setSelectedDetailItem] = useState<any | null>(null);
+    const [selectedDetailType, setSelectedDetailType] = useState<'DIRESA' | 'OGESS' | 'UNGET' | 'MICRORED' | 'IPRESS' | null>(null);
+    const [copiedField, setCopiedField] = useState<string | null>(null);
 
     // Modal States
     const [isDiresaModalOpen, setIsDiresaModalOpen] = useState(false);
@@ -243,6 +260,204 @@ export const AdminOrganizationModule: React.FC = () => {
             return true;
         });
     }, [facilities, isSuperAdmin, userUngetId, userOgessId, userDiresaId]);
+
+    // Computed lists applying both Advanced Filters and Search input
+    const finalFilteredDiresas = useMemo(() => {
+        let list = visibleDiresas;
+        if (filterDiresaId) {
+            list = list.filter(d => d.id === filterDiresaId);
+        }
+        if (filterDepartment) {
+            list = list.filter(d => d.department?.toLowerCase().includes(filterDepartment.toLowerCase()));
+        }
+        if (searchQuery) {
+            list = list.filter(d => 
+                d.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                (d.ruc && d.ruc.includes(searchQuery))
+            );
+        }
+        return list;
+    }, [visibleDiresas, filterDiresaId, filterDepartment, searchQuery]);
+
+    const finalFilteredOgess = useMemo(() => {
+        let list = visibleOgess;
+        if (filterDiresaId) {
+            list = list.filter(o => o.diresaId === filterDiresaId);
+        }
+        if (filterOgessId) {
+            list = list.filter(o => o.id === filterOgessId);
+        }
+        if (filterDepartment) {
+            list = list.filter(o => o.department?.toLowerCase().includes(filterDepartment.toLowerCase()));
+        }
+        if (filterProvince) {
+            list = list.filter(o => o.province?.toLowerCase().includes(filterProvince.toLowerCase()));
+        }
+        if (filterDistrict) {
+            list = list.filter(o => o.district?.toLowerCase().includes(filterDistrict.toLowerCase()));
+        }
+        if (searchQuery) {
+            list = list.filter(o => 
+                o.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                (o.code && o.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (o.ruc && o.ruc.includes(searchQuery))
+            );
+        }
+        return list;
+    }, [visibleOgess, filterDiresaId, filterOgessId, filterDepartment, filterProvince, filterDistrict, searchQuery]);
+
+    const finalFilteredUngets = useMemo(() => {
+        let list = visibleUngets;
+        if (filterDiresaId) {
+            list = list.filter(u => {
+                if (u.diresaId === filterDiresaId) return true;
+                if (u.ogessId) {
+                    const parent = ogess.find(o => o.id === u.ogessId);
+                    return parent?.diresaId === filterDiresaId;
+                }
+                return false;
+            });
+        }
+        if (filterOgessId) {
+            list = list.filter(u => u.ogessId === filterOgessId);
+        }
+        if (filterUngetId) {
+            list = list.filter(u => u.id === filterUngetId);
+        }
+        if (filterDepartment) {
+            list = list.filter(u => u.department?.toLowerCase().includes(filterDepartment.toLowerCase()));
+        }
+        if (filterProvince) {
+            list = list.filter(u => u.province?.toLowerCase().includes(filterProvince.toLowerCase()));
+        }
+        if (filterDistrict) {
+            list = list.filter(u => u.district?.toLowerCase().includes(filterDistrict.toLowerCase()));
+        }
+        if (searchQuery) {
+            list = list.filter(u => 
+                u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (u.province && u.province.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (u.district && u.district.toLowerCase().includes(searchQuery.toLowerCase()))
+            );
+        }
+        return list;
+    }, [visibleUngets, filterDiresaId, filterOgessId, filterUngetId, filterDepartment, filterProvince, filterDistrict, searchQuery, ogess]);
+
+    const finalFilteredMicroredes = useMemo(() => {
+        let list = visibleMicroredes;
+        if (filterDiresaId) {
+            list = list.filter(m => {
+                const parentUnget = ungets.find(u => u.id === m.ungetId);
+                if (!parentUnget) return false;
+                if (parentUnget.diresaId === filterDiresaId) return true;
+                if (parentUnget.ogessId) {
+                    const parentOgess = ogess.find(o => o.id === parentUnget.ogessId);
+                    return parentOgess?.diresaId === filterDiresaId;
+                }
+                return false;
+            });
+        }
+        if (filterOgessId) {
+            list = list.filter(m => {
+                const parentUnget = ungets.find(u => u.id === m.ungetId);
+                return parentUnget?.ogessId === filterOgessId;
+            });
+        }
+        if (filterUngetId) {
+            list = list.filter(m => m.ungetId === filterUngetId);
+        }
+        if (filterMicroredId) {
+            list = list.filter(m => m.id === filterMicroredId);
+        }
+        if (searchQuery) {
+            list = list.filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        }
+        return list;
+    }, [visibleMicroredes, filterDiresaId, filterOgessId, filterUngetId, filterMicroredId, searchQuery, ungets, ogess]);
+
+    const finalFilteredFacilities = useMemo(() => {
+        let list = visibleFacilities;
+        if (filterDiresaId) {
+            list = list.filter(f => f.diresaId === filterDiresaId);
+        }
+        if (filterOgessId) {
+            list = list.filter(f => f.ogessId === filterOgessId);
+        }
+        if (filterUngetId) {
+            list = list.filter(f => f.ungetId === filterUngetId);
+        }
+        if (filterMicroredId) {
+            list = list.filter(f => f.microredId === filterMicroredId);
+        }
+        if (filterDepartment) {
+            list = list.filter(f => f.department?.toLowerCase().includes(filterDepartment.toLowerCase()));
+        }
+        if (filterProvince) {
+            list = list.filter(f => f.province?.toLowerCase().includes(filterProvince.toLowerCase()));
+        }
+        if (filterDistrict) {
+            list = list.filter(f => f.district?.toLowerCase().includes(filterDistrict.toLowerCase()));
+        }
+        if (filterType) {
+            list = list.filter(f => f.type === filterType);
+        }
+        if (filterCategory) {
+            list = list.filter(f => f.category?.toLowerCase() === filterCategory.toLowerCase());
+        }
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            list = list.filter(f => 
+                f.name.toLowerCase().includes(query) || 
+                f.code.toLowerCase().includes(query) ||
+                (f.district && f.district.toLowerCase().includes(query)) ||
+                (f.province && f.province.toLowerCase().includes(query))
+            );
+        }
+        return list;
+    }, [visibleFacilities, filterDiresaId, filterOgessId, filterUngetId, filterMicroredId, filterType, filterCategory, filterDepartment, filterProvince, filterDistrict, searchQuery]);
+
+    const hasActiveFilters = useMemo(() => {
+        return !!filterDiresaId || !!filterOgessId || !!filterUngetId || !!filterMicroredId || !!filterType || !!filterCategory || !!filterDepartment || !!filterProvince || !!filterDistrict;
+    }, [filterDiresaId, filterOgessId, filterUngetId, filterMicroredId, filterType, filterCategory, filterDepartment, filterProvince, filterDistrict]);
+
+    const filterOptions = useMemo(() => {
+        let departments = new Set<string>();
+        let provinces = new Set<string>();
+        let districts = new Set<string>();
+
+        const extractFrom = (list: any[]) => {
+            list.forEach(item => {
+                if (item.department) departments.add(item.department);
+                if (item.province) provinces.add(item.province);
+                if (item.district) districts.add(item.district);
+            });
+        };
+
+        if (activeTab === 'DIRESA') extractFrom(visibleDiresas);
+        else if (activeTab === 'OGESS') extractFrom(visibleOgess);
+        else if (activeTab === 'UNGET') extractFrom(visibleUngets);
+        else if (activeTab === 'MICRORED') extractFrom(visibleMicroredes);
+        else if (activeTab === 'IPRESS') extractFrom(visibleFacilities);
+
+        return {
+            departments: [{ value: '', label: 'Todos' }, ...Array.from(departments).sort().map(d => ({ value: d, label: d }))],
+            provinces: [{ value: '', label: 'Todas' }, ...Array.from(provinces).sort().map(p => ({ value: p, label: p }))],
+            districts: [{ value: '', label: 'Todos' }, ...Array.from(districts).sort().map(d => ({ value: d, label: d }))]
+        };
+    }, [activeTab, visibleDiresas, visibleOgess, visibleUngets, visibleMicroredes, visibleFacilities]);
+
+    const clearAllFilters = () => {
+        setFilterDiresaId('');
+        setFilterOgessId('');
+        setFilterUngetId('');
+        setFilterMicroredId('');
+        setFilterType('');
+        setFilterCategory('');
+        setFilterDepartment('');
+        setFilterProvince('');
+        setFilterDistrict('');
+        toast.info('Se han limpiado todos los filtros activos.');
+    };
 
     // Dynamic Select lists reactive to form state and locks
     const ogessOptions = useMemo(() => {
@@ -537,302 +752,1431 @@ export const AdminOrganizationModule: React.FC = () => {
     const getUngetName = (id?: string) => ungets.find(u => u.id === id)?.name || id || '-';
     const getMicroredName = (id?: string) => microredes.find(m => m.id === id)?.name || id || '-';
 
+    // Premium styling and explorer helpers
+    const getCategoryStyle = (cat?: string) => {
+        if (!cat) return 'bg-slate-50 text-slate-600 border border-slate-200';
+        const c = cat.toUpperCase();
+        if (c.startsWith('I-1') || c.startsWith('I-2')) return 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold';
+        if (c.startsWith('I-3') || c.startsWith('I-4')) return 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold';
+        if (c.startsWith('II-')) return 'bg-amber-50 text-amber-700 border border-amber-200 font-bold';
+        return 'bg-violet-50 text-violet-700 border border-violet-200 font-bold';
+    };
+
+    const getTypeStyle = (type?: string) => {
+        if (!type) return 'bg-slate-50 text-slate-500 border border-slate-200';
+        const t = type.toUpperCase();
+        if (t === 'HOSPITAL') return 'bg-rose-50 text-rose-700 border border-rose-200 font-extrabold';
+        if (t === 'CENTRO') return 'bg-blue-50 text-blue-700 border border-blue-200 font-bold';
+        if (t === 'PUESTO') return 'bg-teal-50 text-teal-700 border border-teal-200 font-bold';
+        return 'bg-violet-50 text-violet-700 border border-violet-200 font-medium';
+    };
+
+    const handleCopyText = (text?: string, label?: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        setCopiedField(label || text);
+        toast.success(`${label || 'Dato'} copiado al portapapeles`);
+        setTimeout(() => setCopiedField(null), 1500);
+    };
+
+    const getDetailHierarchyNodes = () => {
+        if (!selectedDetailItem || !selectedDetailType) return [];
+        
+        let diresaName = '-';
+        let ogessName = '-';
+        let ungetVal = '-';
+        let microredVal = '-';
+        let ipressVal = '-';
+        
+        if (selectedDetailType === 'DIRESA') {
+            diresaName = selectedDetailItem.name;
+        } else if (selectedDetailType === 'OGESS') {
+            diresaName = getDiresaName(selectedDetailItem.diresaId);
+            ogessName = selectedDetailItem.name;
+        } else if (selectedDetailType === 'UNGET') {
+            diresaName = getDiresaName(selectedDetailItem.diresaId);
+            ogessName = getOgessName(selectedDetailItem.ogessId);
+            ungetVal = selectedDetailItem.name;
+        } else if (selectedDetailType === 'MICRORED') {
+            const selectedUnget = ungets.find(u => u.id === selectedDetailItem.ungetId);
+            if (selectedUnget) {
+                diresaName = getDiresaName(selectedUnget.diresaId);
+                ogessName = getOgessName(selectedUnget.ogessId);
+                ungetVal = selectedUnget.name;
+            }
+            microredVal = selectedDetailItem.name;
+        } else if (selectedDetailType === 'IPRESS') {
+            diresaName = getDiresaName(selectedDetailItem.diresaId);
+            ogessName = getOgessName(selectedDetailItem.ogessId);
+            ungetVal = getUngetName(selectedDetailItem.ungetId);
+            microredVal = getMicroredName(selectedDetailItem.microredId);
+            ipressVal = selectedDetailItem.name;
+        }
+        
+        const arr = [
+            { label: 'DIRESA', name: diresaName, isCurrent: selectedDetailType === 'DIRESA', isFilled: diresaName !== '-' },
+            { label: 'OGESS', name: ogessName, isCurrent: selectedDetailType === 'OGESS', isFilled: ogessName !== '-' },
+            { label: 'UNGET', name: ungetVal, isCurrent: selectedDetailType === 'UNGET', isFilled: ungetVal !== '-' },
+            { label: 'MICRORED', name: microredVal, isCurrent: selectedDetailType === 'MICRORED', isFilled: microredVal !== '-' },
+            { label: 'IPRESS', name: ipressVal, isCurrent: selectedDetailType === 'IPRESS', isFilled: ipressVal !== '-' }
+        ];
+
+        return arr.filter(n => n.isFilled);
+    };
+
+    const getRelatedStats = () => {
+        if (!selectedDetailItem || !selectedDetailType) return null;
+        const id = selectedDetailItem.id;
+        
+        if (selectedDetailType === 'DIRESA') {
+            const ogessCount = ogess.filter(o => o.diresaId === id).length;
+            const ungetCount = ungets.filter(u => u.diresaId === id || ogess.find(o => o.id === u.ogessId)?.diresaId === id).length;
+            const ipressCount = facilities.filter(f => f.diresaId === id).length;
+            return [
+                { label: 'OGESS Dependientes', value: ogessCount },
+                { label: 'UNGET Dependientes', value: ungetCount },
+                { label: 'IPRESS Registradas', value: ipressCount }
+            ];
+        }
+        if (selectedDetailType === 'OGESS') {
+            const ungetCount = ungets.filter(u => u.ogessId === id).length;
+            const ipressCount = facilities.filter(f => f.ogessId === id).length;
+            return [
+                { label: 'UNGET Dependientes', value: ungetCount },
+                { label: 'IPRESS Registradas', value: ipressCount }
+            ];
+        }
+        if (selectedDetailType === 'UNGET') {
+            const microredCount = microredes.filter(m => m.ungetId === id).length;
+            const ipressCount = facilities.filter(f => f.ungetId === id).length;
+            return [
+                { label: 'Microredes Dependientes', value: microredCount },
+                { label: 'IPRESS Registradas', value: ipressCount }
+            ];
+        }
+        if (selectedDetailType === 'MICRORED') {
+            const ipressCount = facilities.filter(f => f.microredId === id).length;
+            return [
+                { label: 'IPRESS Registradas', value: ipressCount }
+            ];
+        }
+        return null;
+    };
+
+    const countCurrentItems = (tabName: string) => {
+        if (tabName === 'DIRESA') return finalFilteredDiresas.length;
+        if (tabName === 'OGESS') return finalFilteredOgess.length;
+        if (tabName === 'UNGET') return finalFilteredUngets.length;
+        if (tabName === 'MICRORED') return finalFilteredMicroredes.length;
+        if (tabName === 'IPRESS') return finalFilteredFacilities.length;
+        return 0;
+    };
+
+    const handleOpenEdit = (tab: string, item: any, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (tab === 'DIRESA') { setDiresaForm(item); setDiresaModalStep(1); setIsDiresaModalOpen(true); }
+        else if (tab === 'OGESS') { setOgessForm(item); setOgessModalStep(1); setIsOgessModalOpen(true); }
+        else if (tab === 'UNGET') { setUngetForm(item); setUngetModalStep(1); setIsUngetModalOpen(true); }
+        else if (tab === 'MICRORED') { setMicroredForm(item); setIsMicroredModalOpen(true); }
+        else if (tab === 'IPRESS') { setFacilityForm(item); setFacilityModalStep(1); setIsFacilityModalOpen(true); }
+    };
+
+    const handleConfirmDelete = (tab: string, item: any, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (tab === 'DIRESA') handleDeleteDiresa(item.id);
+        else if (tab === 'OGESS') handleDeleteOgess(item.id);
+        else if (tab === 'UNGET') handleDeleteUnget(item.id);
+        else if (tab === 'MICRORED') handleDeleteMicrored(item.id);
+        else if (tab === 'IPRESS') handleDeleteFacility(item.code);
+    };
+
     return (
         <div className="space-y-6 animate-in fade-in">
-            <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
-                <div className="flex gap-2 flex-wrap">
+            {/* Visual Hierarchy Navigation Tabs (Premium Counts and Microanimations) */}
+            <div className="bg-white/80 p-2 rounded-2xl border border-slate-200/80 shadow-sm backdrop-blur-md">
+                <div className="flex gap-1.5 flex-wrap">
                     {availableTabs.length === 0 ? (
-                        <div className="text-sm font-bold text-gray-500 py-2 px-4">No tiene accesos asignados a esta sección.</div>
-                     ) : availableTabs.map(tab => (
-                        <button 
-                            key={tab}
-                            onClick={() => setActiveTab(tab as any)}
-                            className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${activeTab === tab ? 'bg-white shadow text-teal-700' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            {tab}
-                        </button>
-                    ))}
+                        <div className="text-sm font-bold text-slate-500 py-2 px-4 flex items-center gap-2">
+                            <ShieldAlert className="h-4 w-4 text-slate-400" />
+                            No tiene accesos asignados a esta sección de la jurisdicción territorial.
+                        </div>
+                     ) : availableTabs.map(tab => {
+                        const isActive = activeTab === tab;
+                        const count = countCurrentItems(tab);
+                        let icon = <Building2 className="h-4 w-4" />;
+                        if (tab === 'DIRESA') icon = <ShieldCheck className="h-4 w-4" />;
+                        if (tab === 'OGESS') icon = <Activity className="h-4 w-4" />;
+                        if (tab === 'UNGET') icon = <Building2 className="h-4 w-4" />;
+                        if (tab === 'MICRORED') icon = <Network className="h-4 w-4" />;
+                        if (tab === 'IPRESS') icon = <MapPin className="h-4 w-4" />;
+
+                        return (
+                            <button 
+                                key={tab}
+                                onClick={() => {
+                                    setActiveTab(tab as any);
+                                    setSearchQuery('');
+                                }}
+                                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all duration-300 transform active:scale-95 cursor-pointer select-none ${
+                                    isActive 
+                                        ? 'bg-gradient-to-r from-teal-50 to-teal-100/50 text-teal-800 border-b-2 border-teal-600 shadow-sm' 
+                                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                                }`}
+                            >
+                                {icon}
+                                <span>{tab}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide transition-all ${
+                                    isActive ? 'bg-teal-600 text-white shadow-sm' : 'bg-slate-200 text-slate-600'
+                                }`}>
+                                    {count}
+                                </span>
+                            </button>
+                        );
+                     })}
                 </div>
             </div>
 
             {availableTabs.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-200 flex justify-between items-center flex-wrap gap-4">
-                        <div className="relative">
-                            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input 
-                                type="text"
-                                placeholder={`Buscar en ${activeTab}...`}
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none w-64"
-                            />
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-xl overflow-hidden shadow-slate-100/50">
+                    <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 bg-slate-50/40 backdrop-blur-sm">
+                        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-1">
+                            {/* Search bar */}
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input 
+                                    type="text"
+                                    placeholder={`Buscar ${activeTab.toLowerCase()} por nombre o código...`}
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-10 pr-4 py-2.5 w-full border border-slate-200 rounded-xl text-sm bg-white font-medium text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all shadow-inner"
+                                />
+                                {searchQuery && (
+                                    <button 
+                                        onClick={() => setSearchQuery('')}
+                                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 outline-none"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Advanced Filter Collapse Trigger */}
+                            <button 
+                                onClick={() => setIsFilterPaneOpen(!isFilterPaneOpen)}
+                                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition duration-200 cursor-pointer select-none ${
+                                    isFilterPaneOpen || hasActiveFilters
+                                        ? 'bg-teal-50 border-teal-200 text-teal-700 font-extrabold' 
+                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                            >
+                                <Filter className="h-3.5 w-3.5" />
+                                <span>Filtros Avanzados</span>
+                                {hasActiveFilters && (
+                                    <span className="bg-teal-600 text-white font-black text-[9px] h-4 w-4 flex items-center justify-center rounded-full animate-pulse">
+                                        !
+                                    </span>
+                                )}
+                                {isFilterPaneOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            </button>
                         </div>
+
                         {canAddActiveTab && (
-                        <button 
-                            onClick={() => {
-                            if (activeTab === 'DIRESA') { 
-                                setDiresaForm({}); 
-                                setDiresaModalStep(1);
-                                setIsDiresaModalOpen(true); 
-                            }
-                            if (activeTab === 'OGESS') { 
-                                const initialOgess: Partial<Ogess> = {};
-                                if (!isSuperAdmin && userDiresaId) {
-                                    initialOgess.diresaId = userDiresaId;
-                                    const sDiresa = diresas.find(d => d.id === userDiresaId);
-                                    if (sDiresa) initialOgess.department = sDiresa.department || '';
-                                }
-                                setOgessForm(initialOgess); 
-                                setOgessModalStep(1);
-                                setIsOgessModalOpen(true); 
-                            }
-                            if (activeTab === 'UNGET') { 
-                                const initialUnget: Partial<Unget> = {};
-                                if (!isSuperAdmin) {
-                                    if (userOgessId) {
-                                        initialUnget.ogessId = userOgessId;
-                                        const sOgess = ogess.find(o => o.id === userOgessId);
-                                        if (sOgess) {
-                                            initialUnget.diresaId = sOgess.diresaId;
-                                            const sDiresa = diresas.find(d => d.id === sOgess.diresaId);
-                                            if (sDiresa) initialUnget.department = sDiresa.department || '';
-                                        }
-                                    } else if (userDiresaId) {
-                                        initialUnget.diresaId = userDiresaId;
-                                        const sDiresa = diresas.find(d => d.id === userDiresaId);
-                                        if (sDiresa) initialUnget.department = sDiresa.department || '';
+                            <button 
+                                onClick={() => {
+                                    if (activeTab === 'DIRESA') { 
+                                        setDiresaForm({}); 
+                                        setDiresaModalStep(1);
+                                        setIsDiresaModalOpen(true); 
                                     }
-                                }
-                                setUngetForm(initialUnget); 
-                                setUngetModalStep(1);
-                                setIsUngetModalOpen(true); 
-                            }
-                            if (activeTab === 'MICRORED') { 
-                                const initialMicrored: Partial<Microred> = {};
-                                if (!isSuperAdmin && userUngetId) {
-                                    initialMicrored.ungetId = userUngetId;
-                                }
-                                setMicroredForm(initialMicrored); 
-                                setIsMicroredModalOpen(true); 
-                            }
-                            if (activeTab === 'IPRESS') { 
-                                const initialFacility: Partial<HealthFacility> = {};
-                                if (!isSuperAdmin) {
-                                    if (userUngetId) {
-                                        initialFacility.ungetId = userUngetId;
-                                        const selectedUnget = ungets.find(u => u.id === userUngetId);
-                                        if (selectedUnget) {
-                                            let diresaIdToUse = selectedUnget.diresaId;
-                                            if (selectedUnget.ogessId) {
-                                                initialFacility.ogessId = selectedUnget.ogessId;
-                                                const selectedOgess = ogess.find(o => o.id === selectedUnget.ogessId);
+                                    if (activeTab === 'OGESS') { 
+                                        const initialOgess: Partial<Ogess> = {};
+                                        if (!isSuperAdmin && userDiresaId) {
+                                            initialOgess.diresaId = userDiresaId;
+                                            const sDiresa = diresas.find(d => d.id === userDiresaId);
+                                            if (sDiresa) initialOgess.department = sDiresa.department || '';
+                                        }
+                                        setOgessForm(initialOgess); 
+                                        setOgessModalStep(1);
+                                        setIsOgessModalOpen(true); 
+                                    }
+                                    if (activeTab === 'UNGET') { 
+                                        const initialUnget: Partial<Unget> = {};
+                                        if (!isSuperAdmin) {
+                                            if (userOgessId) {
+                                                initialUnget.ogessId = userOgessId;
+                                                const sOgess = ogess.find(o => o.id === userOgessId);
+                                                if (sOgess) {
+                                                    initialUnget.diresaId = sOgess.diresaId;
+                                                    const sDiresa = diresas.find(d => d.id === sOgess.diresaId);
+                                                    if (sDiresa) initialUnget.department = sDiresa.department || '';
+                                                }
+                                            } else if (userDiresaId) {
+                                                initialUnget.diresaId = userDiresaId;
+                                                const sDiresa = diresas.find(d => d.id === userDiresaId);
+                                                if (sDiresa) initialUnget.department = sDiresa.department || '';
+                                            }
+                                        }
+                                        setUngetForm(initialUnget); 
+                                        setUngetModalStep(1);
+                                        setIsUngetModalOpen(true); 
+                                    }
+                                    if (activeTab === 'MICRORED') { 
+                                        const initialMicrored: Partial<Microred> = {};
+                                        if (!isSuperAdmin && userUngetId) {
+                                            initialMicrored.ungetId = userUngetId;
+                                        }
+                                        setMicroredForm(initialMicrored); 
+                                        setIsMicroredModalOpen(true); 
+                                    }
+                                    if (activeTab === 'IPRESS') { 
+                                        const initialFacility: Partial<HealthFacility> = {};
+                                        if (!isSuperAdmin) {
+                                            if (userUngetId) {
+                                                initialFacility.ungetId = userUngetId;
+                                                const selectedUnget = ungets.find(u => u.id === userUngetId);
+                                                if (selectedUnget) {
+                                                    let diresaIdToUse = selectedUnget.diresaId;
+                                                    if (selectedUnget.ogessId) {
+                                                        initialFacility.ogessId = selectedUnget.ogessId;
+                                                        const selectedOgess = ogess.find(o => o.id === selectedUnget.ogessId);
+                                                        if (selectedOgess) {
+                                                            initialFacility.diresaId = selectedOgess.diresaId;
+                                                            diresaIdToUse = selectedOgess.diresaId;
+                                                        }
+                                                    } else if (selectedUnget.diresaId) {
+                                                        initialFacility.diresaId = selectedUnget.diresaId;
+                                                    }
+                                                    if (diresaIdToUse) {
+                                                        const selectedDiresa = diresas.find(d => d.id === diresaIdToUse);
+                                                        if (selectedDiresa) {
+                                                            initialFacility.department = selectedDiresa.department || '';
+                                                        }
+                                                    }
+                                                }
+                                            } else if (userOgessId) {
+                                                initialFacility.ogessId = userOgessId;
+                                                const selectedOgess = ogess.find(o => o.id === userOgessId);
                                                 if (selectedOgess) {
                                                     initialFacility.diresaId = selectedOgess.diresaId;
-                                                    diresaIdToUse = selectedOgess.diresaId;
+                                                    if (selectedOgess.diresaId) {
+                                                        const selectedDiresa = diresas.find(d => d.id === selectedOgess.diresaId);
+                                                        if (selectedDiresa) {
+                                                            initialFacility.department = selectedDiresa.department || '';
+                                                        }
+                                                    }
                                                 }
-                                            } else if (selectedUnget.diresaId) {
-                                                initialFacility.diresaId = selectedUnget.diresaId;
-                                            }
-                                            if (diresaIdToUse) {
-                                                const selectedDiresa = diresas.find(d => d.id === diresaIdToUse);
+                                            } else if (userDiresaId) {
+                                                initialFacility.diresaId = userDiresaId;
+                                                const selectedDiresa = diresas.find(d => d.id === userDiresaId);
                                                 if (selectedDiresa) {
                                                     initialFacility.department = selectedDiresa.department || '';
                                                 }
                                             }
                                         }
-                                    } else if (userOgessId) {
-                                        initialFacility.ogessId = userOgessId;
-                                        const selectedOgess = ogess.find(o => o.id === userOgessId);
-                                        if (selectedOgess) {
-                                            initialFacility.diresaId = selectedOgess.diresaId;
-                                            if (selectedOgess.diresaId) {
-                                                const selectedDiresa = diresas.find(d => d.id === selectedOgess.diresaId);
-                                                if (selectedDiresa) {
-                                                    initialFacility.department = selectedDiresa.department || '';
-                                                }
-                                            }
-                                        }
-                                    } else if (userDiresaId) {
-                                        initialFacility.diresaId = userDiresaId;
-                                        const selectedDiresa = diresas.find(d => d.id === userDiresaId);
-                                        if (selectedDiresa) {
-                                            initialFacility.department = selectedDiresa.department || '';
-                                        }
+                                        setFacilityForm(initialFacility); 
+                                        setFacilityModalStep(1);
+                                        setIsFacilityModalOpen(true); 
                                     }
-                                }
-                                setFacilityForm(initialFacility); 
-                                setFacilityModalStep(1);
-                                setIsFacilityModalOpen(true); 
-                            }
-                        }}
-                        className="flex items-center gap-2 bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-teal-700 transition"
+                                }}
+                                className="flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-teal-100 hover:shadow-teal-200 transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0 duration-200"
+                            >
+                                <Plus className="h-4 w-3.5 stroke-[3px]" /> Agregar {activeTab}
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Collapsible Advanced Filters Drawer with Dynamic Cascade Selections */}
+                    {isFilterPaneOpen && createPortal(
+                        <div className="fixed inset-0 z-[110000] flex justify-end pointer-events-none">
+                            {/* Backdrop overlay */}
+                            <div 
+                                className="absolute inset-0 bg-transparent pointer-events-auto cursor-pointer"
+                                onClick={() => setIsFilterPaneOpen(false)}
+                            />
+                            
+                            {/* Sidebar content container */}
+                            <div className="relative w-full max-w-sm sm:max-w-md bg-white h-full shadow-2xl border-l border-slate-200 pointer-events-auto animate-in slide-in-from-right duration-300 flex flex-col overflow-hidden">
+                                {/* Header */}
+                                <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-20 shrink-0">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 shadow-sm border border-teal-100/50">
+                                            <Filter className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-tight">Filtros Avanzados</h3>
+                                            <p className="text-[10px] text-teal-600 font-extrabold tracking-widest uppercase">Estructura Organizacional</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setIsFilterPaneOpen(false)}
+                                        className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400 hover:text-slate-900 cursor-pointer"
+                                    >
+                                        <X className="h-4.5 w-4.5" />
+                                    </button>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 font-sans">
+                                    {/* DIRESA Selector */}
+                                    {(activeTab !== 'DIRESA' && isSuperAdmin) && (
+                                        <div className="space-y-1.5">
+                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                <div className="w-1 h-3 bg-teal-500 rounded-sm" /> DIRESA
+                                            </label>
+                                            <CustomSelect
+                                                value={filterDiresaId}
+                                                onChange={(val) => {
+                                                    setFilterDiresaId(val);
+                                                    setFilterOgessId('');
+                                                    setFilterUngetId('');
+                                                    setFilterMicroredId('');
+                                                }}
+                                                placeholder="Todas las DIRESA"
+                                                options={[
+                                                    { value: '', label: 'Todas las DIRESA' },
+                                                    ...diresas.map(d => ({ value: d.id, label: d.name }))
+                                                ]}
+                                                className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* OGESS Selector */}
+                                    {(activeTab !== 'DIRESA' && activeTab !== 'OGESS') && (
+                                        <div className="space-y-1.5">
+                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                <div className="w-1 h-3 bg-emerald-500 rounded-sm" /> OGESS
+                                            </label>
+                                            <CustomSelect
+                                                value={filterOgessId}
+                                                onChange={(val) => {
+                                                    setFilterOgessId(val);
+                                                    setFilterUngetId('');
+                                                    setFilterMicroredId('');
+                                                }}
+                                                placeholder="Todas las OGESS"
+                                                options={[
+                                                    { value: '', label: 'Todas las OGESS' },
+                                                    ...ogess.filter(o => !filterDiresaId || o.diresaId === filterDiresaId).map(o => ({ value: o.id, label: o.name }))
+                                                ]}
+                                                className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* UNGET Selector */}
+                                    {(activeTab !== 'DIRESA' && activeTab !== 'OGESS' && activeTab !== 'UNGET') && (
+                                        <div className="space-y-1.5">
+                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                <div className="w-1 h-3 bg-teal-600 rounded-sm" /> UNGET
+                                            </label>
+                                            <CustomSelect
+                                                value={filterUngetId}
+                                                onChange={(val) => {
+                                                    setFilterUngetId(val);
+                                                    setFilterMicroredId('');
+                                                }}
+                                                placeholder="Todas las UNGET"
+                                                options={[
+                                                    { value: '', label: 'Todas las UNGET' },
+                                                    ...ungets.filter(u => {
+                                                        if (filterOgessId && u.ogessId !== filterOgessId) return false;
+                                                        if (filterDiresaId) {
+                                                            if (u.diresaId && u.diresaId !== filterDiresaId) return false;
+                                                            if (u.ogessId) {
+                                                                const p = ogess.find(o => o.id === u.ogessId);
+                                                                if (p?.diresaId !== filterDiresaId) return false;
+                                                            }
+                                                        }
+                                                        return true;
+                                                    }).map(u => ({ value: u.id, label: u.name }))
+                                                ]}
+                                                className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* MICRORED Selector */}
+                                    {(activeTab === 'IPRESS') && (
+                                        <div className="space-y-1.5">
+                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                <div className="w-1 h-3 bg-emerald-600 rounded-sm" /> MICRORED
+                                            </label>
+                                            <CustomSelect
+                                                value={filterMicroredId}
+                                                onChange={(val) => setFilterMicroredId(val)}
+                                                placeholder="Todas las Microredes"
+                                                options={[
+                                                    { value: '', label: 'Todas las Microredes' },
+                                                    ...microredes.filter(m => !filterUngetId || m.ungetId === filterUngetId).map(m => ({ value: m.id, label: m.name }))
+                                                ]}
+                                                className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* GEOGRAPHICAL FILTERS */}
+                                    <div className="pt-4 mt-2 border-t border-slate-100/80 space-y-4 relative">
+                                        <div className="absolute top-0 left-0 w-8 border-t-2 border-teal-500/20 -mt-[1px]" />
+                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtros Geográficos</h4>
+                                        <div className="space-y-3">
+                                            <div className="space-y-1.5">
+                                                <label className="block text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5">
+                                                    <MapPin className="h-3 w-3 text-slate-400" /> Departamento
+                                                </label>
+                                                <CustomSelect
+                                                    value={filterDepartment}
+                                                    onChange={(val) => setFilterDepartment(val)}
+                                                    placeholder="Todos"
+                                                    options={filterOptions.departments}
+                                                    className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
+                                                />
+                                            </div>
+
+                                            {activeTab !== 'DIRESA' && (
+                                                <>
+                                                    <div className="space-y-1.5">
+                                                        <label className="block text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5">
+                                                            <MapPin className="h-3 w-3 text-slate-400" /> Provincia
+                                                        </label>
+                                                        <CustomSelect
+                                                            value={filterProvince}
+                                                            onChange={(val) => setFilterProvince(val)}
+                                                            placeholder="Todas"
+                                                            options={filterOptions.provinces}
+                                                            className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="block text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5">
+                                                            <MapPin className="h-3 w-3 text-slate-400" /> Distrito
+                                                        </label>
+                                                        <CustomSelect
+                                                            value={filterDistrict}
+                                                            onChange={(val) => setFilterDistrict(val)}
+                                                            placeholder="Todos"
+                                                            options={filterOptions.districts}
+                                                            className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* EXTRA IPRESS FILTERS */}
+                                    {(activeTab === 'IPRESS') && (
+                                        <>
+                                            <div className="space-y-1.5">
+                                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <div className="w-1 h-3 bg-blue-500 rounded-sm" /> Categoría IPRESS
+                                                </label>
+                                                <CustomSelect
+                                                    value={filterCategory}
+                                                    onChange={(val) => setFilterCategory(val)}
+                                                    placeholder="Todas"
+                                                    options={[
+                                                        { value: '', label: 'Todas' },
+                                                        { value: 'I-1', label: 'I-1' },
+                                                        { value: 'I-2', label: 'I-2' },
+                                                        { value: 'I-3', label: 'I-3' },
+                                                        { value: 'I-4', label: 'I-4' },
+                                                        { value: 'II-1', label: 'II-1' },
+                                                        { value: 'II-2', label: 'II-2' },
+                                                        { value: 'III-1', label: 'III-1' }
+                                                    ]}
+                                                    className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <div className="w-1 h-3 bg-indigo-500 rounded-sm" /> Tipo Establecimiento
+                                                </label>
+                                                <CustomSelect
+                                                    value={filterType}
+                                                    onChange={(val) => setFilterType(val)}
+                                                    placeholder="Todos"
+                                                    options={[
+                                                        { value: '', label: 'Todos' },
+                                                        { value: 'HOSPITAL', label: 'HOSPITAL' },
+                                                        { value: 'CENTRO', label: 'CENTRO DE SALUD' },
+                                                        { value: 'PUESTO', label: 'PUESTO DE SALUD' },
+                                                        { value: 'ALM', label: 'ALMACÉN' }
+                                                    ]}
+                                                    className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                                
+                                {/* Sidebar Footer */}
+                                <div className="p-6 border-t border-slate-100 bg-white sticky bottom-0 z-20">
+                                    <div className="flex items-center gap-3 w-full">
+                                        {hasActiveFilters && (
+                                            <button
+                                                onClick={clearAllFilters}
+                                                className="flex-1 flex justify-center items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition cursor-pointer select-none"
+                                            >
+                                                <FilterX className="h-4 w-4" />
+                                                <span>Limpiar</span>
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setIsFilterPaneOpen(false)}
+                                            className="flex-1 flex justify-center items-center gap-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-teal-100/50 transition cursor-pointer select-none"
+                                        >
+                                            Aplicar Filtros
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
+
+                    {/* Interactive Registry tables & list representations */}
+                    <div className="w-full">
+                        {/* Empty state conditional */}
+                        {((activeTab === 'DIRESA' && finalFilteredDiresas.length === 0) ||
+                          (activeTab === 'OGESS' && finalFilteredOgess.length === 0) ||
+                          (activeTab === 'UNGET' && finalFilteredUngets.length === 0) ||
+                          (activeTab === 'MICRORED' && finalFilteredMicroredes.length === 0) ||
+                          (activeTab === 'IPRESS' && finalFilteredFacilities.length === 0)) ? (
+                            <div className="text-center py-16 px-4 space-y-4">
+                                <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                                    <Info className="h-8 w-8" />
+                                </div>
+                                <div className="space-y-1">
+                                    <h3 className="font-extrabold text-slate-800 text-lg">No se encontraron resultados</h3>
+                                    <p className="text-sm text-slate-500 max-w-sm mx-auto">Prueba modulando tus filtros o cambiando tu búsqueda de texto para encontrar el registro deseado.</p>
+                                </div>
+                                {hasActiveFilters && (
+                                    <button 
+                                        onClick={clearAllFilters}
+                                        className="px-4 py-2 bg-teal-50 text-teal-700 hover:bg-teal-100 text-xs font-bold rounded-xl border border-teal-200 transition"
+                                    >
+                                        Restaurar filtros de búsqueda
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <>
+                                {/* 1. DIRESA Tab views */}
+                                {activeTab === 'DIRESA' && (
+                                    <>
+                                        {/* Desktop Premium Table */}
+                                        <div className="hidden md:block overflow-x-auto">
+                                            <table className="w-full text-left text-sm border-collapse">
+                                                <thead>
+                                                    <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
+                                                        <th className="p-4 px-6">Razón Social DIRESA</th>
+                                                        <th className="p-4">RUC</th>
+                                                        <th className="p-4">Distrito</th>
+                                                        <th className="p-4">Provincia</th>
+                                                        <th className="p-4">Departamento</th>
+                                                        <th className="p-4 text-right pr-6">Acciones</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {finalFilteredDiresas.map(d => (
+                                                        <tr 
+                                                            key={d.id} 
+                                                            onClick={() => { setSelectedDetailItem(d); setSelectedDetailType('DIRESA'); }}
+                                                            className="hover:bg-slate-50/60 cursor-pointer transition group"
+                                                        >
+                                                            <td className="p-4 px-6 font-extrabold text-slate-800 group-hover:text-teal-700 transition flex items-center gap-2">
+                                                                <div className="w-1.5 h-6 bg-teal-500/0 group-hover:bg-teal-500 rounded-sm -ml-2.5 transition-all duration-300" />
+                                                                <ShieldCheck className="h-4 w-4 text-slate-400 group-hover:text-teal-600 transition" />
+                                                                <span>{d.name}</span>
+                                                            </td>
+                                                            <td className="p-4 font-mono text-xs font-semibold text-slate-600">{d.ruc || '-'}</td>
+                                                            <td className="p-4 text-slate-600 font-medium">{d.district || '-'}</td>
+                                                            <td className="p-4 text-slate-600 font-medium">{d.province || '-'}</td>
+                                                            <td className="p-4 text-slate-600 font-medium">{d.department || '-'}</td>
+                                                            <td className="p-4 flex gap-2 justify-end pr-6">
+                                                                <button 
+                                                                    onClick={(e) => handleOpenEdit('DIRESA', d, e)} 
+                                                                    className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 border border-slate-100 rounded-xl shadow-sm transition cursor-pointer"
+                                                                >
+                                                                    <Edit className="h-3.5 w-3.5" />
+                                                                </button>
+                                                                {isSuperAdmin && (
+                                                                    <button 
+                                                                        onClick={(e) => handleConfirmDelete('DIRESA', d, e)} 
+                                                                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-100 rounded-xl shadow-sm transition cursor-pointer"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Mobile Responsive List-Grid */}
+                                        <div className="md:hidden divide-y divide-slate-100">
+                                            {finalFilteredDiresas.map(d => (
+                                                <div 
+                                                    key={d.id} 
+                                                    onClick={() => { setSelectedDetailItem(d); setSelectedDetailType('DIRESA'); }}
+                                                    className="p-4 hover:bg-slate-50/40 cursor-pointer active:bg-slate-100 transition relative flex flex-col gap-2 group"
+                                                >
+                                                    <div className="flex justify-between items-start gap-4">
+                                                        <div className="space-y-0.5">
+                                                            <h4 className="font-extrabold text-slate-900 group-hover:text-teal-700 transition flex items-center gap-1.5 leading-snug">
+                                                                <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
+                                                                <span>{d.name}</span>
+                                                            </h4>
+                                                            <div className="text-[10px] font-mono text-slate-400">RUC: {d.ruc || '-'}</div>
+                                                        </div>
+                                                        
+                                                        {/* Actions inline */}
+                                                        <div className="flex gap-1.5 shrink-0">
+                                                            <button 
+                                                                onClick={(e) => handleOpenEdit('DIRESA', d, e)} 
+                                                                className="p-2.5 text-slate-400 hover:text-teal-600 border border-slate-100 rounded-xl bg-slate-50 shadow-sm"
+                                                            >
+                                                                <Edit className="h-3.5 w-3.5" />
+                                                            </button>
+                                                            {isSuperAdmin && (
+                                                                <button 
+                                                                    onClick={(e) => handleConfirmDelete('DIRESA', d, e)} 
+                                                                    className="p-2.5 text-slate-400 hover:text-rose-600 border border-slate-100 rounded-xl bg-slate-50 shadow-sm"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-slate-500 font-bold text-[11px] pt-1">
+                                                        <div className="flex items-center gap-1"><MapPin className="h-3 w-3 text-slate-350" /> {d.district}</div>
+                                                        <div className="text-slate-300">•</div>
+                                                        <div>Dep: {d.department}</div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                                
+                                {/* 2. OGESS Tab views */}
+                                {activeTab === 'OGESS' && (
+                                    <>
+                                        {/* Desktop Premium Table */}
+                                        <div className="hidden md:block overflow-x-auto">
+                                            <table className="w-full text-left text-sm border-collapse">
+                                                <thead>
+                                                    <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
+                                                        <th className="p-4 px-6">Identificación OGESS</th>
+                                                        <th className="p-4">Código / RUC</th>
+                                                        <th className="p-4">Distrito</th>
+                                                        <th className="p-4">Provincia</th>
+                                                        <th className="p-4">DIRESA Superior</th>
+                                                        <th className="p-4 text-right pr-6">Acciones</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {finalFilteredOgess.map(o => (
+                                                        <tr 
+                                                            key={o.id} 
+                                                            onClick={() => { setSelectedDetailItem(o); setSelectedDetailType('OGESS'); }}
+                                                            className="hover:bg-slate-50/60 cursor-pointer transition group"
+                                                        >
+                                                            <td className="p-4 px-6 font-extrabold text-slate-800 group-hover:text-teal-700 transition flex items-center gap-2">
+                                                                <div className="w-1.5 h-6 bg-teal-500/0 group-hover:bg-teal-500 rounded-sm -ml-2.5 transition-all duration-300" />
+                                                                <Activity className="h-4 w-4 text-slate-400 group-hover:text-teal-600 transition animate-pulse" />
+                                                                <span>{o.name}</span>
+                                                            </td>
+                                                            <td className="p-4 font-mono text-xs text-slate-600 font-semibold">{o.code || '-'} / {o.ruc || '-'}</td>
+                                                            <td className="p-4 text-slate-600 font-medium">{o.district || '-'}</td>
+                                                            <td className="p-4 text-slate-600 font-medium">{o.province || '-'}</td>
+                                                            <td className="p-4">
+                                                                <span className="bg-teal-50 text-teal-800 px-2 py-0.5 rounded-lg text-xs font-bold border border-teal-100">{getDiresaName(o.diresaId)}</span>
+                                                            </td>
+                                                            <td className="p-4 flex gap-2 justify-end pr-6">
+                                                                <button 
+                                                                    onClick={(e) => handleOpenEdit('OGESS', o, e)} 
+                                                                    className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 border border-slate-100 rounded-xl shadow-sm transition cursor-pointer"
+                                                                >
+                                                                    <Edit className="h-3.5 w-3.5" />
+                                                                </button>
+                                                                {isSuperAdmin && (
+                                                                    <button 
+                                                                        onClick={(e) => handleConfirmDelete('OGESS', o, e)} 
+                                                                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-100 rounded-xl shadow-sm transition cursor-pointer"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Mobile Responsive List-Grid */}
+                                        <div className="md:hidden divide-y divide-slate-100">
+                                            {finalFilteredOgess.map(o => (
+                                                <div 
+                                                    key={o.id} 
+                                                    onClick={() => { setSelectedDetailItem(o); setSelectedDetailType('OGESS'); }}
+                                                    className="p-4 hover:bg-slate-50/40 cursor-pointer active:bg-slate-100 transition relative flex flex-col gap-2 group"
+                                                >
+                                                    <div className="flex justify-between items-start gap-4">
+                                                        <div className="space-y-0.5">
+                                                            <h4 className="font-extrabold text-slate-900 group-hover:text-teal-700 transition flex items-center gap-1.5 leading-snug">
+                                                                <Activity className="h-4 w-4 text-teal-600" />
+                                                                <span>{o.name}</span>
+                                                            </h4>
+                                                            <div className="text-[10px] font-mono text-slate-400">Cod: {o.code || '-'} • RUC: {o.ruc || '-'}</div>
+                                                        </div>
+                                                        
+                                                        <div className="flex gap-1.5 shrink-0">
+                                                            <button 
+                                                                onClick={(e) => handleOpenEdit('OGESS', o, e)} 
+                                                                className="p-2.5 text-slate-400 hover:text-teal-600 border border-slate-100 rounded-xl bg-slate-50 shadow-sm"
+                                                            >
+                                                                <Edit className="h-3.5 w-3.5" />
+                                                            </button>
+                                                            {isSuperAdmin && (
+                                                                <button 
+                                                                    onClick={(e) => handleConfirmDelete('OGESS', o, e)} 
+                                                                    className="p-2.5 text-slate-400 hover:text-rose-600 border border-slate-100 rounded-xl bg-slate-50 shadow-sm"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-col gap-0.5 text-slate-500 text-[11px] pt-1">
+                                                        <div className="flex items-center gap-1"><MapPin className="h-3 w-3 text-slate-400" /> {o.district}, {o.province}</div>
+                                                        <div className="mt-1"><span className="bg-teal-50 border border-teal-100 text-[10px] text-teal-800 font-extrabold px-1.5 py-0.5 rounded-md">DIRESA: {getDiresaName(o.diresaId)}</span></div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* 3. UNGET Tab views */}
+                                {activeTab === 'UNGET' && (
+                                    <>
+                                        {/* Desktop Premium Table */}
+                                        <div className="hidden md:block overflow-x-auto">
+                                            <table className="w-full text-left text-sm border-collapse">
+                                                <thead>
+                                                    <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
+                                                        <th className="p-4 px-6">Razón Social UNGET</th>
+                                                        <th className="p-4">Distrito</th>
+                                                        <th className="p-4">Provincia</th>
+                                                        <th className="p-4">OGESS Superior</th>
+                                                        <th className="p-4">DIRESA Red</th>
+                                                        <th className="p-4 text-right pr-6">Acciones</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {finalFilteredUngets.map(u => (
+                                                        <tr 
+                                                            key={u.id} 
+                                                            onClick={() => { setSelectedDetailItem(u); setSelectedDetailType('UNGET'); }}
+                                                            className="hover:bg-slate-50/60 cursor-pointer transition group"
+                                                        >
+                                                            <td className="p-4 px-6 font-extrabold text-slate-800 group-hover:text-teal-700 transition flex items-center gap-2">
+                                                                <div className="w-1.5 h-6 bg-teal-500/0 group-hover:bg-teal-500 rounded-sm -ml-2.5 transition-all duration-300" />
+                                                                <Building2 className="h-4 w-4 text-slate-400 group-hover:text-teal-600 transition" />
+                                                                <span>{u.name}</span>
+                                                            </td>
+                                                            <td className="p-4 text-slate-600 font-medium">{u.district || '-'}</td>
+                                                            <td className="p-4 text-slate-600 font-medium">{u.province || '-'}</td>
+                                                            <td className="p-4 text-slate-700 font-semibold">{getOgessName(u.ogessId)}</td>
+                                                            <td className="p-4">
+                                                                <span className="bg-teal-50 text-teal-800 px-2 py-0.5 rounded-lg text-xs font-bold border border-teal-100">{getDiresaName(u.diresaId)}</span>
+                                                            </td>
+                                                            <td className="p-4 flex gap-2 justify-end pr-6">
+                                                                <button 
+                                                                    onClick={(e) => handleOpenEdit('UNGET', u, e)} 
+                                                                    className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 border border-slate-100 rounded-xl shadow-sm transition cursor-pointer"
+                                                                >
+                                                                    <Edit className="h-3.5 w-3.5" />
+                                                                </button>
+                                                                {isSuperAdmin && (
+                                                                    <button 
+                                                                        onClick={(e) => handleConfirmDelete('UNGET', u, e)} 
+                                                                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-100 rounded-xl shadow-sm transition cursor-pointer"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Mobile Responsive List-Grid */}
+                                        <div className="md:hidden divide-y divide-slate-100">
+                                            {finalFilteredUngets.map(u => (
+                                                <div 
+                                                    key={u.id} 
+                                                    onClick={() => { setSelectedDetailItem(u); setSelectedDetailType('UNGET'); }}
+                                                    className="p-4 hover:bg-slate-50/40 cursor-pointer active:bg-slate-100 transition relative flex flex-col gap-2 group"
+                                                >
+                                                    <div className="flex justify-between items-start gap-4">
+                                                        <div className="space-y-0.5">
+                                                            <h4 className="font-extrabold text-slate-900 group-hover:text-teal-700 transition flex items-center gap-1.5 leading-snug">
+                                                                <Building2 className="h-4 w-4 text-slate-400" />
+                                                                <span>{u.name}</span>
+                                                            </h4>
+                                                        </div>
+                                                        
+                                                        <div className="flex gap-1.5 shrink-0">
+                                                            <button 
+                                                                onClick={(e) => handleOpenEdit('UNGET', u, e)} 
+                                                                className="p-2.5 text-slate-400 hover:text-teal-600 border border-slate-100 rounded-xl bg-slate-50 shadow-sm"
+                                                            >
+                                                                <Edit className="h-3.5 w-3.5" />
+                                                            </button>
+                                                            {isSuperAdmin && (
+                                                                <button 
+                                                                    onClick={(e) => handleConfirmDelete('UNGET', u, e)} 
+                                                                    className="p-2.5 text-slate-400 hover:text-rose-600 border border-slate-100 rounded-xl bg-slate-50 shadow-sm"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-col gap-1 text-slate-500 text-[11px] pt-1">
+                                                        <div className="flex items-center gap-1"><MapPin className="h-3 w-3 text-slate-400" /> {u.district}, {u.province}</div>
+                                                        <div className="flex flex-wrap gap-1.5 mt-1">
+                                                            <span className="bg-slate-100 text-slate-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">OGESS: {getOgessName(u.ogessId)}</span>
+                                                            <span className="bg-teal-50 border border-teal-100 text-teal-800 font-extrabold px-1.5 py-0.5 rounded text-[9px]">DIRESA: {getDiresaName(u.diresaId)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* 4. MICRORED Tab views */}
+                                {activeTab === 'MICRORED' && (
+                                    <>
+                                        {/* Desktop Premium Table */}
+                                        <div className="hidden md:block overflow-x-auto">
+                                            <table className="w-full text-left text-sm border-collapse">
+                                                <thead>
+                                                    <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
+                                                        <th className="p-4 px-6">Identificación Microred</th>
+                                                        <th className="p-4">UNGET Jerárquica Asignada</th>
+                                                        <th className="p-4">OGESS Superior</th>
+                                                        <th className="p-4 text-right pr-6">Acciones</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {finalFilteredMicroredes.map(m => {
+                                                        const pUnget = ungets.find(u => u.id === m.ungetId);
+                                                        return (
+                                                            <tr 
+                                                                key={m.id} 
+                                                                onClick={() => { setSelectedDetailItem(m); setSelectedDetailType('MICRORED'); }}
+                                                                className="hover:bg-slate-50/60 cursor-pointer transition group"
+                                                            >
+                                                                <td className="p-4 px-6 font-extrabold text-slate-800 group-hover:text-teal-700 transition flex items-center gap-2">
+                                                                    <div className="w-1.5 h-6 bg-teal-500/0 group-hover:bg-teal-500 rounded-sm -ml-2.5 transition-all duration-300" />
+                                                                    <Network className="h-4 w-4 text-slate-400 group-hover:text-teal-600 transition" />
+                                                                    <span>{m.name}</span>
+                                                                </td>
+                                                                <td className="p-4 text-slate-700 font-semibold">{getUngetName(m.ungetId)}</td>
+                                                                <td className="p-4">
+                                                                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg text-xs font-bold">{pUnget ? getOgessName(pUnget.ogessId) : '-'}</span>
+                                                                </td>
+                                                                <td className="p-4 flex gap-2 justify-end pr-6">
+                                                                    <button 
+                                                                        onClick={(e) => handleOpenEdit('MICRORED', m, e)} 
+                                                                        className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 border border-slate-100 rounded-xl shadow-sm transition cursor-pointer"
+                                                                    >
+                                                                        <Edit className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                    {isSuperAdmin && (
+                                                                        <button 
+                                                                            onClick={(e) => handleConfirmDelete('MICRORED', m, e)} 
+                                                                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-100 rounded-xl shadow-sm transition cursor-pointer"
+                                                                        >
+                                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                                        </button>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Mobile Responsive List-Grid */}
+                                        <div className="md:hidden divide-y divide-slate-100">
+                                            {finalFilteredMicroredes.map(m => {
+                                                const pUnget = ungets.find(u => u.id === m.ungetId);
+                                                return (
+                                                    <div 
+                                                        key={m.id} 
+                                                        onClick={() => { setSelectedDetailItem(m); setSelectedDetailType('MICRORED'); }}
+                                                        className="p-4 hover:bg-slate-50/40 cursor-pointer active:bg-slate-100 transition relative flex flex-col gap-2 group"
+                                                    >
+                                                        <div className="flex justify-between items-start gap-4">
+                                                            <div className="space-y-0.5">
+                                                                    <h4 className="font-extrabold text-slate-900 group-hover:text-teal-700 transition flex items-center gap-1.5 leading-snug">
+                                                                    <Network className="h-4 w-4 text-emerald-600" />
+                                                                    <span>{m.name}</span>
+                                                                </h4>
+                                                            </div>
+                                                            
+                                                            <div className="flex gap-1.5 shrink-0">
+                                                                <button 
+                                                                    onClick={(e) => handleOpenEdit('MICRORED', m, e)} 
+                                                                    className="p-2.5 text-slate-400 hover:text-teal-600 border border-slate-100 rounded-xl bg-slate-50 shadow-sm"
+                                                                >
+                                                                    <Edit className="h-3.5 w-3.5" />
+                                                                </button>
+                                                                {isSuperAdmin && (
+                                                                    <button 
+                                                                        onClick={(e) => handleConfirmDelete('MICRORED', m, e)} 
+                                                                        className="p-2.5 text-slate-400 hover:text-rose-600 border border-slate-100 rounded-xl bg-slate-50 shadow-sm"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="flex flex-col gap-1 text-slate-500 text-[11px] pt-1">
+                                                            <div><span className="font-bold text-slate-400">UNGET:</span> {getUngetName(m.ungetId)}</div>
+                                                            {pUnget && (
+                                                                <div><span className="bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded text-[9px]">OGESS: {getOgessName(pUnget.ogessId)}</span></div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* 5. IPRESS Tab views */}
+                                {activeTab === 'IPRESS' && (
+                                    <>
+                                        {/* Desktop Premium Table */}
+                                        <div className="hidden md:block overflow-x-auto">
+                                            <table className="w-full text-left text-sm border-collapse">
+                                                <thead>
+                                                    <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
+                                                        <th className="p-4 px-6">Establecimiento de Salud</th>
+                                                        <th className="p-4">Código RENIPRESS</th>
+                                                        <th className="p-4">Categoría</th>
+                                                        <th className="p-4">Tipo</th>
+                                                        <th className="p-4">Microred</th>
+                                                        <th className="p-4">UNGET</th>
+                                                        <th className="p-4">OGESS de Enlace</th>
+                                                        <th className="p-4 text-right pr-6">Acciones</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {finalFilteredFacilities.map(f => (
+                                                        <tr 
+                                                            key={f.code} 
+                                                            onClick={() => { setSelectedDetailItem(f); setSelectedDetailType('IPRESS'); }}
+                                                            className="hover:bg-slate-50/60 cursor-pointer transition group"
+                                                        >
+                                                            <td className="p-4 px-6 font-extrabold text-slate-800 group-hover:text-teal-700 transition flex items-center gap-2">
+                                                                <div className="w-1.5 h-6 bg-teal-500/0 group-hover:bg-teal-500 rounded-sm -ml-2.5 transition-all duration-300" />
+                                                                <MapPin className="h-4 w-4 text-slate-400 group-hover:text-teal-600 transition" />
+                                                                <span>{f.name}</span>
+                                                            </td>
+                                                            <td className="p-4 font-mono font-bold text-xs text-slate-600">
+                                                                <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{f.code}</span>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] uppercase font-black tracking-wide border ${getCategoryStyle(f.category)}`}>
+                                                                    {f.category || '-'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <span className={`px-2 py-0.5 rounded-lg text-[10px] uppercase border ${getTypeStyle(f.type)}`}>
+                                                                    {f.type || '-'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4 text-slate-600 font-semibold">{getMicroredName(f.microredId)}</td>
+                                                            <td className="p-4 text-slate-600 font-semibold">{getUngetName(f.ungetId)}</td>
+                                                            <td className="p-4 text-slate-500 font-medium">{getOgessName(f.ogessId)}</td>
+                                                            <td className="p-4 flex gap-2 justify-end pr-6">
+                                                                <button 
+                                                                    onClick={(e) => handleOpenEdit('IPRESS', f, e)} 
+                                                                    className="p-2 text-slate-400 hover:text-teal-600 hover:bg-teal-50 border border-slate-100 rounded-xl shadow-sm transition cursor-pointer"
+                                                                >
+                                                                    <Edit className="h-3.5 w-3.5" />
+                                                                </button>
+                                                                {isSuperAdmin && (
+                                                                    <button 
+                                                                        onClick={(e) => handleConfirmDelete('IPRESS', f, e)} 
+                                                                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-100 rounded-xl shadow-sm transition cursor-pointer"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Mobile Responsive List-Grid */}
+                                        <div className="md:hidden divide-y divide-slate-100">
+                                            {finalFilteredFacilities.map(f => (
+                                                <div 
+                                                    key={f.code} 
+                                                    onClick={() => { setSelectedDetailItem(f); setSelectedDetailType('IPRESS'); }}
+                                                    className="p-4 hover:bg-slate-50/40 cursor-pointer active:bg-slate-100 transition relative flex flex-col gap-2.5 group"
+                                                >
+                                                    <div className="flex justify-between items-start gap-4">
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="font-mono text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">{f.code}</span>
+                                                                <span className={`px-2 py-0.5 rounded-full text-[9px] uppercase font-bold border ${getCategoryStyle(f.category)}`}>{f.category || '-'}</span>
+                                                            </div>
+                                                            <h4 className="font-extrabold text-slate-900 group-hover:text-teal-700 transition leading-snug">{f.name}</h4>
+                                                        </div>
+                                                        
+                                                        <div className="flex gap-1.5 shrink-0">
+                                                            <button 
+                                                                onClick={(e) => handleOpenEdit('IPRESS', f, e)} 
+                                                                className="p-2.5 text-slate-400 hover:text-teal-600 border border-slate-100 rounded-xl bg-slate-50 shadow-sm"
+                                                            >
+                                                                <Edit className="h-3.5 w-3.5" />
+                                                            </button>
+                                                            {isSuperAdmin && (
+                                                                <button 
+                                                                    onClick={(e) => handleConfirmDelete('IPRESS', f, e)} 
+                                                                    className="p-2.5 text-slate-400 hover:text-rose-600 border border-slate-100 rounded-xl bg-slate-50 shadow-sm"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-col gap-1 text-[11px] text-slate-500 pt-0.5 border-t border-slate-50">
+                                                        <div className="flex items-center gap-1"><MapPin className="h-3 w-3 text-slate-405" /> {f.district || '-'}, {f.province || '-'}</div>
+                                                        <div className="flex flex-wrap gap-1.5 mt-1">
+                                                            {f.microredId && <span className="bg-emerald-50/60 border border-emerald-100/50 text-emerald-800 px-1.5 py-0.5 rounded text-[9px] font-black">Microred: {getMicroredName(f.microredId)}</span>}
+                                                            <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[9px] font-medium">UNGET: {getUngetName(f.ungetId)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Interactive Registry Detail Explorer Modal (Stunning Sidebar/Card Bento Explorer Sheet) */}
+            {selectedDetailItem && selectedDetailType && createPortal(
+                <div 
+                    className="fixed inset-0 z-[300000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => { setSelectedDetailItem(null); setSelectedDetailType(null); }}
+                >
+                    <div 
+                        className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col md:flex-row max-h-[90vh] md:max-h-[85vh] overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-300"
+                        onClick={(e) => e.stopPropagation()}
                     >
-                        <Plus className="h-4 w-4" /> Agregar Registro
-                    </button>
-                    )}
-                </div>
+                        {/* LEFT COLUMN: Visual Path & Stats (Dark Gradient) */}
+                        <div className="w-full md:w-80 bg-gradient-to-b from-slate-900 via-slate-900 to-teal-950 p-6 text-white flex flex-col gap-6 shrink-0 overflow-y-auto">
+                            <div className="space-y-1">
+                                <span className="bg-teal-500/10 text-teal-300 border border-teal-500/20 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full inline-block">
+                                    Expediente Técnico
+                                </span>
+                                <h3 className="font-extrabold text-lg text-white leading-tight">Mapa de Jurisdicción</h3>
+                                <p className="text-[10px] text-slate-400 mt-1">Estructura organizacional y dependencia jerárquica del nodo seleccionado.</p>
+                            </div>
 
-                <div className="overflow-x-auto">
-                    {activeTab === 'DIRESA' && (
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
-                                <tr>
-                                    <th className="p-4">Nombre DIRESA</th>
-                                    <th className="p-4">RUC</th>
-                                    <th className="p-4">Distrito</th>
-                                    <th className="p-4">Provincia</th>
-                                    <th className="p-4">Departamento</th>
-                                    <th className="p-4 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {visibleDiresas.filter(d => d.name.toLowerCase().includes(searchQuery.toLowerCase())).map(d => (
-                                    <tr key={d.id} className="hover:bg-gray-50">
-                                        <td className="p-4 font-bold text-gray-800">{d.name}</td>
-                                        <td className="p-4 font-mono">{d.ruc || '-'}</td>
-                                        <td className="p-4 text-gray-600">{d.district || '-'}</td>
-                                        <td className="p-4 text-gray-600">{d.province || '-'}</td>
-                                        <td className="p-4 text-gray-600">{d.department || '-'}</td>
-                                        <td className="p-4 flex gap-2 justify-end">
-                                            <button onClick={() => { setDiresaForm(d); setDiresaModalStep(1); setIsDiresaModalOpen(true); }} className="p-2 text-gray-400 hover:text-teal-600 border rounded shadow-sm"><Edit className="h-4 w-4" /></button>
-                                            {isSuperAdmin && (
-                                                <button onClick={() => handleDeleteDiresa(d.id)} className="p-2 text-gray-400 hover:text-red-600 border rounded shadow-sm"><Trash2 className="h-4 w-4" /></button>
-                                            )}
-                                        </td>
-                                    </tr>
+                            {/* Connected Nodes Path */}
+                            <div className="relative pl-4 space-y-5 flex-1 pr-1 py-1">
+                                {/* Connector Line */}
+                                <div className="absolute left-[21px] top-6 bottom-6 w-0.5 bg-slate-700/60" />
+                                
+                                {getDetailHierarchyNodes().map((node, index) => (
+                                    <div key={index} className="relative flex items-start gap-4">
+                                        <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center z-10 size-3.5 shrink-0 transition-all ${
+                                            node.isCurrent 
+                                                ? 'bg-teal-400 border-teal-400 shadow-lg shadow-teal-500/50 scale-125' 
+                                                : 'bg-slate-900 border-slate-600'
+                                        }`}>
+                                            <div className={`h-1 w-1 rounded-full ${node.isCurrent ? 'bg-slate-900' : 'bg-slate-550'}`} />
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <span className="block text-[8px] uppercase tracking-widest font-black text-slate-400 leading-none">{node.label}</span>
+                                            <span className={`block text-xs font-bold leading-tight ${node.isCurrent ? 'text-teal-400' : 'text-slate-200'}`}>{node.name}</span>
+                                        </div>
+                                    </div>
                                 ))}
-                            </tbody>
-                        </table>
-                    )}
-                    
-                    {activeTab === 'OGESS' && (
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
-                                <tr>
-                                    <th className="p-4">Nombre OGESS</th>
-                                    <th className="p-4">Código / RUC</th>
-                                    <th className="p-4">Distrito</th>
-                                    <th className="p-4">Provincia</th>
-                                    <th className="p-4">DIRESA</th>
-                                    <th className="p-4 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {visibleOgess.filter(o => o.name.toLowerCase().includes(searchQuery.toLowerCase())).map(o => (
-                                    <tr key={o.id} className="hover:bg-gray-50">
-                                        <td className="p-4 font-bold text-gray-800">{o.name}</td>
-                                        <td className="p-4 font-mono">{o.code || '-'} / {o.ruc || '-'}</td>
-                                        <td className="p-4 text-gray-600">{o.district || '-'}</td>
-                                        <td className="p-4 text-gray-600">{o.province || '-'}</td>
-                                        <td className="p-4">{getDiresaName(o.diresaId)}</td>
-                                        <td className="p-4 flex gap-2 justify-end">
-                                            <button onClick={() => { setOgessForm(o); setOgessModalStep(1); setIsOgessModalOpen(true); }} className="p-2 text-gray-400 hover:text-teal-600 border rounded shadow-sm"><Edit className="h-4 w-4" /></button>
-                                            {isSuperAdmin && (
-                                                <button onClick={() => handleDeleteOgess(o.id)} className="p-2 text-gray-400 hover:text-red-600 border rounded shadow-sm"><Trash2 className="h-4 w-4" /></button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
+                            </div>
 
-                    {activeTab === 'UNGET' && (
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
-                                <tr>
-                                    <th className="p-4">Nombre UNGET</th>
-                                    <th className="p-4">Distrito</th>
-                                    <th className="p-4">Provincia</th>
-                                    <th className="p-4">OGESS</th>
-                                    <th className="p-4">DIRESA</th>
-                                    <th className="p-4 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {visibleUngets.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase())).map(u => (
-                                    <tr key={u.id} className="hover:bg-gray-50">
-                                        <td className="p-4 font-bold text-gray-800">{u.name}</td>
-                                        <td className="p-4 text-gray-600">{u.district || '-'}</td>
-                                        <td className="p-4 text-gray-600">{u.province || '-'}</td>
-                                        <td className="p-4">{getOgessName(u.ogessId)}</td>
-                                        <td className="p-4">{getDiresaName(u.diresaId)}</td>
-                                        <td className="p-4 flex gap-2 justify-end">
-                                            <button onClick={() => { setUngetForm(u); setUngetModalStep(1); setIsUngetModalOpen(true); }} className="p-2 text-gray-400 hover:text-teal-600 border rounded shadow-sm"><Edit className="h-4 w-4" /></button>
-                                            {isSuperAdmin && (
-                                                <button onClick={() => handleDeleteUnget(u.id)} className="p-2 text-gray-400 hover:text-red-600 border rounded shadow-sm"><Trash2 className="h-4 w-4" /></button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
+                            {/* Dependent stats (if available) */}
+                            {getRelatedStats() && (
+                                <div className="space-y-2 border-t border-slate-800 pt-4 bg-slate-900/30 p-4 rounded-2xl">
+                                    <h4 className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                        <Activity className="h-3 w-3 text-teal-400" /> Estadísticas de Red
+                                    </h4>
+                                    <div className="divide-y divide-slate-800">
+                                        {getRelatedStats()?.map((stat, i) => (
+                                            <div key={i} className="py-2 flex justify-between items-center text-xs font-bold">
+                                                <span className="text-slate-400 text-[11px]">{stat.label}</span>
+                                                <span className="bg-teal-500/10 text-teal-300 font-black px-2 py-0.5 rounded-lg text-[10px]">{stat.value}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
-                    {activeTab === 'MICRORED' && (
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
-                                <tr>
-                                    <th className="p-4">Nombre MICRORED</th>
-                                    <th className="p-4">UNGET Asignada</th>
-                                    <th className="p-4 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {visibleMicroredes.filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase())).map(m => (
-                                    <tr key={m.id} className="hover:bg-gray-50">
-                                        <td className="p-4 font-bold text-gray-800">{m.name}</td>
-                                        <td className="p-4">{getUngetName(m.ungetId)}</td>
-                                        <td className="p-4 flex gap-2 justify-end">
-                                            <button onClick={() => { setMicroredForm(m); setIsMicroredModalOpen(true); }} className="p-2 text-gray-400 hover:text-teal-600 border rounded shadow-sm"><Edit className="h-4 w-4" /></button>
-                                            {isSuperAdmin && (
-                                                <button onClick={() => handleDeleteMicrored(m.id)} className="p-2 text-gray-400 hover:text-red-600 border rounded shadow-sm"><Trash2 className="h-4 w-4" /></button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
+                            {/* Tags section in left column */}
+                            <div className="space-y-2 border-t border-slate-800 pt-4 mt-auto bg-slate-900/30 p-4 rounded-2xl">
+                                <h4 className="text-[9px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                    <Hash className="h-3 w-3 text-teal-400" /> Clasificación
+                                </h4>
+                                <div className="divide-y divide-slate-800">
+                                    {(!['DIRESA', 'UNGET', 'MICRORED'].includes(selectedDetailType) && selectedDetailItem.code) ? (
+                                        <div className="py-2 flex justify-between items-center text-xs font-bold">
+                                            <span className="text-slate-400 text-[11px]">Código</span>
+                                            <span className="bg-slate-800 text-slate-300 font-mono font-black px-2 py-0.5 rounded-lg text-[10px] flex items-center gap-1">
+                                                <Hash className="h-3 w-3" /> {selectedDetailItem.code}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="py-2 flex justify-between items-center text-xs font-bold">
+                                            <span className="text-slate-400 text-[11px]">Código</span>
+                                            <span className="text-slate-500 font-mono font-medium text-[10px]">No especificado</span>
+                                        </div>
+                                    )}
+                                    {selectedDetailItem.category && (
+                                        <div className="py-2 flex justify-between items-center text-xs font-bold">
+                                            <span className="text-slate-400 text-[11px]">Categoría</span>
+                                            <span className="bg-teal-500/10 text-teal-300 font-black px-2 py-0.5 rounded-lg text-[10px]">{selectedDetailItem.category}</span>
+                                        </div>
+                                    )}
+                                    {selectedDetailItem.type && (
+                                        <div className="py-2 flex justify-between items-center text-xs font-bold">
+                                            <span className="text-slate-400 text-[11px]">Tipo</span>
+                                            <span className="bg-slate-800 text-slate-300 font-black px-2 py-0.5 rounded-lg text-[10px]">{selectedDetailItem.type}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
 
-                    {activeTab === 'IPRESS' && (
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
-                                <tr>
-                                    <th className="p-4">Código</th>
-                                    <th className="p-4">Establecimiento</th>
-                                    <th className="p-4">Categoría</th>
-                                    <th className="p-4">Microred</th>
-                                    <th className="p-4">UNGET</th>
-                                    <th className="p-4">OGESS</th>
-                                    <th className="p-4 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {visibleFacilities.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()) || f.code.includes(searchQuery)).map(f => (
-                                    <tr key={f.code} className="hover:bg-gray-50">
-                                        <td className="p-4 font-mono">{f.code}</td>
-                                        <td className="p-4 font-medium text-gray-900">{f.name}</td>
-                                        <td className="p-4">
-                                            <span className="bg-gray-100 px-2 py-1 rounded text-xs font-bold text-gray-600">{f.category || '-'}</span>
-                                        </td>
-                                        <td className="p-4 text-gray-600">{getMicroredName(f.microredId)}</td>
-                                        <td className="p-4 text-gray-600">{getUngetName(f.ungetId)}</td>
-                                        <td className="p-4 text-gray-600">{getOgessName(f.ogessId)}</td>
-                                        <td className="p-4 flex gap-2 justify-end">
-                                            <button onClick={() => { setFacilityForm(f); setFacilityModalStep(1); setIsFacilityModalOpen(true); }} className="p-2 text-gray-400 hover:text-teal-600 border rounded shadow-sm"><Edit className="h-4 w-4" /></button>
-                                            {isSuperAdmin && (
-                                                <button onClick={() => handleDeleteFacility(f.code)} className="p-2 text-gray-400 hover:text-red-600 border rounded shadow-sm"><Trash2 className="h-4 w-4" /></button>
+                        {/* RIGHT COLUMN: Bento-grid Registry Explorer Data */}
+                        <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
+                            {/* Card Header area */}
+                            <div className="p-6 pb-4 border-b border-slate-100 flex justify-between items-center bg-white min-h-[80px]">
+                                <div className="space-y-1">
+                                    <h2 className="font-extrabold text-xl text-slate-900 leading-snug flex items-center gap-2">
+                                        {selectedDetailType === 'DIRESA' && <ShieldCheck className="h-5 w-5 text-teal-600 shrink-0" />}
+                                        {selectedDetailType === 'OGESS' && <Activity className="h-5 w-5 text-teal-600 shrink-0" />}
+                                        {selectedDetailType === 'UNGET' && <Building2 className="h-5 w-5 text-teal-600 shrink-0" />}
+                                        {selectedDetailType === 'MICRORED' && <Network className="h-5 w-5 text-teal-600 shrink-0" />}
+                                        {selectedDetailType === 'IPRESS' && <MapPin className="h-5 w-5 text-teal-600 shrink-0" />}
+                                        <span>{selectedDetailItem.name}</span>
+                                    </h2>
+                                </div>
+                                <button 
+                                    onClick={() => { setSelectedDetailItem(null); setSelectedDetailType(null); }}
+                                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            {/* Scrollable grid details explorer */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                {/* Subsection 1: Identificación e Inspección */}
+                                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                                        <div className="w-1.5 h-3 bg-teal-500 rounded-sm" /> Datos de Registro de Enlace
+                                    </h4>
+                                    
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {/* RENIPRESS / ID row */}
+                                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center group relative">
+                                            <div>
+                                                <span className="block text-[10px] font-black uppercase text-slate-400 mb-0.5">
+                                                    {selectedDetailType === 'IPRESS' ? 'Código RENIPRESS' : 'Código Ejecutora'}
+                                                </span>
+                                                {['DIRESA', 'UNGET', 'MICRORED'].includes(selectedDetailType) ? (
+                                                    <code className="text-xs font-mono font-bold text-slate-500">
+                                                        No especificado
+                                                    </code>
+                                                ) : (
+                                                    <code className="text-xs font-mono font-bold text-slate-800">
+                                                        {selectedDetailItem.code || 'No especificado'}
+                                                    </code>
+                                                )}
+                                            </div>
+                                            {(!['DIRESA', 'UNGET', 'MICRORED'].includes(selectedDetailType) && selectedDetailItem.code) && (
+                                                <button 
+                                                    onClick={() => handleCopyText(selectedDetailItem.code, selectedDetailType === 'IPRESS' ? 'Código RENIPRESS' : 'Código Ejecutora')}
+                                                    className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-150 transition cursor-pointer"
+                                                >
+                                                    {copiedField === selectedDetailItem.code ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                                                </button>
                                             )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            </div>
+                                        </div>
+
+                                        {/* RUC Row */}
+                                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center group relative">
+                                            <div>
+                                                <span className="block text-[10px] font-black uppercase text-slate-400 mb-0.5">RUC del Establecimiento</span>
+                                                <code className="text-xs font-mono font-bold text-slate-800">
+                                                    {selectedDetailItem.ruc || 'No especificado'}
+                                                </code>
+                                            </div>
+                                            {selectedDetailItem.ruc && (
+                                                <button 
+                                                    onClick={() => handleCopyText(selectedDetailItem.ruc, 'RUC')}
+                                                    className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-150 transition cursor-pointer"
+                                                >
+                                                    {copiedField === selectedDetailItem.ruc ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Subsection 2: Geografía */}
+                                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                                        <div className="w-1.5 h-3 bg-emerald-500 rounded-sm" /> Localización Regional
+                                    </h4>
+                                    
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div className="space-y-0.5">
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Departamento</span>
+                                            <span className="text-sm font-bold text-slate-800">{selectedDetailItem.department || 'San Martín'}</span>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Provincia</span>
+                                            <span className="text-sm font-bold text-slate-800">{selectedDetailItem.province || 'No especificado'}</span>
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Distrito / Ciudad</span>
+                                            <span className="text-sm font-bold text-slate-800">{selectedDetailItem.district || 'No especificado'}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Dirección Legal */}
+                                    <div className="pt-3 border-t border-slate-50 space-y-1">
+                                        <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Dirección Legal</span>
+                                        <div className="p-3 bg-slate-50 rounded-xl text-xs font-semibold text-slate-700 flex justify-between items-center gap-4">
+                                            <span className="leading-relaxed">{selectedDetailItem.legalAddress || 'Sin dirección legal asignada para este registro estatal.'}</span>
+                                            {selectedDetailItem.legalAddress && (
+                                                <a 
+                                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedDetailItem.legalAddress + ', ' + (selectedDetailItem.district || '') + ', ' + (selectedDetailItem.province || '') + ', Peru')}`}
+                                                    target="_blank" 
+                                                    referrerPolicy="no-referrer"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-extrabold text-teal-700 hover:text-white hover:bg-teal-600 rounded-lg bg-white border border-slate-200 transition"
+                                                >
+                                                    <Globe className="h-3 w-3" /> Maps
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Subsection 3: Datos de Contacto y Canales */}
+                                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                                        <div className="w-1.5 h-3 bg-blue-500 rounded-sm" /> Canales de Contacto Oficiales
+                                    </h4>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {/* Teléfono */}
+                                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                            <div className="h-9 w-9 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0 border border-blue-100">
+                                                <Phone className="h-4 w-4" />
+                                            </div>
+                                            <div className="space-y-0.5">
+                                                <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Teléfono Directo</span>
+                                                {selectedDetailItem.phone ? (
+                                                    <a href={`tel:${selectedDetailItem.phone}`} className="text-sm font-bold text-slate-800 hover:text-teal-600 transition">
+                                                        {selectedDetailItem.phone}
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-xs font-semibold text-slate-404">No especificado</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Correo Electrónico */}
+                                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                            <div className="h-9 w-9 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center shrink-0 border border-indigo-100">
+                                                <Mail className="h-4 w-4" />
+                                            </div>
+                                            <div className="space-y-0.5 overflow-hidden">
+                                                <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Correo Electrónico</span>
+                                                {selectedDetailItem.email ? (
+                                                    <a href={`mailto:${selectedDetailItem.email}`} className="text-sm font-bold text-slate-800 hover:text-teal-600 transition truncate block">
+                                                        {selectedDetailItem.email}
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-xs font-semibold text-slate-404">No especificado</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Website y Redes */}
+                                    {(selectedDetailItem.website || selectedDetailItem.socialMedia) && (
+                                        <div className="pt-3 border-t border-slate-50 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {selectedDetailItem.website && (
+                                                <div className="space-y-1">
+                                                    <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Sitio Web Oficial</span>
+                                                    <a 
+                                                        href={selectedDetailItem.website.startsWith('http') ? selectedDetailItem.website : `https://${selectedDetailItem.website}`} 
+                                                        target="_blank" 
+                                                        referrerPolicy="no-referrer"
+                                                        rel="noopener noreferrer" 
+                                                        className="text-xs font-bold text-teal-700 hover:underline flex items-center gap-1"
+                                                    >
+                                                        <Globe className="h-3.5 w-3.5" /> Visitar sitio web oficial
+                                                    </a>
+                                                </div>
+                                            )}
+                                            {selectedDetailItem.socialMedia && (
+                                                <div className="space-y-1">
+                                                    <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Redes Sociales</span>
+                                                    <span className="text-xs font-semibold text-slate-700 block bg-slate-50 p-2 rounded-lg border border-slate-100">{selectedDetailItem.socialMedia}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
 
                {/* Modals for Editing */}

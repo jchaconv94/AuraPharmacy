@@ -174,16 +174,6 @@ export const AdminCatalogsModule: React.FC<AdminCatalogsModuleProps> = ({ onChan
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       
-      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 flex items-start gap-3">
-        <FileText className="h-5 w-5 text-teal-600 mt-0.5 shrink-0" />
-        <div>
-          <h4 className="text-sm font-bold text-slate-800">Mapeo con Ficha Técnica N° 30 (Aura)</h4>
-          <p className="text-xs text-slate-500 mt-1">
-            La correcta clasificación de las profesiones médicas y los regímenes laborales asegura una auditoría precisa y consistencia con las reglas sanitarias del Ministerio de Salud.
-          </p>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
         {/* ================= COLUMN 1: LABOR REGIMES ================= */}
