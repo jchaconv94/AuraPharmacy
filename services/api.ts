@@ -17,8 +17,8 @@ const MOCK_DB = {
         { code: '00002', name: 'C.S. MIRAFLORES', category: 'I-3' },
     ],
     roles: [
-        { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 10 },
-        { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH'], maxUrlsAllowed: 1 }
+        { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH', 'ADMIN_STOCK_ASSIGN', 'IPRESS_STOCK'], maxUrlsAllowed: 10 },
+        { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION', 'IPRESS_STOCK'], maxUrlsAllowed: 1 }
     ],
     laborRegimes: [
         { id: 'LR-276', name: 'D.L. 276', description: 'Sector Público - Régimen de Carrera Administrativa' },
@@ -827,6 +827,161 @@ export const api = {
         } catch(e: any) {
             return { success: false, message: e.message };
         }
+    },
+
+    // --- STOCK ASSIGNMENTS (ADMIN TO USER) ---
+    getAllStockAssignments: async (): Promise<any[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('facility_stock_assignments').select('*');
+                if (!error && data) {
+                    return data.map(d => ({
+                        id: d.id,
+                        adminUsername: d.admin_username,
+                        facilityCode: d.facility_code,
+                        sheetName: d.sheet_name,
+                        sheetUrl: d.sheet_url,
+                        visibleColumns: d.visible_columns || [],
+                        createdAt: d.created_at
+                    }));
+                }
+            }
+        } catch(e) {}
+        return [];
+    },
+
+    getStockAssignmentsByAdmin: async (adminUsername: string): Promise<any[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('facility_stock_assignments').select('*').eq('admin_username', adminUsername);
+                if (!error && data) {
+                    return data.map(d => ({
+                        id: d.id,
+                        adminUsername: d.admin_username,
+                        facilityCode: d.facility_code,
+                        sheetName: d.sheet_name,
+                        sheetUrl: d.sheet_url,
+                        visibleColumns: d.visible_columns || [],
+                        createdAt: d.created_at
+                    }));
+                }
+            }
+        } catch(e) {}
+        return [];
+    },
+
+    getMyStockAssignments: async (facilityCode: string): Promise<any[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('facility_stock_assignments').select('*').eq('facility_code', facilityCode);
+                if (!error && data) {
+                    return data.map(d => ({
+                        id: d.id,
+                        adminUsername: d.admin_username,
+                        facilityCode: d.facility_code,
+                        sheetName: d.sheet_name,
+                        sheetUrl: d.sheet_url,
+                        visibleColumns: d.visible_columns || [],
+                        createdAt: d.created_at
+                    }));
+                }
+            }
+        } catch(e) {}
+        return [];
+    },
+
+    saveStockAssignment: async (assignment: any): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                // Validation: A health facility (establishment) cannot be assigned to two or more sheets at the same time
+                const { data: existingFacility, error: errFac } = await supabase
+                    .from('facility_stock_assignments')
+                    .select('id, facility_code')
+                    .eq('facility_code', assignment.facilityCode)
+                    .maybeSingle();
+                if (existingFacility) {
+                    return { success: false, message: `El establecimiento solicitado ya tiene una hoja de cálculo vinculada.` };
+                }
+
+                // Validation: A single sheet (sheetUrl + sheetName) cannot be assigned to multiple facilities at the same time
+                const { data: existingSheet, error: errSheet } = await supabase
+                    .from('facility_stock_assignments')
+                    .select('id, facility_code, sheet_name')
+                    .eq('sheet_url', assignment.sheetUrl)
+                    .eq('sheet_name', assignment.sheetName)
+                    .maybeSingle();
+                if (existingSheet) {
+                    return { success: false, message: `La hoja "${assignment.sheetName}" de esa conexión ya se encuentra vinculada a otro establecimiento (Código: ${existingSheet.facility_code}).` };
+                }
+
+                const { error } = await supabase.from('facility_stock_assignments').insert({
+                    admin_username: assignment.adminUsername,
+                    facility_code: assignment.facilityCode,
+                    sheet_name: assignment.sheetName,
+                    sheet_url: assignment.sheetUrl,
+                    visible_columns: assignment.visibleColumns
+                });
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
+    },
+
+    updateStockAssignment: async (id: string, assignment: any): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                // Validation: A health facility (establishment) cannot be assigned to two or more sheets at the same time
+                const { data: existingFacility, error: errFac } = await supabase
+                    .from('facility_stock_assignments')
+                    .select('id')
+                    .eq('facility_code', assignment.facilityCode)
+                    .neq('id', id)
+                    .maybeSingle();
+                if (existingFacility) {
+                    return { success: false, message: `El establecimiento solicitado ya tiene otra hoja de cálculo vinculada.` };
+                }
+
+                // Validation: A single sheet (sheetUrl + sheetName) cannot be assigned to multiple facilities at the same time
+                const { data: existingSheet, error: errSheet } = await supabase
+                    .from('facility_stock_assignments')
+                    .select('id, facility_code')
+                    .eq('sheet_url', assignment.sheetUrl)
+                    .eq('sheet_name', assignment.sheetName)
+                    .neq('id', id)
+                    .maybeSingle();
+                if (existingSheet) {
+                    return { success: false, message: `La hoja "${assignment.sheetName}" de esa conexión ya se encuentra vinculada a otro establecimiento (Código: ${existingSheet.facility_code}).` };
+                }
+
+                const { error } = await supabase.from('facility_stock_assignments').update({
+                    facility_code: assignment.facilityCode,
+                    sheet_name: assignment.sheetName,
+                    sheet_url: assignment.sheetUrl,
+                    visible_columns: assignment.visibleColumns
+                }).eq('id', id);
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
+    },
+
+    deleteStockAssignment: async (id: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('facility_stock_assignments').delete().eq('id', id);
+                if (error) throw error;
+                return { success: true };
+            }
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+        return { success: false, message: "No Supabase connected" };
     },
 
     // --- DYNAMIC LABOR REGIMES (CRUD) ---

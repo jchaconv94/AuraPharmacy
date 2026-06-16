@@ -149,6 +149,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         )}
 
+        {hasPermission('IPRESS_STOCK') && (
+          <button
+            onClick={() => setCurrentView('IPRESS_STOCK')}
+            className={`w-full flex items-center gap-3 py-3 rounded-xl transition-all duration-300 group ${
+              currentView === 'IPRESS_STOCK'
+                ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
+                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+            } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
+            title={isCollapsed ? "Stock IPRESS" : ""}
+          >
+            <Database className={`h-5 w-5 shrink-0 ${currentView === 'IPRESS_STOCK' ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
+            {!isCollapsed && <span className="font-semibold text-sm">Stock IPRESS</span>}
+          </button>
+        )}
+
         {(hasPermission('ADMIN_USERS') || hasPermission('ADMIN_ROLES') || hasPermission('ADMIN_FACILITIES') || hasPermission('ADMIN_PARAMS') || hasPermission('ADMIN_MIGRATION') || hasPermission('ADMIN_CATALOGS')) && (
           <div className="flex flex-col gap-1">
             <button
@@ -253,6 +268,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <Database className="h-4 w-4 shrink-0" />
                       Migrar Datos (Supabase)
+                    </button>
+                  )}
+                  {hasPermission('ADMIN_STOCK_ASSIGN') && (
+                    <button
+                      onClick={() => setCurrentView('ADMIN_STOCK_ASSIGN')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'ADMIN_STOCK_ASSIGN'
+                          ? 'text-teal-400 bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <ShieldCheck className="h-4 w-4 shrink-0" />
+                      Asignar Stock
                     </button>
                   )}
                 </div>

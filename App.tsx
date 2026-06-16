@@ -26,6 +26,8 @@ import { UserProfile } from './components/UserProfile';
 import { WelcomeModal } from './components/WelcomeModal';
 import { RedistributionModule } from './components/RedistributionModule';
 import { SheetSearchModule } from './components/SheetSearchModule';
+import { AdminStockAssignmentModule } from './components/AdminStockAssignmentModule';
+import { IpressStockModule } from './components/IpressStockModule';
 
 const SuspenseFallback = () => (
     <div className="flex-1 flex h-full w-full items-center justify-center p-8 bg-gray-50/50">
@@ -96,8 +98,10 @@ const AuthenticatedApp: React.FC = () => {
     useEffect(() => {
         if (isAuthenticated && !isLoading && user && !hasPermission(currentView)) {
             if (hasPermission('DASHBOARD')) setCurrentView('DASHBOARD');
+            else if (hasPermission('IPRESS_STOCK')) setCurrentView('IPRESS_STOCK');
             else if (hasPermission('REDISTRIBUTION')) setCurrentView('REDISTRIBUTION');
             else if (hasPermission('SIG_SEARCH')) setCurrentView('SIG_SEARCH');
+            else if (hasPermission('ADMIN_STOCK_ASSIGN')) setCurrentView('ADMIN_STOCK_ASSIGN');
             else if (hasPermission('ADMIN_USERS')) setCurrentView('ADMIN_USERS');
             else if (hasPermission('ADMIN_ROLES')) setCurrentView('ADMIN_ROLES');
             else if (hasPermission('ADMIN_FACILITIES')) setCurrentView('ADMIN_FACILITIES');
@@ -153,7 +157,9 @@ const AuthenticatedApp: React.FC = () => {
                            {currentView === 'DASHBOARD' && 'Análisis de Requerimiento'}
                            {currentView === 'REDISTRIBUTION' && 'Módulo de Redistribución'}
                            {currentView === 'SIG_SEARCH' && 'Consulta Stock'}
-                           {currentView.startsWith('ADMIN') && 'Panel de Administración'}
+                           {currentView === 'IPRESS_STOCK' && 'Visor de Stock IPRESS'}
+                           {currentView === 'ADMIN_STOCK_ASSIGN' && 'Asignar Stock a IPRESS'}
+                           {currentView.startsWith('ADMIN') && currentView !== 'ADMIN_STOCK_ASSIGN' && 'Panel de Administración'}
                            {currentView === 'PROFILE' && 'Perfil de Usuario'}
                         </h2>
                      </div>
@@ -171,7 +177,9 @@ const AuthenticatedApp: React.FC = () => {
                                 {currentView === 'DASHBOARD' && <AnalysisModule />}
                                 {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
                                 {currentView === 'SIG_SEARCH' && <SheetSearchModule />}
-                                {currentView.startsWith('ADMIN') && <AdminPanel currentView={currentView} />}
+                                {currentView === 'IPRESS_STOCK' && <IpressStockModule />}
+                                {currentView === 'ADMIN_STOCK_ASSIGN' && <AdminStockAssignmentModule />}
+                                {currentView.startsWith('ADMIN') && currentView !== 'ADMIN_STOCK_ASSIGN' && <AdminPanel currentView={currentView} />}
                                 {currentView === 'PROFILE' && <UserProfile />}
                             </Suspense>
                         </ErrorBoundary>

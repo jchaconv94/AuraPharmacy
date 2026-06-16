@@ -515,6 +515,8 @@ export const SheetSearchModule: React.FC = () => {
   const [sources, setSources] = useState<SheetSource[]>([]);
   const [data, setData] = useState<SIGData[]>([]);
   const [lastGlobalSync, setLastGlobalSync] = useState<Date | null>(null);
+  const [allFacilities, setAllFacilities] = useState<any[]>([]);
+  const [allAssignments, setAllAssignments] = useState<any[]>([]);
 
   // UI states
   const [isLoading, setIsLoading] = useState(false);
@@ -919,6 +921,15 @@ export const SheetSearchModule: React.FC = () => {
 
       // 2. CARGA EN SEGUNDO PLANO DESDE EL SERVIDOR
       try {
+        try {
+          const facs = await api.getFacilities();
+          setAllFacilities(facs);
+          const assigs = await api.getAllStockAssignments();
+          setAllAssignments(assigs);
+        } catch (err) {
+          console.error("Error loading facilities or assignments metadata:", err);
+        }
+
         const remoteConfigs = await api.getUngetConfigs(user.username);
         if (remoteConfigs && remoteConfigs.length > 0) {
           let visibleConfigs = remoteConfigs;
@@ -1132,9 +1143,25 @@ export const SheetSearchModule: React.FC = () => {
                 }
               }
 
+              // Resolve real health facility name if stock assignment exists
+              let displayName = sheet.name;
+              if (allAssignments.length > 0 && allFacilities.length > 0) {
+                const matchingAssignment = allAssignments.find(
+                  (a) => a.sheetUrl === config.url && a.sheetName === sheet.name
+                );
+                if (matchingAssignment) {
+                  const matchingF = allFacilities.find(
+                    (f) => f.code === matchingAssignment.facilityCode
+                  );
+                  if (matchingF) {
+                    displayName = matchingF.name;
+                  }
+                }
+              }
+
               newSources.push({
                 id: uniqueSourceId,
-                name: sheet.name,
+                name: displayName,
                 urlIndex,
                 lastUpdate: lastUpdateStr,
                 lastUpdateTime: lastUpdateTime || undefined,
@@ -1743,35 +1770,31 @@ export const SheetSearchModule: React.FC = () => {
   
   try {
     var ss = SpreadsheetApp.openById(id);
-    var sheets = ss.getSheets();
+    var targetSheetName = e.parameter.sheet; // Parametro de url ?sheet=NOMBRE
+    var action = e.parameter.action; // Opcional: acción a realizar
     var result = [];
     
-    for (var i = 0; i < sheets.length; i++) {
-        var sheet = sheets[i];
-        var data = sheet.getDataRange().getValues();
-        if (data.length < 2) continue; // Saltar sin datos
-        
-        var headers = data[0];
-        var rows = [];
-        
-        for (var j = 1; j < data.length; j++) {
-            var row = data[j];
-            var obj = {};
-            var hasData = false;
-            for (var k = 0; k < headers.length; k++) {
-                if (headers[k]) {
-                    obj[headers[k].toString().trim()] = row[k] !== undefined ? row[k].toString() : "";
-                    if (row[k]) hasData = true;
-                }
-            }
-            if(hasData) rows.push(obj);
+    // OPTIMIZACIÓN: Solo retornar la lista de hojas sin procesar todo el contenido (rápido)
+    if (action === 'getSheets') {
+        var sheets = ss.getSheets();
+        for (var i = 0; i < sheets.length; i++) {
+            result.push({ id: sheets[i].getSheetId().toString(), name: sheets[i].getName() });
         }
-        
-        result.push({
-            id: sheet.getSheetId().toString(),
-            name: sheet.getName(),
-            data: rows
-        });
+        return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    if (targetSheetName) {
+        var sheet = ss.getSheetByName(targetSheetName);
+        if (sheet) {
+            result.push(processSheet(sheet));
+        } else {
+            return ContentService.createTextOutput(JSON.stringify({error: "Hoja no encontrada"})).setMimeType(ContentService.MimeType.JSON);
+        }
+    } else {
+        var sheets = ss.getSheets();
+        for (var i = 0; i < sheets.length; i++) {
+            result.push(processSheet(sheets[i]));
+        }
     }
     
     // Devolver un JSON válido respetando el Cross-Origin (CORS)
@@ -1779,6 +1802,33 @@ export const SheetSearchModule: React.FC = () => {
   } catch(err) {
       return ContentService.createTextOutput(JSON.stringify({error: err.message})).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function processSheet(sheet) {
+    var data = sheet.getDataRange().getValues();
+    if (data.length < 2) return { id: sheet.getSheetId().toString(), name: sheet.getName(), data: [] };
+    
+    var headers = data[0];
+    var rows = [];
+    
+    for (var j = 1; j < data.length; j++) {
+        var row = data[j];
+        var obj = {};
+        var hasData = false;
+        for (var k = 0; k < headers.length; k++) {
+            if (headers[k]) {
+                obj[headers[k].toString().trim()] = row[k] !== undefined ? row[k].toString() : "";
+                if (row[k]) hasData = true;
+            }
+        }
+        if(hasData) rows.push(obj);
+    }
+    
+    return {
+        id: sheet.getSheetId().toString(),
+        name: sheet.getName(),
+        data: rows
+    };
 }`;
 
   const filteredUngets = useMemo(() => {
@@ -3556,18 +3606,7 @@ export const SheetSearchModule: React.FC = () => {
                                     </div>
                                     <div className="flex-1 sm:mb-4 min-w-0">
                                       {(() => {
-                                        const lastDash =
-                                          sheet.name.lastIndexOf("-");
-                                        const description =
-                                          lastDash === -1
-                                            ? sheet.name.replace(
-                                                /^FARM\s*-\s*/i,
-                                                "",
-                                              )
-                                            : sheet.name
-                                                .substring(0, lastDash)
-                                                .trim()
-                                                .replace(/^FARM\s*-\s*/i, "");
+                                        const description = sheet.name.replace(/^FARM\s*-\s*/i, "");
                                         const code = getAlmCodeForSheet(
                                           sheet.id,
                                           data,

@@ -2,13 +2,93 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../services/api';
 import { HealthFacility, Unget, Diresa, Ogess, Microred } from '../types';
-import { Building2, Plus, Edit, Trash2, MapPin, Search, ChevronLeft, ChevronRight, Save, X, Network, Globe, Filter, FilterX, Eye, Info, ChevronDown, ChevronUp, Copy, Check, Hash, Phone, Mail, Activity, ArrowRight, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Building2, Plus, Edit, Trash2, MapPin, Search, ChevronLeft, ChevronRight, Save, X, Network, Globe, Filter, FilterX, Eye, Info, ChevronDown, ChevronUp, Copy, Check, Hash, Phone, Mail, Activity, ArrowRight, ShieldAlert, ShieldCheck, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { CustomSelect } from './ui/CustomSelect';
 
+const AVAILABLE_COLUMNS = [
+  { key: "ALMCOD", label: "Código Almacén", defaultState: false },
+  { key: "DESC_ALM", label: "Almacén", defaultState: true },
+  { key: "Id_Producto", label: "Código SISMED", defaultState: true },
+  { key: "CODIGO_SIG", label: "Código SIGA", defaultState: true },
+  { key: "Nombre", label: "Descripción / Nombre", defaultState: true },
+  { key: "Lote", label: "Lote", defaultState: true },
+  { key: "Fec_Vencim", label: "Fec. Vencimiento", defaultState: true },
+  { key: "Reg_Sanitario", label: "Reg. Sanitario", defaultState: true },
+  { key: "DESC_TIPSUM", label: "Tipo de Suministro", defaultState: true },
+  { key: "DESC_FFINAN", label: "Fuente Financiamiento", defaultState: true },
+  { key: "Saldo", label: "Stock / Saldo", defaultState: true },
+  { key: "Precio_Det", label: "Precio Detalle", defaultState: false },
+  { key: "Precio_Cab", label: "Precio Paquete", defaultState: false },
+];
+
 export const AdminOrganizationModule: React.FC = () => {
     const { user } = useAuth();
+
+    // Premium spreadsheet-like column filter states
+    const [activeFilterId, setActiveFilterId] = useState<string | null>(null);
+    const [activeFilterTitle, setActiveFilterTitle] = useState('');
+    const [activeFilterValue, setActiveFilterValue] = useState('');
+    const [activeFilterOptions, setActiveFilterOptions] = useState<{ value: string; label: string }[]>([]);
+    const [activeFilterOnChange, setActiveFilterOnChange] = useState<((val: string) => void) | null>(null);
+    const [activeFilterTriggerRect, setActiveFilterTriggerRect] = useState<DOMRect | null>(null);
+    const [headerFilterSearch, setHeaderFilterSearch] = useState('');
+
+    // Dynamic clean close on scroll and window resize
+    useEffect(() => {
+        const handleCloseOnEvents = () => {
+            setActiveFilterId(null);
+            setActiveFilterTriggerRect(null);
+        };
+        window.addEventListener('resize', handleCloseOnEvents);
+        document.addEventListener('scroll', handleCloseOnEvents, true);
+        return () => {
+            window.removeEventListener('resize', handleCloseOnEvents);
+            document.removeEventListener('scroll', handleCloseOnEvents, true);
+        };
+    }, []);
+
+    const renderHeaderFilter = (
+        title: string,
+        value: string,
+        options: { value: string; label: string }[],
+        onChange: (val: string) => void,
+        id: string
+    ) => {
+        const isActive = !!value;
+        return (
+            <div 
+                id={`th-filter-${id}`}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setActiveFilterTitle(title);
+                    setActiveFilterValue(value);
+                    setActiveFilterOptions(options || []);
+                    setActiveFilterOnChange(() => onChange);
+                    setActiveFilterTriggerRect(rect);
+                    setActiveFilterId(activeFilterId === id ? null : id);
+                    setHeaderFilterSearch('');
+                }}
+                className={`group select-none inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all duration-200 cursor-pointer ${
+                    isActive 
+                        ? 'bg-teal-50 border-teal-200/80 text-teal-700 font-extrabold shadow-sm shadow-teal-50/20' 
+                        : 'bg-transparent border-transparent hover:bg-slate-100 hover:border-slate-200 text-slate-500 hover:text-slate-800'
+                }`}
+            >
+                <span className="font-extrabold uppercase tracking-wider text-[10px] whitespace-nowrap">{title}</span>
+                <Filter 
+                    className={`h-3 w-3 shrink-0 transition-transform duration-200 ${
+                        isActive 
+                            ? 'text-teal-600 fill-teal-100 scale-110' 
+                            : 'text-slate-400 group-hover:text-slate-600 group-hover:scale-105'
+                    }`} 
+                />
+            </div>
+        );
+    };
+
     const [diresas, setDiresas] = useState<Diresa[]>([]);
     const [ogess, setOgess] = useState<Ogess[]>([]);
     const [ungets, setUngets] = useState<Unget[]>([]);
@@ -75,6 +155,72 @@ export const AdminOrganizationModule: React.FC = () => {
     const [microredForm, setMicroredForm] = useState<Partial<Microred>>({});
     const [facilityForm, setFacilityForm] = useState<Partial<HealthFacility>>({});
 
+    // Quick Spreadsheet Linking states
+    const [linkFacilityCode, setLinkFacilityCode] = useState("");
+    const [linkFacilityName, setLinkFacilityName] = useState("");
+    const [linkConnectionUrl, setLinkConnectionUrl] = useState("");
+    const [linkAvailableSheets, setLinkAvailableSheets] = useState<{ id: string; name: string }[]>([]);
+    const [linkSheetName, setLinkSheetName] = useState("");
+    const [linkLoadingSheets, setLinkLoadingSheets] = useState(false);
+    const [linkUngetConfigs, setLinkUngetConfigs] = useState<any[]>([]);
+    const [linkVisibleColumns, setLinkVisibleColumns] = useState<string[]>([]);
+
+    const handleOpenLinkModal = async (code: string | undefined, name: string | undefined) => {
+        if (!code) return;
+        const found = facilities.find(f => f.code === code);
+        if (found) {
+            setFacilityForm(found);
+        } else {
+            setFacilityForm({ code, name });
+        }
+        setFacilityModalStep(4);
+        setIsFacilityModalOpen(true);
+        prepareFacilityStep4(code, name);
+    };
+
+    const handleLinkConnectionChange = async (url: string) => {
+        setLinkConnectionUrl(url);
+        setLinkSheetName("");
+        setLinkAvailableSheets([]);
+        if (!url) return;
+
+        setLinkLoadingSheets(true);
+        toast.info("Leyendo hojas de la conexión...", { duration: 2000 });
+        try {
+            let finalUrl = url;
+            try {
+                const u = new URL(url);
+                u.searchParams.set("action", "getSheets");
+                finalUrl = u.toString();
+            } catch (e) {}
+
+            const response = await fetch(finalUrl);
+            if (!response.ok) throw new Error("HTTP Error");
+            const json = await response.json();
+            
+            let sheetsArray: any[] = [];
+            if (Array.isArray(json)) {
+                sheetsArray = json;
+            } else if (json && json.success && Array.isArray(json.sheets)) {
+                sheetsArray = json.sheets;
+            } else if (json && Array.isArray(json.sheets)) {
+                sheetsArray = json.sheets;
+            }
+
+            if (sheetsArray.length > 0) {
+                setLinkAvailableSheets(sheetsArray.map((s: any) => ({ id: s.id || s.name, name: s.name })));
+                toast.success(`Se encontraron ${sheetsArray.length} hojas.`);
+            } else {
+                toast.error("No se encontraron hojas o el formato es inválido");
+            }
+        } catch(e) {
+            console.error(e);
+            toast.error("Error al obtener las hojas de cálculo");
+        } finally {
+            setLinkLoadingSheets(false);
+        }
+    };
+
     // DIRESA step validations
     const isDiresaStep1Valid = useMemo(() => {
         return !!diresaForm.name?.trim() && 
@@ -129,6 +275,13 @@ export const AdminOrganizationModule: React.FC = () => {
         return !!facilityForm.district?.trim() && 
                !!facilityForm.province?.trim();
     }, [facilityForm.district, facilityForm.province]);
+
+    const isFacilityStep4Valid = useMemo(() => {
+        if (!linkConnectionUrl && !linkSheetName) {
+            return true;
+        }
+        return !!linkConnectionUrl && !!linkSheetName && linkVisibleColumns.length > 0;
+    }, [linkConnectionUrl, linkSheetName, linkVisibleColumns]);
 
     // Hierarchy Locks for non-ADMIN users
     const isSuperAdmin = user?.role === 'ADMIN';
@@ -268,7 +421,13 @@ export const AdminOrganizationModule: React.FC = () => {
             list = list.filter(d => d.id === filterDiresaId);
         }
         if (filterDepartment) {
-            list = list.filter(d => d.department?.toLowerCase().includes(filterDepartment.toLowerCase()));
+            list = list.filter(d => d.department?.toLowerCase() === filterDepartment.toLowerCase());
+        }
+        if (filterProvince) {
+            list = list.filter(d => d.province?.toLowerCase() === filterProvince.toLowerCase());
+        }
+        if (filterDistrict) {
+            list = list.filter(d => d.district?.toLowerCase() === filterDistrict.toLowerCase());
         }
         if (searchQuery) {
             list = list.filter(d => 
@@ -277,7 +436,7 @@ export const AdminOrganizationModule: React.FC = () => {
             );
         }
         return list;
-    }, [visibleDiresas, filterDiresaId, filterDepartment, searchQuery]);
+    }, [visibleDiresas, filterDiresaId, filterDepartment, filterProvince, filterDistrict, searchQuery]);
 
     const finalFilteredOgess = useMemo(() => {
         let list = visibleOgess;
@@ -725,10 +884,120 @@ export const AdminOrganizationModule: React.FC = () => {
         setFacilityForm(updatedForm);
     };
 
+    const prepareFacilityStep4 = async (code: string | undefined, name: string | undefined) => {
+        setLinkFacilityCode(code || "");
+        setLinkFacilityName(name || "");
+        setLinkConnectionUrl("");
+        setLinkSheetName("");
+        setLinkAvailableSheets([]);
+        setLinkVisibleColumns(AVAILABLE_COLUMNS.filter(c => c.defaultState).map(c => c.key));
+
+        try {
+            if (user?.username) {
+                const configs = await api.getUngetConfigs(user.username);
+                setLinkUngetConfigs(configs);
+            }
+        } catch (e) {
+            console.error("Error loading configs:", e);
+        }
+
+        if (code) {
+            try {
+                const assignments = await api.getMyStockAssignments(code);
+                if (assignments && assignments.length > 0) {
+                    const assig = assignments[0];
+                    setLinkConnectionUrl(assig.sheetUrl || "");
+                    setLinkSheetName(assig.sheetName || "");
+                    setLinkVisibleColumns(assig.visibleColumns || AVAILABLE_COLUMNS.filter(c => c.defaultState).map(c => c.key));
+                    
+                    if (assig.sheetUrl) {
+                        setLinkLoadingSheets(true);
+                        try {
+                            let finalUrl = assig.sheetUrl;
+                            try {
+                                const u = new URL(assig.sheetUrl);
+                                u.searchParams.set("action", "getSheets");
+                                finalUrl = u.toString();
+                            } catch (e) {}
+
+                            const response = await fetch(finalUrl);
+                            if (response.ok) {
+                                const json = await response.json();
+                                let sheetsArray: any[] = [];
+                                if (Array.isArray(json)) {
+                                    sheetsArray = json;
+                                } else if (json && json.success && Array.isArray(json.sheets)) {
+                                    sheetsArray = json.sheets;
+                                } else if (json && Array.isArray(json.sheets)) {
+                                    sheetsArray = json.sheets;
+                                }
+                                
+                                if (sheetsArray.length > 0) {
+                                    setLinkAvailableSheets(sheetsArray.map((s: any) => ({ id: s.id || s.name, name: s.name })));
+                                }
+                            }
+                        } catch(e) {
+                            console.error("Error preloading sheet name list:", e);
+                        } finally {
+                            setLinkLoadingSheets(false);
+                        }
+                    }
+                }
+            } catch(e) {
+                console.error("Error loading existing stock assignment:", e);
+            }
+        }
+    };
+
     const handleSaveFacility = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
+        
+        // 1. Save Health Facility First
         const res = await api.saveFacility(facilityForm as HealthFacility);
-        if (res.success) { toast.success('Guardado correctamente'); setIsFacilityModalOpen(false); fetchData(); }
+        if (res.success) { 
+            // 2. Save Stock Assignment if we are on step 4 or if link details are filled
+            if (linkConnectionUrl && linkSheetName) {
+                if (linkVisibleColumns.length === 0) {
+                    toast.error("Debe seleccionar al menos una columna visible en el Paso 4");
+                    return;
+                }
+                
+                const existingAssigList = await api.getMyStockAssignments(facilityForm.code || "");
+                const assigData = {
+                    adminUsername: user?.username || "",
+                    facilityCode: facilityForm.code || "",
+                    sheetName: linkSheetName,
+                    sheetUrl: linkConnectionUrl,
+                    visibleColumns: linkVisibleColumns
+                };
+
+                let assigRes;
+                if (existingAssigList && existingAssigList.length > 0) {
+                    // Update existing
+                    assigRes = await api.updateStockAssignment(existingAssigList[0].id, assigData);
+                } else {
+                    // Save new
+                    assigRes = await api.saveStockAssignment(assigData);
+                }
+
+                if (!assigRes.success) {
+                    toast.error(`La IPRESS se guardó, pero hubo un problema con la vinculación del stock: ${assigRes.message}`);
+                    return;
+                }
+            } else if (!linkConnectionUrl && !linkSheetName) {
+                // If they cleared it, we can delete any existing assignment to avoid ghost data
+                try {
+                    const existingAssigList = await api.getMyStockAssignments(facilityForm.code || "");
+                    if (existingAssigList && existingAssigList.length > 0) {
+                        await api.deleteStockAssignment(existingAssigList[0].id);
+                    }
+                } catch(e) {}
+            }
+
+            toast.success('IPRESS y Vinculación guardadas correctamente'); 
+            setIsFacilityModalOpen(false); 
+            fetchData(); 
+        }
         else toast.error(res.message);
     };
     const handleDeleteFacility = async (code: string) => {
@@ -878,7 +1147,12 @@ export const AdminOrganizationModule: React.FC = () => {
         else if (tab === 'OGESS') { setOgessForm(item); setOgessModalStep(1); setIsOgessModalOpen(true); }
         else if (tab === 'UNGET') { setUngetForm(item); setUngetModalStep(1); setIsUngetModalOpen(true); }
         else if (tab === 'MICRORED') { setMicroredForm(item); setIsMicroredModalOpen(true); }
-        else if (tab === 'IPRESS') { setFacilityForm(item); setFacilityModalStep(1); setIsFacilityModalOpen(true); }
+        else if (tab === 'IPRESS') { 
+            setFacilityForm(item); 
+            setFacilityModalStep(1); 
+            setIsFacilityModalOpen(true); 
+            prepareFacilityStep4(item.code, item.name);
+        }
     };
 
     const handleConfirmDelete = (tab: string, item: any, e: React.MouseEvent) => {
@@ -889,6 +1163,44 @@ export const AdminOrganizationModule: React.FC = () => {
         else if (tab === 'MICRORED') handleDeleteMicrored(item.id);
         else if (tab === 'IPRESS') handleDeleteFacility(item.code);
     };
+
+    const popoverStyle = useMemo(() => {
+        if (!activeFilterTriggerRect) return {};
+        const width = 285;
+        const spacing = 8;
+        const triggerBottom = activeFilterTriggerRect.bottom + window.scrollY;
+        const triggerLeft = activeFilterTriggerRect.left + window.scrollX;
+        
+        let top = triggerBottom + spacing;
+        let left = triggerLeft;
+        
+        if (left + width > window.innerWidth - 16) {
+            left = window.innerWidth - width - 16;
+        }
+        if (left < 16) left = 16;
+        
+        return {
+            position: 'absolute' as const,
+            top: `${top}px`,
+            left: `${left}px`,
+            width: `${width}px`,
+            zIndex: 9999,
+        };
+    }, [activeFilterTriggerRect]);
+
+    const filteredOptionsList = useMemo(() => {
+        const resetOpt = activeFilterOptions.find(opt => opt.value === '');
+        const otherOpts = activeFilterOptions.filter(opt => opt.value !== '');
+        
+        if (!headerFilterSearch) return activeFilterOptions;
+        
+        const q = headerFilterSearch.toLowerCase();
+        const matched = otherOpts.filter(opt => 
+            opt.label.toLowerCase().includes(q)
+        );
+        
+        return resetOpt ? [resetOpt, ...matched] : matched;
+    }, [activeFilterOptions, headerFilterSearch]);
 
     return (
         <div className="space-y-6 animate-in fade-in">
@@ -960,24 +1272,20 @@ export const AdminOrganizationModule: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* Advanced Filter Collapse Trigger */}
-                            <button 
-                                onClick={() => setIsFilterPaneOpen(!isFilterPaneOpen)}
-                                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border transition duration-200 cursor-pointer select-none ${
-                                    isFilterPaneOpen || hasActiveFilters
-                                        ? 'bg-teal-50 border-teal-200 text-teal-700 font-extrabold' 
-                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                                }`}
-                            >
-                                <Filter className="h-3.5 w-3.5" />
-                                <span>Filtros Avanzados</span>
-                                {hasActiveFilters && (
-                                    <span className="bg-teal-600 text-white font-black text-[9px] h-4 w-4 flex items-center justify-center rounded-full animate-pulse">
-                                        !
+                            {/* Clear Filters Button (If any header filters are active) */}
+                            {hasActiveFilters && (
+                                <button 
+                                    onClick={clearAllFilters}
+                                    className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 hover:shadow-sm transition duration-200 cursor-pointer select-none animate-in fade-in"
+                                    title="Limpiar todos los filtros"
+                                >
+                                    <FilterX className="h-4 w-4 shrink-0 text-teal-600 animate-pulse" />
+                                    <span>Limpiar Filtros</span>
+                                    <span className="bg-teal-600 text-white font-black text-[9px] h-4 px-1 flex items-center justify-center rounded-full">
+                                        Activos
                                     </span>
-                                )}
-                                {isFilterPaneOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                            </button>
+                                </button>
+                            )}
                         </div>
 
                         {canAddActiveTab && (
@@ -1075,6 +1383,7 @@ export const AdminOrganizationModule: React.FC = () => {
                                         }
                                         setFacilityForm(initialFacility); 
                                         setFacilityModalStep(1);
+                                        prepareFacilityStep4("", "");
                                         setIsFacilityModalOpen(true); 
                                     }
                                 }}
@@ -1084,256 +1393,6 @@ export const AdminOrganizationModule: React.FC = () => {
                             </button>
                         )}
                     </div>
-
-                    {/* Collapsible Advanced Filters Drawer with Dynamic Cascade Selections */}
-                    {isFilterPaneOpen && createPortal(
-                        <div className="fixed inset-0 z-[110000] flex justify-end pointer-events-none">
-                            {/* Backdrop overlay */}
-                            <div 
-                                className="absolute inset-0 bg-transparent pointer-events-auto cursor-pointer"
-                                onClick={() => setIsFilterPaneOpen(false)}
-                            />
-                            
-                            {/* Sidebar content container */}
-                            <div className="relative w-full max-w-sm sm:max-w-md bg-white h-full shadow-2xl border-l border-slate-200 pointer-events-auto animate-in slide-in-from-right duration-300 flex flex-col overflow-hidden">
-                                {/* Header */}
-                                <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-20 shrink-0">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600 shadow-sm border border-teal-100/50">
-                                            <Filter className="h-5 w-5" />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-tight">Filtros Avanzados</h3>
-                                            <p className="text-[10px] text-teal-600 font-extrabold tracking-widest uppercase">Estructura Organizacional</p>
-                                        </div>
-                                    </div>
-                                    <button 
-                                        onClick={() => setIsFilterPaneOpen(false)}
-                                        className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400 hover:text-slate-900 cursor-pointer"
-                                    >
-                                        <X className="h-4.5 w-4.5" />
-                                    </button>
-                                </div>
-
-                                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 font-sans">
-                                    {/* DIRESA Selector */}
-                                    {(activeTab !== 'DIRESA' && isSuperAdmin) && (
-                                        <div className="space-y-1.5">
-                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                                <div className="w-1 h-3 bg-teal-500 rounded-sm" /> DIRESA
-                                            </label>
-                                            <CustomSelect
-                                                value={filterDiresaId}
-                                                onChange={(val) => {
-                                                    setFilterDiresaId(val);
-                                                    setFilterOgessId('');
-                                                    setFilterUngetId('');
-                                                    setFilterMicroredId('');
-                                                }}
-                                                placeholder="Todas las DIRESA"
-                                                options={[
-                                                    { value: '', label: 'Todas las DIRESA' },
-                                                    ...diresas.map(d => ({ value: d.id, label: d.name }))
-                                                ]}
-                                                className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* OGESS Selector */}
-                                    {(activeTab !== 'DIRESA' && activeTab !== 'OGESS') && (
-                                        <div className="space-y-1.5">
-                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                                <div className="w-1 h-3 bg-emerald-500 rounded-sm" /> OGESS
-                                            </label>
-                                            <CustomSelect
-                                                value={filterOgessId}
-                                                onChange={(val) => {
-                                                    setFilterOgessId(val);
-                                                    setFilterUngetId('');
-                                                    setFilterMicroredId('');
-                                                }}
-                                                placeholder="Todas las OGESS"
-                                                options={[
-                                                    { value: '', label: 'Todas las OGESS' },
-                                                    ...ogess.filter(o => !filterDiresaId || o.diresaId === filterDiresaId).map(o => ({ value: o.id, label: o.name }))
-                                                ]}
-                                                className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* UNGET Selector */}
-                                    {(activeTab !== 'DIRESA' && activeTab !== 'OGESS' && activeTab !== 'UNGET') && (
-                                        <div className="space-y-1.5">
-                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                                <div className="w-1 h-3 bg-teal-600 rounded-sm" /> UNGET
-                                            </label>
-                                            <CustomSelect
-                                                value={filterUngetId}
-                                                onChange={(val) => {
-                                                    setFilterUngetId(val);
-                                                    setFilterMicroredId('');
-                                                }}
-                                                placeholder="Todas las UNGET"
-                                                options={[
-                                                    { value: '', label: 'Todas las UNGET' },
-                                                    ...ungets.filter(u => {
-                                                        if (filterOgessId && u.ogessId !== filterOgessId) return false;
-                                                        if (filterDiresaId) {
-                                                            if (u.diresaId && u.diresaId !== filterDiresaId) return false;
-                                                            if (u.ogessId) {
-                                                                const p = ogess.find(o => o.id === u.ogessId);
-                                                                if (p?.diresaId !== filterDiresaId) return false;
-                                                            }
-                                                        }
-                                                        return true;
-                                                    }).map(u => ({ value: u.id, label: u.name }))
-                                                ]}
-                                                className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* MICRORED Selector */}
-                                    {(activeTab === 'IPRESS') && (
-                                        <div className="space-y-1.5">
-                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                                <div className="w-1 h-3 bg-emerald-600 rounded-sm" /> MICRORED
-                                            </label>
-                                            <CustomSelect
-                                                value={filterMicroredId}
-                                                onChange={(val) => setFilterMicroredId(val)}
-                                                placeholder="Todas las Microredes"
-                                                options={[
-                                                    { value: '', label: 'Todas las Microredes' },
-                                                    ...microredes.filter(m => !filterUngetId || m.ungetId === filterUngetId).map(m => ({ value: m.id, label: m.name }))
-                                                ]}
-                                                className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* GEOGRAPHICAL FILTERS */}
-                                    <div className="pt-4 mt-2 border-t border-slate-100/80 space-y-4 relative">
-                                        <div className="absolute top-0 left-0 w-8 border-t-2 border-teal-500/20 -mt-[1px]" />
-                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtros Geográficos</h4>
-                                        <div className="space-y-3">
-                                            <div className="space-y-1.5">
-                                                <label className="block text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5">
-                                                    <MapPin className="h-3 w-3 text-slate-400" /> Departamento
-                                                </label>
-                                                <CustomSelect
-                                                    value={filterDepartment}
-                                                    onChange={(val) => setFilterDepartment(val)}
-                                                    placeholder="Todos"
-                                                    options={filterOptions.departments}
-                                                    className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
-                                                />
-                                            </div>
-
-                                            {activeTab !== 'DIRESA' && (
-                                                <>
-                                                    <div className="space-y-1.5">
-                                                        <label className="block text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5">
-                                                            <MapPin className="h-3 w-3 text-slate-400" /> Provincia
-                                                        </label>
-                                                        <CustomSelect
-                                                            value={filterProvince}
-                                                            onChange={(val) => setFilterProvince(val)}
-                                                            placeholder="Todas"
-                                                            options={filterOptions.provinces}
-                                                            className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
-                                                        />
-                                                    </div>
-
-                                                    <div className="space-y-1.5">
-                                                        <label className="block text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5">
-                                                            <MapPin className="h-3 w-3 text-slate-400" /> Distrito
-                                                        </label>
-                                                        <CustomSelect
-                                                            value={filterDistrict}
-                                                            onChange={(val) => setFilterDistrict(val)}
-                                                            placeholder="Todos"
-                                                            options={filterOptions.districts}
-                                                            className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
-                                                        />
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* EXTRA IPRESS FILTERS */}
-                                    {(activeTab === 'IPRESS') && (
-                                        <>
-                                            <div className="space-y-1.5">
-                                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <div className="w-1 h-3 bg-blue-500 rounded-sm" /> Categoría IPRESS
-                                                </label>
-                                                <CustomSelect
-                                                    value={filterCategory}
-                                                    onChange={(val) => setFilterCategory(val)}
-                                                    placeholder="Todas"
-                                                    options={[
-                                                        { value: '', label: 'Todas' },
-                                                        { value: 'I-1', label: 'I-1' },
-                                                        { value: 'I-2', label: 'I-2' },
-                                                        { value: 'I-3', label: 'I-3' },
-                                                        { value: 'I-4', label: 'I-4' },
-                                                        { value: 'II-1', label: 'II-1' },
-                                                        { value: 'II-2', label: 'II-2' },
-                                                        { value: 'III-1', label: 'III-1' }
-                                                    ]}
-                                                    className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <div className="w-1 h-3 bg-indigo-500 rounded-sm" /> Tipo Establecimiento
-                                                </label>
-                                                <CustomSelect
-                                                    value={filterType}
-                                                    onChange={(val) => setFilterType(val)}
-                                                    placeholder="Todos"
-                                                    options={[
-                                                        { value: '', label: 'Todos' },
-                                                        { value: 'HOSPITAL', label: 'HOSPITAL' },
-                                                        { value: 'CENTRO', label: 'CENTRO DE SALUD' },
-                                                        { value: 'PUESTO', label: 'PUESTO DE SALUD' },
-                                                        { value: 'ALM', label: 'ALMACÉN' }
-                                                    ]}
-                                                    className="w-full bg-white text-xs border border-slate-200 rounded-xl text-slate-700 shadow-sm"
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                                
-                                {/* Sidebar Footer */}
-                                <div className="p-6 border-t border-slate-100 bg-white sticky bottom-0 z-20">
-                                    <div className="flex items-center gap-3 w-full">
-                                        {hasActiveFilters && (
-                                            <button
-                                                onClick={clearAllFilters}
-                                                className="flex-1 flex justify-center items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition cursor-pointer select-none"
-                                            >
-                                                <FilterX className="h-4 w-4" />
-                                                <span>Limpiar</span>
-                                            </button>
-                                        )}
-                                        <button
-                                            onClick={() => setIsFilterPaneOpen(false)}
-                                            className="flex-1 flex justify-center items-center gap-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-teal-100/50 transition cursor-pointer select-none"
-                                        >
-                                            Aplicar Filtros
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>,
-                        document.body
-                    )}
 
                     {/* Interactive Registry tables & list representations */}
                     <div className="w-full">
@@ -1372,9 +1431,15 @@ export const AdminOrganizationModule: React.FC = () => {
                                                     <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
                                                         <th className="p-4 px-6">Razón Social DIRESA</th>
                                                         <th className="p-4">RUC</th>
-                                                        <th className="p-4">Distrito</th>
-                                                        <th className="p-4">Provincia</th>
-                                                        <th className="p-4">Departamento</th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("Distrito", filterDistrict, filterOptions.districts, setFilterDistrict, "diresa-district")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("Provincia", filterProvince, filterOptions.provinces, setFilterProvince, "diresa-province")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("Departamento", filterDepartment, filterOptions.departments, setFilterDepartment, "diresa-department")}
+                                                        </th>
                                                         <th className="p-4 text-right pr-6">Acciones</th>
                                                     </tr>
                                                 </thead>
@@ -1473,9 +1538,15 @@ export const AdminOrganizationModule: React.FC = () => {
                                                     <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
                                                         <th className="p-4 px-6">Identificación OGESS</th>
                                                         <th className="p-4">Código / RUC</th>
-                                                        <th className="p-4">Distrito</th>
-                                                        <th className="p-4">Provincia</th>
-                                                        <th className="p-4">DIRESA Superior</th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("Distrito", filterDistrict, filterOptions.districts, setFilterDistrict, "ogess-district")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("Provincia", filterProvince, filterOptions.provinces, setFilterProvince, "ogess-province")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("DIRESA Superior", filterDiresaId, [{ value: '', label: 'Todas las DIRESA' }, ...diresas.map(d => ({ value: d.id, label: d.name }))], setFilterDiresaId, "ogess-diresa")}
+                                                        </th>
                                                         <th className="p-4 text-right pr-6">Acciones</th>
                                                     </tr>
                                                 </thead>
@@ -1573,10 +1644,25 @@ export const AdminOrganizationModule: React.FC = () => {
                                                 <thead>
                                                     <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
                                                         <th className="p-4 px-6">Razón Social UNGET</th>
-                                                        <th className="p-4">Distrito</th>
-                                                        <th className="p-4">Provincia</th>
-                                                        <th className="p-4">OGESS Superior</th>
-                                                        <th className="p-4">DIRESA Red</th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("Distrito", filterDistrict, filterOptions.districts, setFilterDistrict, "unget-district")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("Provincia", filterProvince, filterOptions.provinces, setFilterProvince, "unget-province")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("OGESS Superior", filterOgessId, [{ value: '', label: 'Todas las OGESS' }, ...ogess.filter(o => !filterDiresaId || o.diresaId === filterDiresaId).map(o => ({ value: o.id, label: o.name }))], (val) => {
+                                                                setFilterOgessId(val);
+                                                                setFilterUngetId('');
+                                                            }, "unget-ogess")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("DIRESA Red", filterDiresaId, [{ value: '', label: 'Todas las DIRESA' }, ...diresas.map(d => ({ value: d.id, label: d.name }))], (val) => {
+                                                                setFilterDiresaId(val);
+                                                                setFilterOgessId('');
+                                                                setFilterUngetId('');
+                                                            }, "unget-diresa")}
+                                                        </th>
                                                         <th className="p-4 text-right pr-6">Acciones</th>
                                                     </tr>
                                                 </thead>
@@ -1676,8 +1762,15 @@ export const AdminOrganizationModule: React.FC = () => {
                                                 <thead>
                                                     <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
                                                         <th className="p-4 px-6">Identificación Microred</th>
-                                                        <th className="p-4">UNGET Jerárquica Asignada</th>
-                                                        <th className="p-4">OGESS Superior</th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("UNGET Jerárquica Asignada", filterUngetId, [{ value: '', label: 'Todas las UNGET' }, ...ungets.filter(u => !filterOgessId || u.ogessId === filterOgessId).map(u => ({ value: u.id, label: u.name }))], setFilterUngetId, "microred-unget")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("OGESS Superior", filterOgessId, [{ value: '', label: 'Todas las OGESS' }, ...ogess.filter(o => !filterDiresaId || o.diresaId === filterDiresaId).map(o => ({ value: o.id, label: o.name }))], (val) => {
+                                                                setFilterOgessId(val);
+                                                                setFilterUngetId('');
+                                                            }, "microred-ogess")}
+                                                        </th>
                                                         <th className="p-4 text-right pr-6">Acciones</th>
                                                     </tr>
                                                 </thead>
@@ -1781,11 +1874,34 @@ export const AdminOrganizationModule: React.FC = () => {
                                                     <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
                                                         <th className="p-4 px-6">Establecimiento de Salud</th>
                                                         <th className="p-4">Código RENIPRESS</th>
-                                                        <th className="p-4">Categoría</th>
-                                                        <th className="p-4">Tipo</th>
-                                                        <th className="p-4">Microred</th>
-                                                        <th className="p-4">UNGET</th>
-                                                        <th className="p-4">OGESS de Enlace</th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("Categoría", filterCategory, [{ value: '', label: 'Todas' }, ...['I-1', 'I-2', 'I-3', 'I-4', 'II-1', 'II-2', 'III-1'].map(cat => ({ value: cat, label: cat }))], setFilterCategory, "ipress-category")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("Tipo", filterType, [
+                                                                { value: '', label: 'Todos' },
+                                                                { value: 'HOSPITAL', label: 'HOSPITAL' },
+                                                                { value: 'CENTRO', label: 'CENTRO DE SALUD' },
+                                                                { value: 'PUESTO', label: 'PUESTO DE SALUD' },
+                                                                { value: 'ALM', label: 'ALMACÉN' }
+                                                            ], setFilterType, "ipress-type")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("Microred", filterMicroredId, [{ value: '', label: 'Todas' }, ...microredes.filter(m => !filterUngetId || m.ungetId === filterUngetId).map(m => ({ value: m.id, label: m.name }))], setFilterMicroredId, "ipress-microred")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("UNGET", filterUngetId, [{ value: '', label: 'Todas' }, ...ungets.filter(u => !filterOgessId || u.ogessId === filterOgessId).map(u => ({ value: u.id, label: u.name }))], (val) => {
+                                                                setFilterUngetId(val);
+                                                                setFilterMicroredId('');
+                                                            }, "ipress-unget")}
+                                                        </th>
+                                                        <th className="p-4">
+                                                            {renderHeaderFilter("OGESS", filterOgessId, [{ value: '', label: 'Todas' }, ...ogess.filter(o => !filterDiresaId || o.diresaId === filterDiresaId).map(o => ({ value: o.id, label: o.name }))], (val) => {
+                                                                setFilterOgessId(val);
+                                                                setFilterUngetId('');
+                                                                setFilterMicroredId('');
+                                                            }, "ipress-ogess")}
+                                                        </th>
                                                         <th className="p-4 text-right pr-6">Acciones</th>
                                                     </tr>
                                                 </thead>
@@ -3154,20 +3270,22 @@ export const AdminOrganizationModule: React.FC = () => {
                             <div className="absolute left-6 top-8 right-6 h-0.5 bg-gray-100 -z-10">
                                 <div 
                                     className="h-full bg-teal-600 transition-all duration-300" 
-                                    style={{ width: facilityModalStep === 1 ? '0%' : facilityModalStep === 2 ? '50%' : '100%' }}
+                                    style={{ width: facilityModalStep === 1 ? '0%' : facilityModalStep === 2 ? '33.3%' : facilityModalStep === 3 ? '66.6%' : '100%' }}
                                 />
                             </div>
                             {[
                                 { step: 1, label: 'Identificación', desc: 'Códigos y Categoría', icon: Building2 },
                                 { step: 2, label: 'Jurisdicción', desc: 'Asociaciones y UNGET', icon: Network },
-                                { step: 3, label: 'Ubicación y Contacto', desc: 'Geografía y Canales', icon: Globe }
+                                { step: 3, label: 'Ubicación y Contacto', desc: 'Geografía y Canales', icon: Globe },
+                                { step: 4, label: 'Vinculación de Hoja (Stock)', desc: 'Conexión y Columnas', icon: FileSpreadsheet }
                             ].map(s => (
                                 <button
                                     key={s.step}
                                     type="button"
                                     disabled={
                                         (s.step === 2 && !isFacilityStep1Valid) ||
-                                        (s.step === 3 && (!isFacilityStep1Valid || !isFacilityStep2Valid))
+                                        (s.step === 3 && (!isFacilityStep1Valid || !isFacilityStep2Valid)) ||
+                                        (s.step === 4 && (!isFacilityStep1Valid || !isFacilityStep2Valid || !isFacilityStep3Valid))
                                     }
                                     onClick={() => setFacilityModalStep(s.step)}
                                     className="flex items-center gap-3 bg-white px-3 disabled:opacity-50 disabled:cursor-not-allowed group text-left outline-none"
@@ -3449,6 +3567,74 @@ export const AdminOrganizationModule: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
+
+                                {facilityModalStep === 4 && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-200">
+                                        <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100/80 space-y-4">
+                                            <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5">
+                                                <div className="w-1.5 h-3 bg-teal-500 rounded-sm" /> Configuración de Conexión de Stock
+                                            </h4>
+                                            
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Conexión / Archivo (Data)</label>
+                                                    <CustomSelect
+                                                        value={linkConnectionUrl}
+                                                        onChange={handleLinkConnectionChange}
+                                                        placeholder="-- Seleccionar Conexión --"
+                                                        options={linkUngetConfigs.map(c => ({ value: c.url, label: c.name }))}
+                                                    />
+                                                    <p className="text-[10px] text-slate-400 mt-1">Conexiones de Google Apps Script agregadas para su usuario.</p>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Establecimiento (Hoja / Pestaña)</label>
+                                                    <CustomSelect
+                                                        value={linkSheetName}
+                                                        onChange={setLinkSheetName}
+                                                        placeholder="-- Seleccionar Hoja --"
+                                                        disabled={!linkConnectionUrl || linkAvailableSheets.length === 0}
+                                                        options={linkAvailableSheets.map(s => ({ value: s.name, label: s.name }))}
+                                                    />
+                                                    {linkLoadingSheets && (
+                                                        <p className="text-[10px] text-teal-600 font-bold mt-1 animate-pulse">Obteniendo hojas de la conexión...</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100/80 space-y-4">
+                                            <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1 flex items-center gap-1.5">
+                                                <div className="w-1.5 h-3 bg-teal-500 rounded-sm" /> Restringir Columnas Visibles para este usuario
+                                            </h4>
+                                            <p className="text-[11px] text-slate-500">Marque las columnas que deben visualizarse en el reporte consolidado de stock.</p>
+                                            
+                                            <div className="bg-white p-4 rounded-xl border border-gray-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[220px] overflow-y-auto">
+                                                {AVAILABLE_COLUMNS.map(col => (
+                                                    <div 
+                                                        key={col.key} 
+                                                        onClick={() => {
+                                                            setLinkVisibleColumns(prev => 
+                                                                prev.includes(col.key) 
+                                                                    ? prev.filter(k => k !== col.key) 
+                                                                    : [...prev, col.key]
+                                                            );
+                                                        }}
+                                                        className="flex items-center gap-2.5 cursor-pointer bg-slate-50 hover:bg-slate-100 p-2.5 rounded-lg border border-gray-150 transition-colors select-none"
+                                                    >
+                                                        <div className={`w-5 h-5 rounded flex items-center justify-center border ${linkVisibleColumns.includes(col.key) ? 'bg-teal-600 border-teal-600' : 'bg-white border-gray-300'}`}>
+                                                            {linkVisibleColumns.includes(col.key) && <Check className="w-3.5 h-3.5 text-white" />}
+                                                        </div>
+                                                        <span className="text-[11px] font-bold text-slate-700 leading-tight">{col.label}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {linkConnectionUrl && linkVisibleColumns.length === 0 && (
+                                                <p className="text-[10px] text-red-500 font-bold">Debe seleccionar al menos una columna visible cuando una conexión está configurada.</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Footer Buttons */}
@@ -3471,10 +3657,14 @@ export const AdminOrganizationModule: React.FC = () => {
                                     </button>
                                 )}
 
-                                {facilityModalStep < 3 ? (
+                                {facilityModalStep < 4 ? (
                                     <button 
                                         type="button" 
-                                        disabled={facilityModalStep === 1 ? !isFacilityStep1Valid : !isFacilityStep2Valid}
+                                        disabled={
+                                            facilityModalStep === 1 ? !isFacilityStep1Valid :
+                                            facilityModalStep === 2 ? !isFacilityStep2Valid :
+                                            !isFacilityStep3Valid
+                                        }
                                         onClick={() => setFacilityModalStep(step => step + 1)} 
                                         className="px-5 py-2.5 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all flex items-center gap-1 text-center"
                                     >
@@ -3483,7 +3673,7 @@ export const AdminOrganizationModule: React.FC = () => {
                                 ) : (
                                     <button 
                                         type="button" 
-                                        disabled={!isFacilityStep3Valid}
+                                        disabled={!isFacilityStep4Valid}
                                         onClick={() => handleSaveFacility()}
                                         className="px-6 py-2.5 text-sm font-black text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all flex items-center gap-2 shadow-lg hover:shadow-teal-100"
                                     >
@@ -3494,6 +3684,126 @@ export const AdminOrganizationModule: React.FC = () => {
                         </form>
                     </div>
                 </div>,
+                document.body
+            )}
+
+            {/* Spreadsheet-like Column Filter Popover */}
+            {activeFilterId && activeFilterTriggerRect && createPortal(
+                <>
+                    {/* Click-outside backdrop shield */}
+                    <div 
+                        className="fixed inset-0 z-[9998] bg-transparent cursor-default" 
+                        onClick={() => {
+                            setActiveFilterId(null);
+                            setActiveFilterTriggerRect(null);
+                        }}
+                    />
+                    
+                    {/* Floating Dropdown Card */}
+                    <div 
+                        style={popoverStyle}
+                        className="bg-white border border-slate-200 shadow-xl shadow-slate-200/80 rounded-2xl flex flex-col z-[9999] animate-in fade-in slide-in-from-top-2 duration-150 overflow-hidden"
+                    >
+                        {/* Header */}
+                        <div className="bg-slate-50/80 px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                            <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">
+                                Filtrar {activeFilterTitle}
+                            </span>
+                            {activeFilterValue && (
+                                <button 
+                                    type="button"
+                                    onClick={() => {
+                                        activeFilterOnChange?.('');
+                                        setActiveFilterValue('');
+                                        setActiveFilterId(null);
+                                        setActiveFilterTriggerRect(null);
+                                        toast.success(`Filtro de ${activeFilterTitle} limpiado`);
+                                    }}
+                                    className="text-[10px] font-extrabold text-teal-600 hover:text-teal-700 underline cursor-pointer"
+                                >
+                                    Limpiar
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Search input if options length has substantial items (> 3) */}
+                        {activeFilterOptions.length > 3 && (
+                            <div className="p-2 border-b border-slate-100/60 bg-white">
+                                <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500/10 transition">
+                                    <Search className="h-3.5 w-3.5 text-slate-400 shrink-0 mr-1.5" />
+                                    <input 
+                                        type="text"
+                                        placeholder="Buscar opción..."
+                                        value={headerFilterSearch}
+                                        onChange={(e) => setHeaderFilterSearch(e.target.value)}
+                                        className="w-full bg-transparent border-none text-xs text-slate-700 font-bold outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                    />
+                                    {headerFilterSearch && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => setHeaderFilterSearch('')}
+                                            className="p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Scrollable list of options */}
+                        <div className="flex-1 overflow-y-auto max-h-[190px] py-1 select-none">
+                            {filteredOptionsList.length === 0 ? (
+                                <div className="py-6 text-center text-xs font-bold text-slate-400">
+                                    No hay coincidencias
+                                </div>
+                            ) : (
+                                filteredOptionsList.map((opt) => {
+                                    const isSelected = activeFilterValue === opt.value;
+                                    return (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            onClick={() => {
+                                                activeFilterOnChange?.(opt.value);
+                                                setActiveFilterValue(opt.value);
+                                                setActiveFilterId(null);
+                                                setActiveFilterTriggerRect(null);
+                                            }}
+                                            className={`w-full text-left px-4 py-2 border-none transition-all flex items-center justify-between text-xs cursor-pointer ${
+                                                isSelected 
+                                                    ? 'bg-teal-50/70 hover:bg-teal-50 text-teal-800 font-extrabold' 
+                                                    : 'hover:bg-slate-50 text-slate-600 font-bold'
+                                            }`}
+                                        >
+                                            <span className="truncate pr-4">{opt.label}</span>
+                                            {isSelected && (
+                                                <Check className="h-3.5 w-3.5 text-teal-600 stroke-[3px] shrink-0" />
+                                            )}
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* Footer info stats */}
+                        <div className="bg-slate-50/60 border-t border-slate-100 px-4 py-2 flex items-center justify-between select-none shrink-0">
+                            <span className="text-[9px] text-slate-400 font-extrabold">
+                                {filteredOptionsList.length} opciones
+                            </span>
+                            <button 
+                                type="button"
+                                onClick={() => {
+                                    setActiveFilterId(null);
+                                    setActiveFilterTriggerRect(null);
+                                }}
+                                className="px-2.5 py-1 text-[10px] font-black text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </>,
                 document.body
             )}
         </div>

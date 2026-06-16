@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check, Search, Loader2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useDropdownPosition } from '../../hooks/useDropdownPosition';
 
@@ -15,10 +15,11 @@ interface CustomSelectProps {
     placeholder?: string;
     disabled?: boolean;
     className?: string; // Optional class for the trigger button
+    loading?: boolean;  // Display a loading spinner
 }
 
 export const CustomSelect: React.FC<CustomSelectProps> = ({
-    value, onChange, options, placeholder = "Seleccionar...", disabled = false, className = ""
+    value, onChange, options, placeholder = "Seleccionar...", disabled = false, className = "", loading = false
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const { triggerRef, menuStyles } = useDropdownPosition(isOpen, { align: 'left' });
@@ -54,6 +55,39 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     }, [isOpen]);
 
     const selectedOption = options.find(o => String(o.value) === String(value));
+    const [searchQuery, setSearchQuery] = useState("");
+
+    useEffect(() => {
+        if (!isOpen) {
+            setSearchQuery("");
+        }
+    }, [isOpen]);
+
+    const getOptionText = (label: React.ReactNode): string => {
+        if (typeof label === 'string' || typeof label === 'number') {
+            return String(label);
+        }
+        try {
+            if (React.isValidElement(label)) {
+                const extractText = (node: any): string => {
+                    if (!node) return '';
+                    if (typeof node === 'string' || typeof node === 'number') return String(node);
+                    if (Array.isArray(node)) return node.map(extractText).join(' ');
+                    if (node.props && node.props.children) return extractText(node.props.children);
+                    return '';
+                };
+                return extractText(label);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+        return '';
+    };
+
+    const filteredOptions = options.filter(option => {
+        const text = getOptionText(option.label).toLowerCase();
+        return text.includes(searchQuery.toLowerCase());
+    });
 
     const dropdownContent = isOpen && !disabled && (
         <div 
@@ -61,11 +95,27 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             className="bg-white border border-gray-200 rounded-xl shadow-xl z-[200000] py-1 flex flex-col fixed overflow-hidden"
             style={dynamicStyles}
         >
+            {options.length > 1 && (
+                <div className="px-3 py-2 border-b border-gray-100 shrink-0">
+                    <div className="relative flex items-center">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar..."
+                            className="w-full pl-8 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 focus:outline-none bg-gray-50 text-gray-900"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            autoFocus
+                        />
+                    </div>
+                </div>
+            )}
             <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                {options.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-gray-500 italic text-center">Sin opciones</div>
+                {filteredOptions.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-gray-500 italic text-center">Sin resultados</div>
                 ) : (
-                    options.map(option => {
+                    filteredOptions.map(option => {
                         const isSelected = String(option.value) === String(value);
                         return (
                             <button
@@ -105,7 +155,11 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                 <span className="truncate mr-2 font-medium">
                     {selectedOption ? selectedOption.label : <span className="text-gray-400 font-normal">{placeholder}</span>}
                 </span>
-                <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-teal-600' : 'text-gray-400'}`} />
+                {loading ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-teal-600" />
+                ) : (
+                    <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-teal-600' : 'text-gray-400'}`} />
+                )}
             </button>
             {createPortal(dropdownContent, document.body)}
         </div>

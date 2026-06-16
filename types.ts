@@ -96,21 +96,33 @@ export interface ChartDataPoint {
 
 export type UserRole = string;
 
-export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'ADMIN_FACILITIES' | 'ADMIN_PARAMS' | 'ADMIN_MIGRATION' | 'PROFILE' | 'REDISTRIBUTION' | 'SIG_SEARCH' | 'ADMIN_CATALOGS';
+export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'ADMIN_FACILITIES' | 'ADMIN_PARAMS' | 'ADMIN_MIGRATION' | 'PROFILE' | 'REDISTRIBUTION' | 'SIG_SEARCH' | 'ADMIN_CATALOGS' | 'ADMIN_STOCK_ASSIGN' | 'IPRESS_STOCK';
 
 export const AVAILABLE_MODULES: { id: AppModule; label: string; description: string }[] = [
   { id: 'DASHBOARD', label: 'Dashboard', description: 'Vista principal y resumen de indicadores' },
   { id: 'ANALYSIS', label: 'Análisis Inteligente', description: 'Módulo de análisis de requerimientos' },
   { id: 'SIG_SEARCH', label: 'Consulta Stock', description: 'Buscador de stock SIG' },
   { id: 'REDISTRIBUTION', label: 'Redistribución', description: 'Módulo de redistribución de medicamentos' },
+  { id: 'IPRESS_STOCK', label: 'Stock IPRESS', description: 'Visor de stock asignado a la IPRESS (Solo lectura)' },
   { id: 'ADMIN_USERS', label: 'Gestión de Usuarios', description: 'Administración de cuentas de usuario' },
   { id: 'ADMIN_ROLES', label: 'Configuración de Roles', description: 'Gestión de roles y permisos' },
   { id: 'ADMIN_FACILITIES', label: 'Establecimientos', description: 'Gestión de la organización y establecimientos' },
   { id: 'ADMIN_CATALOGS', label: 'Regímenes y Profesiones', description: 'Gestión de regímenes laborales y profesiones' },
   { id: 'ADMIN_PARAMS', label: 'Parámetros del Sistema', description: 'Configuraciones generales del sistema' },
   { id: 'ADMIN_MIGRATION', label: 'Migración (Supabase)', description: 'Herramientas de migración de datos' },
+  { id: 'ADMIN_STOCK_ASSIGN', label: 'Asignar Stock', description: 'Asignación de vistas de stock a usuarios IPRESS' },
   { id: 'PROFILE', label: 'Perfil de Usuario', description: 'Configuración del perfil personal' }
 ];
+
+export interface StockAssignment {
+  id?: string;
+  adminUsername: string;
+  targetUsername: string;
+  sheetName: string;
+  sheetUrl: string;
+  visibleColumns: string[];
+  createdAt?: string;
+}
 
 export interface Diresa {
   id: string;
