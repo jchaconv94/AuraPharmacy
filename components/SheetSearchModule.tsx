@@ -981,6 +981,13 @@ export const SheetSearchModule: React.FC = () => {
         } catch (e) {}
       }
 
+      const savedSync = localStorage.getItem(`aura_sig_lastsync_${user.username}`);
+      if (savedSync) {
+        try {
+          setLastGlobalSync(new Date(savedSync));
+        } catch (e) {}
+      }
+
       // 2. CARGA EN SEGUNDO PLANO DESDE EL SERVIDOR
       try {
         try {
@@ -1180,6 +1187,9 @@ export const SheetSearchModule: React.FC = () => {
         `aura_sig_sources_${user.username}`,
         JSON.stringify(sources),
       );
+      if (lastGlobalSync) {
+        localStorage.setItem(`aura_sig_lastsync_${user.username}`, lastGlobalSync.toISOString());
+      }
     } catch (e) {
       console.warn("Storage quota exceeded for URLs/Sources.", e);
     }
@@ -1461,8 +1471,8 @@ export const SheetSearchModule: React.FC = () => {
   useEffect(() => {
     if (!isConfigLoading) {
       if (scriptUrls.length > 0) {
-        // Si no hay datos cacheados, hacemos fetch con UI de carga, sino, silent
-        fetchData(undefined, data.length > 0);
+        // Siempre hacemos fetch de manera silenciosa para no bloquear la pantalla, como sugirió el usuario.
+        fetchData(undefined, true);
         if (supabase) {
           loadSupabaseSyncs().catch((e) => console.warn(e));
         }
@@ -1570,8 +1580,8 @@ export const SheetSearchModule: React.FC = () => {
         setIsConfigOpen(false);
         toast.success("Configuración guardada en la nube con éxito.");
 
-        // Sincronizar datos inmediatamente y de manera asíncrona pero asegurando que la carga se complete
-        await fetchData(mergedScriptUrls);
+        // Sincronizar datos inmediatamente y de manera asíncrona pero asegurando que la carga se complete sin bloquear la pantalla
+        fetchData(mergedScriptUrls, true).catch(err => console.warn(err));
       } else {
         toast.error("Error al guardar en el servidor: " + result.message);
       }
@@ -2879,7 +2889,7 @@ function processSheet(sheet) {
             </button>
             <button
               id="sync-btn"
-              onClick={() => fetchData()}
+              onClick={() => fetchData(undefined, true)}
               disabled={isLoading || isSilentSyncing}
               className="flex-1 sm:flex-none bg-teal-600 text-white px-4 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm hover:bg-teal-700 hover:shadow-md transition-all disabled:opacity-50 disabled:hover:shadow-none flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap"
             >
@@ -3826,13 +3836,6 @@ function processSheet(sheet) {
                 Cargando configuración...
               </span>
             </div>
-          ) : isLoading && data.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-teal-600 gap-3 py-20">
-              <RefreshCw className="h-10 w-10 animate-spin" />
-              <span className="font-bold text-lg">
-                Sincronizando información...
-              </span>
-            </div>
           ) : error && data.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center max-w-md mx-auto py-20">
               <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
@@ -3841,7 +3844,7 @@ function processSheet(sheet) {
               </h3>
               <p className="text-sm text-gray-500 mb-6">{error}</p>
               <button
-                onClick={() => fetchData()}
+                onClick={() => fetchData(undefined, true)}
                 className="bg-teal-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-teal-700 transition-colors"
               >
                 Reintentar Sincronización
@@ -4222,19 +4225,6 @@ function processSheet(sheet) {
                                     onClick={() => handleSelectSheet(sheet.id)}
                                     className="group relative bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer overflow-hidden"
                                   >
-                                    {lastGlobalSync === null &&
-                                      (isLoading || isSilentSyncing) && (
-                                        <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
-                                          <div className="flex flex-col items-center gap-1.5 p-4">
-                                            <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
-                                              <RefreshCw className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin text-teal-600" />
-                                            </div>
-                                            <span className="text-[9.5px] sm:text-[10.5px] font-black text-teal-700 uppercase tracking-widest text-center">
-                                              Actualizando...
-                                            </span>
-                                          </div>
-                                        </div>
-                                      )}
                                     <div className="hidden sm:flex absolute top-4 right-4 sm:top-6 sm:right-6 flex-col gap-1.5 items-end z-10 p-1">
                                       {renderSyncStatusPill(
                                         sheet.lastUpdateTime,
@@ -4543,19 +4533,6 @@ function processSheet(sheet) {
                                     onClick={() => handleSelectSheet(sheet.id)}
                                     className="group relative bg-white border border-gray-200 p-4 sm:p-5 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left w-full cursor-pointer overflow-hidden"
                                   >
-                                    {lastGlobalSync === null &&
-                                      (isLoading || isSilentSyncing) && (
-                                        <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
-                                          <div className="flex flex-col items-center gap-1.5 p-4">
-                                            <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
-                                              <RefreshCw className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin text-teal-600" />
-                                            </div>
-                                            <span className="text-[9.5px] sm:text-[10.5px] font-black text-teal-700 uppercase tracking-widest text-center">
-                                              Actualizando...
-                                            </span>
-                                          </div>
-                                        </div>
-                                      )}
                                     <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-4 w-full">
                                       {/* Column 1: Hospital Info & Status (Flexible width) */}
                                       <div className="flex items-center gap-3 md:gap-4 flex-[1_1_240px] min-w-[200px]">
@@ -4736,19 +4713,6 @@ function processSheet(sheet) {
                                     onClick={() => handleSelectSheet(sheet.id)}
                                     className="group relative bg-white border border-gray-200 p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col justify-between h-full min-h-[175px] cursor-pointer overflow-hidden"
                                   >
-                                    {lastGlobalSync === null &&
-                                      (isLoading || isSilentSyncing) && (
-                                        <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
-                                          <div className="flex flex-col items-center gap-1.5 p-4">
-                                            <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
-                                              <RefreshCw className="h-4 w-4 animate-spin text-teal-600" />
-                                            </div>
-                                            <span className="text-[9px] font-black text-teal-700 uppercase tracking-widest text-center">
-                                              Actualizando...
-                                            </span>
-                                          </div>
-                                        </div>
-                                      )}
                                     <div className="w-full">
                                       {/* Compact Top Row: SISMED code with Establishment style icon, and stats/status dot on the right */}
                                       <div className="flex items-center justify-between mb-3.5">
@@ -4867,20 +4831,6 @@ function processSheet(sheet) {
                             <div
                               className={`bg-white rounded-2xl border border-slate-200/50 relative overflow-hidden ${isTableFullscreen ? "shadow-lg border-slate-200/60 m-1 sm:m-2" : "shadow-sm animate-in fade-in duration-200"}`}
                             >
-                              {lastGlobalSync === null &&
-                                (isLoading || isSilentSyncing) && (
-                                  <div className="absolute inset-0 bg-white/85 backdrop-blur-[1.5px] flex flex-col items-center justify-center z-30 transition-all duration-300">
-                                    <div className="flex flex-col items-center gap-2 p-6">
-                                      <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl shrink-0 shadow-xs">
-                                        <RefreshCw className="h-6 w-6 animate-spin text-teal-600" />
-                                      </div>
-                                      <span className="text-xs font-black text-teal-700 uppercase tracking-widest text-center">
-                                        Actualizando listado de
-                                        establecimientos...
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
                               <div className="overflow-auto scrollbar-thin">
                                 <table className="min-w-full divide-y divide-slate-100 text-left font-sans">
                                   <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-wider shadow-[0_1px_0_0_rgba(226,232,240,0.8)]">

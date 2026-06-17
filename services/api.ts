@@ -873,12 +873,25 @@ export const api = {
     getSubscriptions: async (username: string): Promise<string[]> => {
         try {
             if (supabase) {
-                const { data, error } = await supabase
+                // First try user_subscriptions just in case the migration was run
+                const { data: subData, error: subError } = await supabase
                     .from('user_subscriptions')
                     .select('subscribed_username')
                     .eq('username', username);
-                if (!error && data) {
-                    return data.map((d: any) => d.subscribed_username);
+                
+                if (!subError && subData) {
+                    return subData.map((d: any) => d.subscribed_username);
+                }
+
+                // Fallback to system_config
+                const { data: configData, error: configError } = await supabase
+                    .from('system_config')
+                    .select('value')
+                    .eq('key', `subscriptions_${username}`)
+                    .single();
+                
+                if (!configError && configData && configData.value) {
+                    return Array.isArray(configData.value) ? configData.value : [];
                 }
             }
         } catch(e) {
@@ -892,21 +905,28 @@ export const api = {
     saveSubscriptions: async (username: string, subscribedUsernames: string[]): Promise<{ success: boolean; message?: string }> => {
         try {
             if (supabase) {
-                const { error: delError } = await supabase
-                    .from('user_subscriptions')
-                    .delete()
-                    .eq('username', username);
-                if (delError) throw delError;
+                // Try saving in system_config via upsert to avoid requiring the migration immediately
+                const { error: configError } = await supabase
+                    .from('system_config')
+                    .upsert({ 
+                        key: `subscriptions_${username}`, 
+                        value: subscribedUsernames 
+                    }, { onConflict: 'key' });
 
-                if (subscribedUsernames.length > 0) {
-                    const rows = subscribedUsernames.map(subUsername => ({
-                        username,
-                        subscribed_username: subUsername
-                    }));
-                    const { error: insError } = await supabase
-                        .from('user_subscriptions')
-                        .insert(rows);
-                    if (insError) throw insError;
+                if (configError) throw configError;
+
+                // Also attempt to save to user_subscriptions if it exists, without strictly failing
+                try {
+                    await supabase.from('user_subscriptions').delete().eq('username', username);
+                    if (subscribedUsernames.length > 0) {
+                        const rows = subscribedUsernames.map(subUsername => ({
+                            username,
+                            subscribed_username: subUsername
+                        }));
+                        await supabase.from('user_subscriptions').insert(rows);
+                    }
+                } catch(e) {
+                    // Ignore errors if table doesn't exist
                 }
             }
             localStorage.setItem(`aura_sig_subs_${username}`, JSON.stringify(subscribedUsernames));
