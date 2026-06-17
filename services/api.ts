@@ -870,6 +870,54 @@ export const api = {
         }
     },
 
+    getSubscriptions: async (username: string): Promise<string[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase
+                    .from('user_subscriptions')
+                    .select('subscribed_username')
+                    .eq('username', username);
+                if (!error && data) {
+                    return data.map((d: any) => d.subscribed_username);
+                }
+            }
+        } catch(e) {
+            console.warn("Error fetching subscriptions from Supabase:", e);
+        }
+        
+        const saved = localStorage.getItem(`aura_sig_subs_${username}`);
+        return saved ? JSON.parse(saved) : [];
+    },
+
+    saveSubscriptions: async (username: string, subscribedUsernames: string[]): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                const { error: delError } = await supabase
+                    .from('user_subscriptions')
+                    .delete()
+                    .eq('username', username);
+                if (delError) throw delError;
+
+                if (subscribedUsernames.length > 0) {
+                    const rows = subscribedUsernames.map(subUsername => ({
+                        username,
+                        subscribed_username: subUsername
+                    }));
+                    const { error: insError } = await supabase
+                        .from('user_subscriptions')
+                        .insert(rows);
+                    if (insError) throw insError;
+                }
+            }
+            localStorage.setItem(`aura_sig_subs_${username}`, JSON.stringify(subscribedUsernames));
+            return { success: true };
+        } catch(e: any) {
+            console.error("Error saving subscriptions in Supabase:", e);
+            localStorage.setItem(`aura_sig_subs_${username}`, JSON.stringify(subscribedUsernames));
+            return { success: false, message: e.message };
+        }
+    },
+
     saveMultipleUngetConfigs: async (configsToSave: any[], usernamesToClear: string[]): Promise<{ success: boolean; message?: string }> => {
         try {
             if (supabase) {

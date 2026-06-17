@@ -568,6 +568,7 @@ export const SheetSearchModule: React.FC = () => {
   const [isSilentSyncing, setIsSilentSyncing] = useState(false);
   const [isConfigLoading, setIsConfigLoading] = useState(true); // Nuevo: Estado para carga de config
   const [error, setError] = useState<string | null>(null);
+  const [connectionErrors, setConnectionErrors] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [sheetSearchTerm, setSheetSearchTerm] = useState("");
   const [ungetSearchTerm, setUngetSearchTerm] = useState("");
@@ -1028,20 +1029,12 @@ export const SheetSearchModule: React.FC = () => {
 
         if (level === "GLOBAL" || level === "DIRESA" || level === "OGESS") {
           try {
-            const [allConfigs, allUsers] = await Promise.all([
+            const [allConfigs, allUsers, subscriptions] = await Promise.all([
               api.getAllUngetConfigs(),
               api.getUsers(),
+              api.getSubscriptions(user.username),
             ]);
             setAllUsersList(allUsers);
-
-            // Subscriptions stored in LocalStorage for Regional roles
-            const storedSubs = localStorage.getItem(
-              `aura_sig_subs_${user.username}`,
-            );
-            let subscriptions: string[] = [];
-            try {
-              if (storedSubs) subscriptions = JSON.parse(storedSubs);
-            } catch (e) {}
             setSubscribedUsernames(subscriptions);
 
             const jurisdictionConfigs = allConfigs.filter((config) => {
@@ -1380,9 +1373,18 @@ export const SheetSearchModule: React.FC = () => {
               }
             });
           }
+
+          setConnectionErrors((prev) => {
+            const updated = { ...prev };
+            delete updated[config.url];
+            return updated;
+          });
         } catch (err: any) {
           console.error(`Error fetching URL index ${urlIndex}:`, err);
-          throw new Error(`Fallo en fuente ${urlIndex + 1}: ${err.message}`);
+          setConnectionErrors((prev) => ({
+            ...prev,
+            [config.url]: err.message || "Failed to fetch",
+          }));
         }
       });
 
@@ -1533,11 +1535,8 @@ export const SheetSearchModule: React.FC = () => {
       const result = await api.saveUngetConfigs(user.username, urlsToSave);
 
       if (result.success) {
-        // Guardar suscripciones
-        localStorage.setItem(
-          `aura_sig_subs_${user.username}`,
-          JSON.stringify(tempSubscribedUsernames),
-        );
+        // Guardar suscripciones en la base de datos (Supabase) y localmente como respaldo
+        await api.saveSubscriptions(user.username, tempSubscribedUsernames);
         setSubscribedUsernames(tempSubscribedUsernames);
 
         // Actualizar localmente allJurisdictionConfigs en tiempo real para mantener la concordancia
@@ -3185,6 +3184,12 @@ function processSheet(sheet) {
                                   <div className="text-[8.5px] sm:text-[9.5px] text-slate-400 truncate font-mono mt-1 flex items-center gap-1 border-b border-transparent group-hover:border-slate-100 pb-0.5 max-w-[240px] md:max-w-xs xl:max-w-none">
                                     {config.url}
                                   </div>
+                                  {connectionErrors[config.url] && (
+                                    <div className="text-[8px] font-extrabold text-red-600 bg-red-50 border border-red-100/60 px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 uppercase tracking-tight mt-1.5">
+                                      <AlertCircle className="h-2 w-2 text-red-400 shrink-0" />
+                                      CORS / Error de Consulta
+                                    </div>
+                                  )}
                                   {config.username &&
                                     config.username !== user?.username && (
                                       <div className="text-[8px] font-extrabold text-teal-700 bg-teal-50 border border-teal-100/60 px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 uppercase tracking-tight mt-1.5">
@@ -3901,6 +3906,12 @@ function processSheet(sheet) {
                               <h3 className="text-sm sm:text-lg font-black text-gray-900 sm:mb-2 group-hover:text-teal-700 transition-colors uppercase tracking-tight truncate sm:whitespace-normal">
                                 {config.name}
                               </h3>
+                              {connectionErrors[config.url] && (
+                                <div className="text-[9px] font-black px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100 inline-flex items-center gap-1 uppercase mb-2">
+                                  <AlertCircle className="h-3 w-3 text-red-500 shrink-0" />
+                                  Error Consulta (CORS)
+                                </div>
+                              )}
 
                               <div className="sm:hidden text-[10px] sm:text-xs font-bold text-gray-500 mt-0.5 mb-1.5">
                                 {
