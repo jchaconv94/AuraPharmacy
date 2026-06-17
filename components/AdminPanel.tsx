@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../services/api';
 import { User, RoleConfig, HealthFacility, AVAILABLE_MODULES, UserRole, LaborRegime, Profession } from '../types';
@@ -224,60 +224,72 @@ export const AdminPanel: React.FC<{ currentView?: string }> = ({ currentView }) 
       return map;
   }, [laborRegimes]);
 
-  const filteredUsers = useMemo(() => {
-      // Helper to compute a user's full geographical footprint
-      const getExpandedHierarchy = (usr: any) => {
-          const p = usr.personnel || usr.personnelData || usr;
-          if (!p) return { diresaId: '', ogessId: '', ungetId: '', microredId: '', facilityCode: '' };
+  const diresaMapLookup = useMemo(() => {
+      const map = new Map<string, any>();
+      diresas.forEach(d => { if (d?.id) map.set(d.id, d); });
+      return map;
+  }, [diresas]);
 
-          let diresaId = p.diresaId || '';
-          let ogessId = p.ogessId || '';
-          let ungetId = p.ungetId || '';
-          let microredId = p.microredId || '';
-          const facilityCode = p.facilityCode || '';
+  const ogessMapLookup = useMemo(() => {
+      const map = new Map<string, any>();
+      ogess.forEach(o => { if (o?.id) map.set(o.id, o); });
+      return map;
+  }, [ogess]);
 
-          if (facilityCode) {
-              const f = facilityMapLookup.get(facilityCode);
-              if (f) {
-                  if (f.microredId && !microredId) microredId = f.microredId;
-                  if (f.ungetId && !ungetId) ungetId = f.ungetId;
-                  if (f.ogessId && !ogessId) ogessId = f.ogessId;
-                  if (f.diresaId && !diresaId) diresaId = f.diresaId;
-              }
+  // Helper to compute a user's full geographical footprint, accessible globally in the component
+  const getExpandedHierarchy = useCallback((usr: any) => {
+      const p = usr.personnel || usr.personnelData || usr;
+      if (!p) return { diresaId: '', ogessId: '', ungetId: '', microredId: '', facilityCode: '' };
+
+      let diresaId = p.diresaId || '';
+      let ogessId = p.ogessId || '';
+      let ungetId = p.ungetId || '';
+      let microredId = p.microredId || '';
+      const facilityCode = p.facilityCode || '';
+
+      if (facilityCode) {
+          const f = facilityMapLookup.get(facilityCode);
+          if (f) {
+              if (f.microredId && !microredId) microredId = f.microredId;
+              if (f.ungetId && !ungetId) ungetId = f.ungetId;
+              if (f.ogessId && !ogessId) ogessId = f.ogessId;
+              if (f.diresaId && !diresaId) diresaId = f.diresaId;
           }
+      }
 
-          if (microredId) {
-              const m = microredMapLookup.get(microredId);
-              if (m) {
-                  if (m.ungetId && !ungetId) ungetId = m.ungetId;
-                  if (m.ungetId) {
-                      const un = ungetMapLookup.get(m.ungetId);
-                      if (un) {
-                          if (un.ogessId && !ogessId) ogessId = un.ogessId;
-                          if (un.diresaId && !diresaId) diresaId = un.diresaId;
-                      }
+      if (microredId) {
+          const m = microredMapLookup.get(microredId);
+          if (m) {
+              if (m.ungetId && !ungetId) ungetId = m.ungetId;
+              if (m.ungetId) {
+                  const un = ungetMapLookup.get(m.ungetId);
+                  if (un) {
+                      if (un.ogessId && !ogessId) ogessId = un.ogessId;
+                      if (un.diresaId && !diresaId) diresaId = un.diresaId;
                   }
               }
           }
+      }
 
-          if (ungetId) {
-              const un = ungetMapLookup.get(ungetId);
-              if (un) {
-                  if (un.ogessId && !ogessId) ogessId = un.ogessId;
-                  if (un.diresaId && !diresaId) diresaId = un.diresaId;
-              }
+      if (ungetId) {
+          const un = ungetMapLookup.get(ungetId);
+          if (un) {
+              if (un.ogessId && !ogessId) ogessId = un.ogessId;
+              if (un.diresaId && !diresaId) diresaId = un.diresaId;
           }
+      }
 
-          if (ogessId) {
-              const og = ogess.find(o => o.id === ogessId);
-              if (og && og.diresaId && !diresaId) {
-                  diresaId = og.diresaId;
-              }
+      if (ogessId) {
+          const og = ogess.find(o => o.id === ogessId);
+          if (og && og.diresaId && !diresaId) {
+              diresaId = og.diresaId;
           }
+      }
 
-          return { diresaId, ogessId, ungetId, microredId, facilityCode };
-      };
+      return { diresaId, ogessId, ungetId, microredId, facilityCode };
+  }, [facilityMapLookup, microredMapLookup, ungetMapLookup, ogess]);
 
+  const filteredUsers = useMemo(() => {
       // 1. Hierarchy filter (authorized users list)
       let list = users;
       if (!isSuperAdmin) {
@@ -368,7 +380,7 @@ export const AdminPanel: React.FC<{ currentView?: string }> = ({ currentView }) 
   }, [
       users, isSuperAdmin, userDiresaId, userOgessId, userUngetId, userMicroredId, userFacilityCode,
       searchTerm, filterProfession, filterRole, filterStatus, filterDiresa, filterOgess, filterUnget, filterLaborRegime, filterMicrored,
-      facilityMapLookup, microredMapLookup, ungetMapLookup, ogess
+      facilityMapLookup, microredMapLookup, ungetMapLookup, ogess, getExpandedHierarchy
   ]);
 
   const HIERARCHY_WEIGHTS: Record<string, number> = {
@@ -1205,7 +1217,7 @@ export const AdminPanel: React.FC<{ currentView?: string }> = ({ currentView }) 
                                             <th className="px-5 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[240px]">Nombre (personal)</th>
                                             <th className="px-5 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[180px]">Profesión</th>
                                             <th className="px-5 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[150px]">Teléfono</th>
-                                            <th className="px-5 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[180px]">UNGET</th>
+                                            <th className="px-5 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[180px]">Jurisdicción</th>
                                             <th className="px-4 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[100px]">Rol</th>
                                             <th className="px-4 py-3.5 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-[110px]">Acciones</th>
                                         </tr>
@@ -1245,42 +1257,40 @@ export const AdminPanel: React.FC<{ currentView?: string }> = ({ currentView }) 
                                             const isUserActive = u.isActive === true || String(u.isActive).toLowerCase() === 'true';
                                             
                                             // --- OPTIMIZED O(1) HIERARCHICAL LOOKUP ENGINE ---
-                                            let ungetName = '-';
-                                            if (u.personnel) {
-                                                const p = u.personnel;
-                                                if (p.ungetId) {
-                                                    // Direct UNGET link
-                                                    ungetName = ungetMapLookup.get(p.ungetId)?.name || '-';
-                                                } else if (p.microredId) {
-                                                    // Personnel -> Microred -> UNGET
-                                                    const m = microredMapLookup.get(p.microredId);
-                                                    if (m && m.ungetId) {
-                                                        ungetName = ungetMapLookup.get(m.ungetId)?.name || '-';
-                                                    }
-                                                } else if (p.facilityCode) {
-                                                    // Personnel -> Facility -> (Microred -> UNGET) OR (Direct UNGET)
-                                                    const f = facilityMapLookup.get(p.facilityCode);
-                                                    if (f) {
-                                                        if (f.ungetId) {
-                                                            ungetName = ungetMapLookup.get(f.ungetId)?.name || '-';
-                                                        } else if (f.microredId) {
-                                                            const m = microredMapLookup.get(f.microredId);
-                                                            if (m && m.ungetId) {
-                                                                ungetName = ungetMapLookup.get(m.ungetId)?.name || '-';
-                                                            }
-                                                        }
-                                                    }
+                                            let jurisdictionName = '-';
+                                            const rObj = roles.find(r => r.role === u.role);
+                                            const level = rObj?.jurisdictionLevel;
+                                            const h = getExpandedHierarchy(u);
+
+                                            if (level === 'GLOBAL') {
+                                                jurisdictionName = 'Nacional';
+                                            } else if (level === 'DIRESA' || u.role === 'DIRESA') {
+                                                jurisdictionName = diresaMapLookup.get(h.diresaId)?.name || '-';
+                                            } else if (level === 'OGESS' || u.role === 'OGESS') {
+                                                jurisdictionName = ogessMapLookup.get(h.ogessId)?.name || '-';
+                                            } else if (level === 'UNGET' || u.role === 'UNGET') {
+                                                jurisdictionName = ungetMapLookup.get(h.ungetId)?.name || '-';
+                                            } else if (level === 'MICRORED' || u.role === 'MICRORED') {
+                                                jurisdictionName = microredMapLookup.get(h.microredId)?.name || '-';
+                                            } else if (level === 'IPRESS' || u.role === 'IPRESS') {
+                                                jurisdictionName = facilityMapLookup.get(h.facilityCode)?.name || '-';
+                                            } else {
+                                                // Fallback hierarchy waterfall: use the highest specificity set
+                                                if (h.ungetId) {
+                                                    jurisdictionName = ungetMapLookup.get(h.ungetId)?.name || '-';
+                                                } else if (h.ogessId) {
+                                                    jurisdictionName = ogessMapLookup.get(h.ogessId)?.name || '-';
+                                                } else if (h.diresaId) {
+                                                    jurisdictionName = diresaMapLookup.get(h.diresaId)?.name || '-';
+                                                } else if (h.facilityCode) {
+                                                    jurisdictionName = facilityMapLookup.get(h.facilityCode)?.name || '-';
                                                 }
-                                            }
-                                            if (ungetName === '-' && (u.ungetId || (u as any).facilityData?.ungetId)) {
-                                                const fallbackId = u.ungetId || (u as any).facilityData?.ungetId;
-                                                ungetName = ungetMapLookup.get(fallbackId)?.name || '-';
                                             }
                                             
                                             const name = u.personnel ? `${u.personnel.firstName} ${u.personnel.lastName}` : 'Sin datos de personal';
                                             const email = u.personnel?.email || '';
                                             const professionName = u.personnel?.professionData?.name || professionMapLookup.get(u.personnel?.professionId)?.name || '-';
-
+ 
                                             return (
                                                 <tr 
                                                     key={idx} 
@@ -1291,7 +1301,7 @@ export const AdminPanel: React.FC<{ currentView?: string }> = ({ currentView }) 
                                                     <td className="px-5 py-3 whitespace-nowrap text-sm w-[240px] max-w-[240px] truncate">
                                                         <div className="font-semibold text-gray-800 leading-tight truncate" title={name}>{name}</div>
                                                     </td>
-
+ 
                                                     {/* Profesión */}
                                                     <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-600 font-semibold w-[180px] max-w-[180px] truncate">
                                                         {professionName !== '-' ? (
@@ -1302,7 +1312,7 @@ export const AdminPanel: React.FC<{ currentView?: string }> = ({ currentView }) 
                                                             <span className="text-gray-300">-</span>
                                                         )}
                                                     </td>
-
+ 
                                                     {/* Teléfono */}
                                                     <td className="px-5 py-3 whitespace-nowrap text-xs text-gray-500 font-semibold w-[150px] max-w-[150px] truncate">
                                                         {u.personnel?.phone ? (
@@ -1314,16 +1324,16 @@ export const AdminPanel: React.FC<{ currentView?: string }> = ({ currentView }) 
                                                             <span className="text-gray-300">-</span>
                                                         )}
                                                     </td>
-
-                                                    {/* UNGET */}
-                                                    <td className="px-5 py-3 text-xs w-[180px] max-w-[180px] truncate" title={ungetName}>
-                                                        {ungetName !== '-' ? (
-                                                            <span className="font-medium text-gray-700 bg-slate-55 border border-slate-100 px-2 py-0.5 rounded-md truncate block w-fit">{ungetName}</span>
+ 
+                                                    {/* Jurisdicción */}
+                                                    <td className="px-5 py-3 text-xs w-[180px] max-w-[180px] truncate" title={jurisdictionName}>
+                                                        {jurisdictionName !== '-' ? (
+                                                            <span className="font-medium text-gray-700 bg-slate-55 border border-slate-100 px-2 py-0.5 rounded-md truncate block w-fit">{jurisdictionName}</span>
                                                         ) : (
                                                             <span className="text-gray-300">-</span>
                                                         )}
                                                     </td>
-
+ 
                                                     {/* Rol */}
                                                     <td className="px-4 py-3 whitespace-nowrap text-sm w-[100px] max-w-[100px]">
                                                         <span className={`px-2 py-0.5 inline-flex text-[10px] font-extrabold rounded-md uppercase tracking-wide ${u.role === 'ADMIN' ? 'bg-purple-100 text-purple-850' : 'bg-blue-50 text-blue-700 border border-blue-100/50'}`}>

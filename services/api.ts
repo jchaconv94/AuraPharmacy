@@ -800,7 +800,8 @@ export const api = {
                 if (!error && data) {
                     return data.map(d => ({
                         name: d.unget_name,
-                        url: d.url
+                        url: d.url,
+                        username: d.username
                     }));
                 }
             }
@@ -808,6 +809,46 @@ export const api = {
         
         const saved = localStorage.getItem(`aura_sig_ungets_${username}`);
         return saved ? JSON.parse(saved) : [];
+    },
+
+    getAllUngetConfigs: async (): Promise<any[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase.from('unget_configs').select('*');
+                if (!error && data) {
+                    return data.map(d => ({
+                        id: d.id,
+                        username: d.username,
+                        name: d.unget_name,
+                        url: d.url
+                    }));
+                }
+            }
+        } catch(e) {}
+        
+        const all: any[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('aura_sig_ungets_')) {
+                const username = key.replace('aura_sig_ungets_', '');
+                try {
+                    const saved = localStorage.getItem(key);
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed)) {
+                            parsed.forEach(c => {
+                                all.push({
+                                    username,
+                                    name: c.name,
+                                    url: c.url
+                                });
+                            });
+                        }
+                    }
+                } catch(e) {}
+            }
+        }
+        return all;
     },
 
     saveUngetConfigs: async (username: string, configs: any[]): Promise<{ success: boolean; message?: string }> => {
@@ -823,6 +864,39 @@ export const api = {
                 }
             }
             localStorage.setItem(`aura_sig_ungets_${username}`, JSON.stringify(configs));
+            return { success: true };
+        } catch(e: any) {
+            return { success: false, message: e.message };
+        }
+    },
+
+    saveMultipleUngetConfigs: async (configsToSave: any[], usernamesToClear: string[]): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (supabase) {
+                for (const u of usernamesToClear) {
+                    await supabase.from('unget_configs').delete().eq('username', u);
+                }
+                for (const c of configsToSave) {
+                    await supabase.from('unget_configs').insert({
+                        username: c.username,
+                        unget_name: c.name,
+                        url: c.url
+                    });
+                }
+            }
+            // En localstorage
+            for (const u of usernamesToClear) {
+                localStorage.removeItem(`aura_sig_ungets_${u}`);
+            }
+            const grouped: Record<string, any[]> = {};
+            for (const c of configsToSave) {
+                const u = c.username || 'unknown';
+                if (!grouped[u]) grouped[u] = [];
+                grouped[u].push({ name: c.name, url: c.url, username: u });
+            }
+            for (const u in grouped) {
+                localStorage.setItem(`aura_sig_ungets_${u}`, JSON.stringify(grouped[u]));
+            }
             return { success: true };
         } catch(e: any) {
             return { success: false, message: e.message };

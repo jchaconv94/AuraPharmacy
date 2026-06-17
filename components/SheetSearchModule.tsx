@@ -26,6 +26,9 @@ import {
   Download,
   Filter,
   ArrowLeft,
+  ArrowRight,
+  HelpCircle,
+  User,
   ChevronDown,
   LayoutGrid,
   List,
@@ -184,101 +187,137 @@ const getUpdateStatus = (timestamp?: number) => {
 };
 
 const renderRangeFilter = (
-  unit: "hours" | "days", setUnit: React.Dispatch<React.SetStateAction<"hours" | "days">>,
-  value: number, setValue: React.Dispatch<React.SetStateAction<number>>,
-  condition: "with" | "without", setCondition: React.Dispatch<React.SetStateAction<"with" | "without">>,
+  unit: "hours" | "days",
+  setUnit: React.Dispatch<React.SetStateAction<"hours" | "days">>,
+  value: number,
+  setValue: React.Dispatch<React.SetStateAction<number>>,
+  condition: "with" | "without",
+  setCondition: React.Dispatch<React.SetStateAction<"with" | "without">>,
   title: string,
   onConditionLabel: string = "ACTUALIZADO",
   offConditionLabel: string = "NO ACTUALIZADO",
   onConditionFullLabel: string = "ACTUALIZADOS",
-  offConditionFullLabel: string = "NO ACTUALIZADOS"
+  offConditionFullLabel: string = "NO ACTUALIZADOS",
 ) => {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-           <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
-           <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">{title}</h4>
+          <div className="w-1.5 h-3 bg-teal-500 rounded-full" />
+          <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
+            {title}
+          </h4>
         </div>
         <div className="flex flex-col gap-4 w-full pl-3.5 border-l-2 border-slate-100">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex rounded-lg border border-slate-200 bg-slate-100 overflow-hidden shadow-sm shadow-slate-200/50 p-1 w-full sm:w-auto">
-                  <button 
-                    type="button" 
-                    onClick={() => { setUnit("hours"); if (unit !== "hours") setValue(0); }} 
-                    className={`flex-1 px-4 py-1.5 min-w-[80px] text-[10px] font-black rounded-md transition-all ${unit === "hours" ? "bg-white text-teal-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
-                  >HORAS</button>
-                  <button 
-                    type="button" 
-                    onClick={() => { setUnit("days"); if (unit !== "days") setValue(0); }} 
-                    className={`flex-1 px-4 py-1.5 min-w-[80px] text-[10px] font-black rounded-md transition-all ${unit === "days" ? "bg-white text-teal-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
-                  >DÍAS</button>
-                </div>
-                
-                <div className="flex rounded-lg border border-slate-200 bg-slate-100 overflow-hidden shadow-sm shadow-slate-200/50 p-1 w-full sm:w-auto transition-all duration-300">
-                  <button 
-                    type="button" 
-                    onClick={() => setCondition("with")} 
-                    className={`flex-1 px-4 py-1.5 text-[10px] font-black tracking-tight rounded-md transition-all whitespace-nowrap ${condition === "with" ? "bg-white text-blue-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
-                  >{onConditionLabel}</button>
-                  <button 
-                    type="button" 
-                    onClick={() => setCondition("without")} 
-                    className={`flex-1 px-4 py-1.5 text-[10px] font-black tracking-tight rounded-md transition-all whitespace-nowrap ${condition === "without" ? "bg-white text-blue-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
-                  >{offConditionLabel}</button>
-                </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex rounded-lg border border-slate-200 bg-slate-100 overflow-hidden shadow-sm shadow-slate-200/50 p-1 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setUnit("hours");
+                  if (unit !== "hours") setValue(0);
+                }}
+                className={`flex-1 px-4 py-1.5 min-w-[80px] text-[10px] font-black rounded-md transition-all ${unit === "hours" ? "bg-white text-teal-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
+              >
+                HORAS
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUnit("days");
+                  if (unit !== "days") setValue(0);
+                }}
+                className={`flex-1 px-4 py-1.5 min-w-[80px] text-[10px] font-black rounded-md transition-all ${unit === "days" ? "bg-white text-teal-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
+              >
+                DÍAS
+              </button>
             </div>
 
-            <div className="pt-5 pb-1 flex items-center gap-4 group">
-               <div className="flex-1 relative">
-                 <div className="absolute -top-7 left-0 w-full text-center pointer-events-none">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest bg-white px-2.5 py-1 rounded-full border shadow-sm transition-all transform duration-300 ${value > 0 ? 'text-blue-600 border-blue-100 shadow-blue-100/50 -translate-y-1 opacity-100' : 'text-slate-400 border-slate-100 translate-y-0 opacity-0 group-hover:-translate-y-1 group-hover:opacity-100'}`}>
-                        {value === 0 ? "Filtro desactivado" : `${value} ${unit === "hours" ? "Hora" + (value !== 1 ? "s" : "") : "Día" + (value !== 1 ? "s" : "")}`}
-                    </span>
-                 </div>
-                 
-                 <div className="flex items-center gap-3">
-                   <button
-                     type="button"
-                     onClick={() => setValue(Math.max(0, value - 1))}
-                     className="p-1 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 shrink-0 shadow-sm bg-white border border-slate-200/60"
-                   >
-                     <Minus className="h-4 w-4" />
-                   </button>
-                   
-                   <input 
-                     type="range" 
-                     min="0" 
-                     max={unit === "hours" ? 23 : 30} 
-                     step="1"
-                     value={value} 
-                     onChange={(e) => setValue(parseInt(e.target.value))} 
-                     className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 hover:h-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20" 
-                   />
-                   
-                   <button
-                     type="button"
-                     onClick={() => setValue(Math.min(unit === "hours" ? 23 : 30, value + 1))}
-                     className="p-1 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 shrink-0 shadow-sm bg-white border border-slate-200/60"
-                   >
-                     <Plus className="h-4 w-4" />
-                   </button>
-                 </div>
-                 
-                 <div className="flex justify-between text-[10px] font-extrabold text-slate-400/80 tracking-wide uppercase px-8 select-none mt-2">
-                   <span>Todos</span>
-                   <span>{unit === "hours" ? "23 Horas" : "30 Días"}</span>
-                 </div>
-               </div>
+            <div className="flex rounded-lg border border-slate-200 bg-slate-100 overflow-hidden shadow-sm shadow-slate-200/50 p-1 w-full sm:w-auto transition-all duration-300">
+              <button
+                type="button"
+                onClick={() => setCondition("with")}
+                className={`flex-1 px-4 py-1.5 text-[10px] font-black tracking-tight rounded-md transition-all whitespace-nowrap ${condition === "with" ? "bg-white text-blue-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
+              >
+                {onConditionLabel}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCondition("without")}
+                className={`flex-1 px-4 py-1.5 text-[10px] font-black tracking-tight rounded-md transition-all whitespace-nowrap ${condition === "without" ? "bg-white text-blue-700 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"}`}
+              >
+                {offConditionLabel}
+              </button>
             </div>
-            
-            {value > 0 && (
-              <div className="-mt-1 flex justify-center animate-in fade-in zoom-in duration-300">
-                <div className="text-center text-[10px] font-bold text-blue-700 bg-blue-50/80 py-1.5 px-3 rounded-md border border-blue-100 shadow-xs">
-                  Establecimientos {condition === "with" ? onConditionFullLabel.toLowerCase() : offConditionFullLabel.toLowerCase()} hace {value} {unit === "hours" ? (value === 1 ? "hora" : "horas") : (value === 1 ? "día" : "días")}
-                </div>
+          </div>
+
+          <div className="pt-5 pb-1 flex items-center gap-4 group">
+            <div className="flex-1 relative">
+              <div className="absolute -top-7 left-0 w-full text-center pointer-events-none">
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-widest bg-white px-2.5 py-1 rounded-full border shadow-sm transition-all transform duration-300 ${value > 0 ? "text-blue-600 border-blue-100 shadow-blue-100/50 -translate-y-1 opacity-100" : "text-slate-400 border-slate-100 translate-y-0 opacity-0 group-hover:-translate-y-1 group-hover:opacity-100"}`}
+                >
+                  {value === 0
+                    ? "Filtro desactivado"
+                    : `${value} ${unit === "hours" ? "Hora" + (value !== 1 ? "s" : "") : "Día" + (value !== 1 ? "s" : "")}`}
+                </span>
               </div>
-            )}
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setValue(Math.max(0, value - 1))}
+                  className="p-1 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 shrink-0 shadow-sm bg-white border border-slate-200/60"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+
+                <input
+                  type="range"
+                  min="0"
+                  max={unit === "hours" ? 23 : 30}
+                  step="1"
+                  value={value}
+                  onChange={(e) => setValue(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 hover:h-2 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setValue(Math.min(unit === "hours" ? 23 : 30, value + 1))
+                  }
+                  className="p-1 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 shrink-0 shadow-sm bg-white border border-slate-200/60"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex justify-between text-[10px] font-extrabold text-slate-400/80 tracking-wide uppercase px-8 select-none mt-2">
+                <span>Todos</span>
+                <span>{unit === "hours" ? "23 Horas" : "30 Días"}</span>
+              </div>
+            </div>
+          </div>
+
+          {value > 0 && (
+            <div className="-mt-1 flex justify-center animate-in fade-in zoom-in duration-300">
+              <div className="text-center text-[10px] font-bold text-blue-700 bg-blue-50/80 py-1.5 px-3 rounded-md border border-blue-100 shadow-xs">
+                Establecimientos{" "}
+                {condition === "with"
+                  ? onConditionFullLabel.toLowerCase()
+                  : offConditionFullLabel.toLowerCase()}{" "}
+                hace {value}{" "}
+                {unit === "hours"
+                  ? value === 1
+                    ? "hora"
+                    : "horas"
+                  : value === 1
+                    ? "día"
+                    : "días"}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -355,6 +394,7 @@ const formatDate = (dateValue: any): string => {
 interface UngetConfig {
   url: string;
   name: string;
+  username?: string;
 }
 
 const formatAlmCode = (code: string | undefined): string => {
@@ -517,6 +557,11 @@ export const SheetSearchModule: React.FC = () => {
   const [lastGlobalSync, setLastGlobalSync] = useState<Date | null>(null);
   const [allFacilities, setAllFacilities] = useState<any[]>([]);
   const [allAssignments, setAllAssignments] = useState<any[]>([]);
+  const [allUsersList, setAllUsersList] = useState<any[]>([]);
+  const [allJurisdictionConfigs, setAllJurisdictionConfigs] = useState<any[]>(
+    [],
+  );
+  const [subscribedUsernames, setSubscribedUsernames] = useState<string[]>([]);
 
   // UI states
   const [isLoading, setIsLoading] = useState(false);
@@ -556,13 +601,21 @@ export const SheetSearchModule: React.FC = () => {
   const [filterSortOrder, setFilterSortOrder] = useState<string>("name_asc");
   const [filterHasPendingExpirations, setFilterHasPendingExpirations] =
     useState<boolean>(false);
-  const [filterDateUnit, setFilterDateUnit] = useState<"hours" | "days">("hours");
+  const [filterDateUnit, setFilterDateUnit] = useState<"hours" | "days">(
+    "hours",
+  );
   const [filterDateValue, setFilterDateValue] = useState<number>(0);
-  const [filterDateCondition, setFilterDateCondition] = useState<"with" | "without">("with");
+  const [filterDateCondition, setFilterDateCondition] = useState<
+    "with" | "without"
+  >("with");
 
-  const [filterMovementsUnit, setFilterMovementsUnit] = useState<"hours" | "days">("hours");
+  const [filterMovementsUnit, setFilterMovementsUnit] = useState<
+    "hours" | "days"
+  >("hours");
   const [filterMovementsValue, setFilterMovementsValue] = useState<number>(0);
-  const [filterMovementsCondition, setFilterMovementsCondition] = useState<"with" | "without">("with");
+  const [filterMovementsCondition, setFilterMovementsCondition] = useState<
+    "with" | "without"
+  >("with");
 
   // Estados para dropdowns de filtros personalizados
   const [isSortOrderDropdownOpen, setIsSortOrderDropdownOpen] = useState(false);
@@ -644,6 +697,7 @@ export const SheetSearchModule: React.FC = () => {
   }, []);
   // Modal & Config
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isInstructionModalOpen, setIsInstructionModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
   const [isDataFiltersOpen, setIsDataFiltersOpen] = useState(false);
@@ -841,14 +895,21 @@ export const SheetSearchModule: React.FC = () => {
   const [exportRed, setExportRed] = useState(true);
   const [exportGray, setExportGray] = useState(true);
 
-  const [exportDateUnit, setExportDateUnit] = useState<"hours" | "days">("hours");
+  const [exportDateUnit, setExportDateUnit] = useState<"hours" | "days">(
+    "hours",
+  );
   const [exportDateValue, setExportDateValue] = useState<number>(0);
-  const [exportDateCondition, setExportDateCondition] = useState<"with" | "without">("with");
+  const [exportDateCondition, setExportDateCondition] = useState<
+    "with" | "without"
+  >("with");
   const [exportHasPendingExpirations, setExportHasPendingExpirations] =
     useState<boolean>(false);
   const [exportScope, setExportScope] = useState<"single" | "all">("single");
   const [editingIndex, setEditingIndex] = useState<number | null>(null); // Nuevo: índice que se está editando
   const [tempUrls, setTempUrls] = useState<UngetConfig[]>([]);
+  const [tempSubscribedUsernames, setTempSubscribedUsernames] = useState<
+    string[]
+  >([]);
   const [newUrlInput, setNewUrlInput] = useState("");
   const [newNameInput, setNewNameInput] = useState("");
   const [copied, setCopied] = useState(false);
@@ -927,28 +988,146 @@ export const SheetSearchModule: React.FC = () => {
           const assigs = await api.getAllStockAssignments();
           setAllAssignments(assigs);
         } catch (err) {
-          console.error("Error loading facilities or assignments metadata:", err);
+          console.error(
+            "Error loading facilities or assignments metadata:",
+            err,
+          );
         }
 
-        const remoteConfigs = await api.getUngetConfigs(user.username);
+        let remoteConfigs: any[] = [];
+        const role = user.role;
+        let level = "";
+        const r = (role || "").toUpperCase();
+        if (
+          r === "ADMIN" ||
+          r === "GLOBAL" ||
+          r.includes("SUPER") ||
+          r.includes("GENERAL") ||
+          r === "ADMINISTRADOR"
+        )
+          level = "GLOBAL";
+        else if (r.includes("DIRESA")) level = "DIRESA";
+        else if (r.includes("OGESS")) level = "OGESS";
+        else if (r.includes("UNGET")) level = "UNGET";
+        else if (r.includes("MICRORED")) level = "MICRORED";
+        else if (
+          r.includes("FARMACIA") ||
+          r.includes("IPRESS") ||
+          r.includes("PERSONAL")
+        )
+          level = "IPRESS";
+
+        const userDiresaId =
+          user.personnelData?.diresaId ||
+          user.facilityData?.diresaId ||
+          (user as any).diresaId;
+        const userOgessId =
+          user.personnelData?.ogessId ||
+          user.facilityData?.ogessId ||
+          (user as any).ogessId;
+
+        if (level === "GLOBAL" || level === "DIRESA" || level === "OGESS") {
+          try {
+            const [allConfigs, allUsers] = await Promise.all([
+              api.getAllUngetConfigs(),
+              api.getUsers(),
+            ]);
+            setAllUsersList(allUsers);
+
+            // Subscriptions stored in LocalStorage for Regional roles
+            const storedSubs = localStorage.getItem(
+              `aura_sig_subs_${user.username}`,
+            );
+            let subscriptions: string[] = [];
+            try {
+              if (storedSubs) subscriptions = JSON.parse(storedSubs);
+            } catch (e) {}
+            setSubscribedUsernames(subscriptions);
+
+            const jurisdictionConfigs = allConfigs.filter((config) => {
+              // Encontrar usuario creador
+              const creator = allUsers.find(
+                (u) => u.username === config.username,
+              );
+              if (!creator) {
+                return level === "GLOBAL";
+              }
+              const creatorDiresaId =
+                creator.personnelData?.diresaId ||
+                creator.facilityData?.diresaId ||
+                (creator as any).diresaId ||
+                (creator as any).personnel?.diresaId;
+              const creatorOgessId =
+                creator.personnelData?.ogessId ||
+                creator.facilityData?.ogessId ||
+                (creator as any).ogessId ||
+                (creator as any).personnel?.ogessId;
+
+              if (level === "GLOBAL") return true;
+              if (level === "DIRESA" && userDiresaId)
+                return String(creatorDiresaId) === String(userDiresaId);
+              if (level === "OGESS" && userOgessId)
+                return String(creatorOgessId) === String(userOgessId);
+              return false;
+            });
+
+            setAllJurisdictionConfigs(jurisdictionConfigs);
+
+            remoteConfigs = allConfigs.filter((config) => {
+              // Si el creador es el mismo, siempre lo ve
+              if (config.username === user.username) return true;
+
+              // Only see other configs if explicitly subscribed (imported)
+              if (subscriptions.includes(config.username)) return true;
+
+              return false;
+            });
+          } catch (fetchErr) {
+            console.error(
+              "Error loading segmented unget configs from server:",
+              fetchErr,
+            );
+            remoteConfigs = await api.getUngetConfigs(user.username);
+          }
+        } else {
+          remoteConfigs = await api.getUngetConfigs(user.username);
+        }
+
         if (remoteConfigs && remoteConfigs.length > 0) {
           let visibleConfigs = remoteConfigs;
-          // Filter if not ADMIN/UNGET so they only see their own facility's URL/sheet
-          if (user.role !== 'ADMIN' && user.role !== 'UNGET' && user.role !== 'DIRESA') {
-             visibleConfigs = remoteConfigs.map((config: any) => {
-                 // For each URL configuration, filter the individual sheets
-                 if (config.sheets && Array.isArray(config.sheets)) {
-                     // Try to match the exact string or code in sheet names
-                     const myFacilitySheets = config.sheets.filter((s: any) => {
-                         const facName = (user.facilityData?.name || '').toUpperCase();
-                         const facCode = (user.facilityData?.code || '').toUpperCase();
-                         const sName = s.name.toUpperCase();
-                         return sName.includes(facName) || sName.includes(facCode) || s.id === facCode;
-                     });
-                     return { ...config, sheets: myFacilitySheets };
-                 }
-                 return config;
-             }).filter((config: any) => config.sheets && config.sheets.length > 0);
+          // Filter if standard user so they only see their own facility's URL/sheet
+          if (
+            level !== "GLOBAL" &&
+            level !== "DIRESA" &&
+            level !== "OGESS" &&
+            level !== "UNGET"
+          ) {
+            visibleConfigs = remoteConfigs
+              .map((config: any) => {
+                // For each URL configuration, filter the individual sheets
+                if (config.sheets && Array.isArray(config.sheets)) {
+                  // Try to match the exact string or code in sheet names
+                  const myFacilitySheets = config.sheets.filter((s: any) => {
+                    const facName = (
+                      user.facilityData?.name || ""
+                    ).toUpperCase();
+                    const facCode = (
+                      user.facilityData?.code || ""
+                    ).toUpperCase();
+                    const sName = s.name.toUpperCase();
+                    return (
+                      sName.includes(facName) ||
+                      sName.includes(facCode) ||
+                      s.id === facCode
+                    );
+                  });
+                  return { ...config, sheets: myFacilitySheets };
+                }
+                return config;
+              })
+              .filter(
+                (config: any) => config.sheets && config.sheets.length > 0,
+              );
           }
           setScriptUrls(visibleConfigs);
         } else if (savedUrls) {
@@ -1073,15 +1252,23 @@ export const SheetSearchModule: React.FC = () => {
   ) => {
     if (isConfigLoading && !overrideUrls) return;
 
-    const urlsToUse = overrideUrls || scriptUrls;
+    const sourceUrls = overrideUrls || scriptUrls;
+
+    // Eliminar posibles duplicados introducidos por roles administrativos al asignar URLs
+    const urlsToUse = Array.from(
+      new Map(sourceUrls.map((u) => [u.url, u])).values(),
+    );
 
     if (urlsToUse.length === 0) {
+      setSources([]);
+      setData([]);
+
       if (!silent) {
         setError(
-          "Primero debe configurar al menos una URL de Web App de Apps Script.",
+          "No hay orígenes activos. Primero debe configurar al menos una URL de Web App de Apps Script o suscribirse a otra entidad.",
         );
-        setTempUrls([...urlsToUse]);
-        setIsConfigOpen(true);
+        setTempUrls([]);
+        setTempSubscribedUsernames([...subscribedUsernames]);
       }
       return;
     }
@@ -1147,11 +1334,12 @@ export const SheetSearchModule: React.FC = () => {
               let displayName = sheet.name;
               if (allAssignments.length > 0 && allFacilities.length > 0) {
                 const matchingAssignment = allAssignments.find(
-                  (a) => a.sheetUrl === config.url && a.sheetName === sheet.name
+                  (a) =>
+                    a.sheetUrl === config.url && a.sheetName === sheet.name,
                 );
                 if (matchingAssignment) {
                   const matchingF = allFacilities.find(
-                    (f) => f.code === matchingAssignment.facilityCode
+                    (f) => f.code === matchingAssignment.facilityCode,
                   );
                   if (matchingF) {
                     displayName = matchingF.name;
@@ -1269,11 +1457,16 @@ export const SheetSearchModule: React.FC = () => {
 
   // Al montar y cargar la configuración, hacer refresh de los datos.
   useEffect(() => {
-    if (!isConfigLoading && scriptUrls.length > 0) {
-      // Si no hay datos cacheados, hacemos fetch con UI de carga, sino, silent
-      fetchData(undefined, data.length > 0);
-      if (supabase) {
-        loadSupabaseSyncs().catch((e) => console.warn(e));
+    if (!isConfigLoading) {
+      if (scriptUrls.length > 0) {
+        // Si no hay datos cacheados, hacemos fetch con UI de carga, sino, silent
+        fetchData(undefined, data.length > 0);
+        if (supabase) {
+          loadSupabaseSyncs().catch((e) => console.warn(e));
+        }
+      } else {
+        // Ejecutar para disparar el estado vacío
+        fetchData(undefined, false);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1313,14 +1506,73 @@ export const SheetSearchModule: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const result = await api.saveUngetConfigs(user.username, tempUrls);
-      if (result.success) {
-        setScriptUrls([...tempUrls]);
-        setIsConfigOpen(false);
-        toast.success("Configuración guardada en la nube.");
+      let urlsToSave = [...tempUrls];
 
-        // Sincronizar datos inmediatamente con las nuevas URLs
-        fetchData(tempUrls);
+      // Si el usuario ingresó una URL en los campos de texto pero olvidó hacer clic en "+ Añadir a Lista",
+      // la procesamos automáticamente aquí para que no se pierda la configuración.
+      const pendingUrl = newUrlInput.trim();
+      if (pendingUrl) {
+        const pendingName = newNameInput.trim() || `UNGET ${urlsToSave.length + 1}`;
+        if (editingIndex !== null) {
+          urlsToSave[editingIndex] = { url: pendingUrl, name: pendingName, username: user.username };
+        } else {
+          if (!urlsToSave.find((u) => u.url === pendingUrl)) {
+            // Validar límites si corresponde
+            if (!maxUrlsAllowed || urlsToSave.length < maxUrlsAllowed) {
+              urlsToSave.push({ url: pendingUrl, name: pendingName, username: user.username });
+            }
+          }
+        }
+        // Limpiar inputs temporales
+        setNewUrlInput("");
+        setNewNameInput("");
+        setEditingIndex(null);
+        setTempUrls(urlsToSave);
+      }
+
+      const result = await api.saveUngetConfigs(user.username, urlsToSave);
+
+      if (result.success) {
+        // Guardar suscripciones
+        localStorage.setItem(
+          `aura_sig_subs_${user.username}`,
+          JSON.stringify(tempSubscribedUsernames),
+        );
+        setSubscribedUsernames(tempSubscribedUsernames);
+
+        // Actualizar localmente allJurisdictionConfigs en tiempo real para mantener la concordancia
+        setAllJurisdictionConfigs((prev) => {
+          const others = prev.filter((c) => c.username !== user.username);
+          const myUpdated = urlsToSave.map((c) => ({
+            username: user.username,
+            name: c.name,
+            url: c.url,
+          }));
+          return [...others, ...myUpdated];
+        });
+
+        // Buscar orígenes de las demás entidades suscritas
+        const updatedAllJurisdiction = [
+          ...allJurisdictionConfigs.filter((c) => c.username !== user.username),
+          ...urlsToSave.map((c) => ({ username: user.username, name: c.name, url: c.url }))
+        ];
+
+        const subscribedConfigs = updatedAllJurisdiction.filter((config) =>
+          tempSubscribedUsernames.includes(config.username),
+        );
+        
+        // Remover duplicados si el usuario estuviera de alguna manera suscrito a sí mismo
+        const othersUrls = subscribedConfigs.filter(
+          (u) => u.username !== user.username,
+        );
+
+        const mergedScriptUrls = [...othersUrls, ...urlsToSave];
+        setScriptUrls(mergedScriptUrls);
+        setIsConfigOpen(false);
+        toast.success("Configuración guardada en la nube con éxito.");
+
+        // Sincronizar datos inmediatamente y de manera asíncrona pero asegurando que la carga se complete
+        await fetchData(mergedScriptUrls);
       } else {
         toast.error("Error al guardar en el servidor: " + result.message);
       }
@@ -1332,6 +1584,7 @@ export const SheetSearchModule: React.FC = () => {
   };
 
   const handleAddUrl = () => {
+    if (!user) return;
     const url = newUrlInput.trim();
     const name = newNameInput.trim() || `UNGET ${tempUrls.length + 1}`;
 
@@ -1340,7 +1593,7 @@ export const SheetSearchModule: React.FC = () => {
     if (editingIndex !== null) {
       // Caso edición
       const updated = [...tempUrls];
-      updated[editingIndex] = { url, name };
+      updated[editingIndex] = { url, name, username: user.username };
       setTempUrls(updated);
       setEditingIndex(null);
     } else {
@@ -1355,7 +1608,7 @@ export const SheetSearchModule: React.FC = () => {
         toast.error("Esta URL ya está registrada.");
         return;
       }
-      setTempUrls([...tempUrls, { url, name }]);
+      setTempUrls([...tempUrls, { url, name, username: user.username }]);
     }
 
     setNewUrlInput("");
@@ -1368,14 +1621,26 @@ export const SheetSearchModule: React.FC = () => {
     setEditingIndex(index);
     setNewUrlInput(config.url);
     setNewNameInput(config.name);
+    setTempSubscribedUsernames([...subscribedUsernames]);
     setIsConfigOpen(true);
   };
 
   const handleDirectEdit = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!user) return;
     const config = scriptUrls[index];
-    setTempUrls([...scriptUrls]);
-    setEditingIndex(index);
+
+    // Only edit my own URLs, or if I'm editing an old one without a set username it gets adopted
+    const visibleUrls = scriptUrls.filter(
+      (u) => !u.username || u.username === user.username,
+    );
+    setTempUrls(visibleUrls);
+    setTempSubscribedUsernames([...subscribedUsernames]);
+
+    const targetIdx = visibleUrls.findIndex(
+      (u) => u.url === config.url && u.name === config.name,
+    );
+    setEditingIndex(targetIdx !== -1 ? targetIdx : null);
     setNewUrlInput(config.url);
     setNewNameInput(config.name);
     setIsConfigOpen(true);
@@ -1385,7 +1650,6 @@ export const SheetSearchModule: React.FC = () => {
     e.stopPropagation();
     if (!user) return;
 
-    // Usamos una confirmación por toast en lugar de window.confirm que falla en iframes
     toast("¿Eliminar esta conexión?", {
       description: `Se borrará el acceso a "${scriptUrls[index].name}"`,
       action: {
@@ -1394,7 +1658,14 @@ export const SheetSearchModule: React.FC = () => {
           const updated = scriptUrls.filter((_, idx) => idx !== index);
           setIsLoading(true);
           try {
-            const result = await api.saveUngetConfigs(user.username, updated);
+            const myOwnUpdated = updated.filter(
+              (u) => !u.username || u.username === user.username,
+            );
+            const result = await api.saveUngetConfigs(
+              user.username,
+              myOwnUpdated,
+            );
+
             if (result.success) {
               setScriptUrls(updated);
               if (selectedUngetIndex === index) {
@@ -1582,7 +1853,8 @@ export const SheetSearchModule: React.FC = () => {
           diffHours = diffMs / (1000 * 60 * 60);
         }
 
-        const maxHours = exportDateUnit === "hours" ? exportDateValue : exportDateValue * 24;
+        const maxHours =
+          exportDateUnit === "hours" ? exportDateValue : exportDateValue * 24;
         const isWithinLimit = diffHours <= maxHours;
 
         if (exportDateCondition === "with" && !isWithinLimit) return false;
@@ -1641,7 +1913,8 @@ export const SheetSearchModule: React.FC = () => {
           diffHours = diffMs / (1000 * 60 * 60);
         }
 
-        const maxHours = exportDateUnit === "hours" ? exportDateValue : exportDateValue * 24;
+        const maxHours =
+          exportDateUnit === "hours" ? exportDateValue : exportDateValue * 24;
         const isWithinLimit = diffHours <= maxHours;
 
         if (exportDateCondition === "with" && !isWithinLimit) return false;
@@ -1764,9 +2037,9 @@ export const SheetSearchModule: React.FC = () => {
   };
 
   const scriptCode = `function doGet(e) {
-  // Reemplace 'VUESTRO_ID_AQUI' con el ID real de su Google Sheet
-  // Por defecto he colocado el que suministró:
-  var id = '1vic6MeMiA5Jk4_UWx8nI462yXe8irgxAoMncJiekOOA';
+  // Reemplace 'TU_ID_AQUI' con el ID real de su Google Sheet
+  
+  var id = 'TU_ID_AQUI';
   
   try {
     var ss = SpreadsheetApp.openById(id);
@@ -2137,7 +2410,8 @@ function processSheet(sheet) {
           diffHours = diffMs / (1000 * 60 * 60);
         }
 
-        const maxHours = filterDateUnit === "hours" ? filterDateValue : filterDateValue * 24;
+        const maxHours =
+          filterDateUnit === "hours" ? filterDateValue : filterDateValue * 24;
         const isWithinLimit = diffHours <= maxHours;
 
         if (filterDateCondition === "with" && !isWithinLimit) return false;
@@ -2149,16 +2423,20 @@ function processSheet(sheet) {
         const syncRecord = supabaseSyncs[s.id];
         let diffHours = Infinity;
         if (syncRecord && syncRecord.sync_date) {
-            const now = new Date().getTime();
-            const diffMs = now - new Date(syncRecord.sync_date).getTime();
-            diffHours = diffMs / (1000 * 60 * 60);
+          const now = new Date().getTime();
+          const diffMs = now - new Date(syncRecord.sync_date).getTime();
+          diffHours = diffMs / (1000 * 60 * 60);
         }
 
-        const maxHours = filterMovementsUnit === "hours" ? filterMovementsValue : filterMovementsValue * 24;
+        const maxHours =
+          filterMovementsUnit === "hours"
+            ? filterMovementsValue
+            : filterMovementsValue * 24;
         const isWithinLimit = diffHours <= maxHours;
 
         if (filterMovementsCondition === "with" && !isWithinLimit) return false;
-        if (filterMovementsCondition === "without" && isWithinLimit) return false;
+        if (filterMovementsCondition === "without" && isWithinLimit)
+          return false;
       }
 
       // Expiration filter
@@ -2585,7 +2863,14 @@ function processSheet(sheet) {
           <div className="flex items-center gap-2 sm:gap-2.5 w-full md:w-auto overflow-x-auto pb-1 sm:pb-0 hide-scrollbar justify-start xl:justify-end shrink-0">
             <button
               onClick={() => {
-                setTempUrls([...scriptUrls]);
+                if (user) {
+                  setTempUrls(
+                    scriptUrls.filter(
+                      (u) => !u.username || u.username === user.username,
+                    ),
+                  );
+                  setTempSubscribedUsernames([...subscribedUsernames]);
+                }
                 setIsConfigOpen(!isConfigOpen);
               }}
               className="bg-white border border-slate-200 text-slate-700 px-3 py-2 sm:px-4 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-sm whitespace-nowrap shrink-0"
@@ -2612,18 +2897,18 @@ function processSheet(sheet) {
 
       {isConfigOpen && (
         <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col border border-white/20">
+          <div className="bg-white w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col border border-white/20">
             {/* Header Modal */}
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+            <div className="p-5 sm:p-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-teal-50 rounded-xl flex items-center justify-center text-teal-600">
                   <Settings className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-gray-900 text-lg uppercase tracking-tight">
+                  <h3 className="font-black text-gray-900 text-base sm:text-lg uppercase tracking-tight">
                     Gestión de Orígenes UNGET
                   </h3>
-                  <p className="text-xs text-gray-500 font-medium tracking-tight">
+                  <p className="text-[10px] sm:text-xs text-gray-500 font-medium tracking-tight mt-0.5">
                     Configure sus conexiones a Google Apps Script
                   </p>
                 </div>
@@ -2637,222 +2922,441 @@ function processSheet(sheet) {
                 }}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-900"
               >
-                <X className="h-6 w-6" />
+                <X className="h-5 w-5 sm:h-6 sm:w-6" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 lg:p-8">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                  <div className="bg-gray-50 border border-gray-200 rounded-3xl p-6">
-                    <h4 className="text-sm font-black text-gray-800 mb-4 flex items-center gap-2">
-                      <Plus
-                        className={`h-4 w-4 ${editingIndex !== null ? "text-amber-500" : "text-teal-500"}`}
-                      />
-                      {editingIndex !== null
-                        ? "EDITAR ORÍGEN"
-                        : "AÑADIR NUEVO ORÍGEN"}
-                    </h4>
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-gray-400 ml-1 uppercase">
-                          Nombre Identificador
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Ej: UNGET CENTRO"
-                          value={newNameInput}
-                          onChange={(e) => setNewNameInput(e.target.value)}
-                          className="w-full text-sm rounded-xl border-gray-300 focus:border-teal-500 focus:ring-teal-500 shadow-sm py-2.5 px-4 font-medium"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-gray-400 ml-1 uppercase">
-                          URL Web App (Apps Script)
-                        </label>
-                        <input
-                          type="url"
-                          placeholder="https://script.google.com/..."
-                          value={newUrlInput}
-                          onChange={(e) => setNewUrlInput(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}
-                          className="w-full text-sm rounded-xl border-gray-300 focus:border-teal-500 focus:ring-teal-500 shadow-sm py-2.5 px-4 font-mono text-[11px]"
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleAddUrl}
-                          className={`flex-1 py-2.5 rounded-xl text-white font-bold text-sm transition-all shadow-sm flex items-center justify-center gap-2 ${editingIndex !== null ? "bg-amber-500 hover:bg-amber-600" : "bg-teal-600 hover:bg-teal-700"}`}
-                        >
-                          {editingIndex !== null ? (
-                            <Check className="h-4 w-4" />
-                          ) : (
-                            <Plus className="h-4 w-4" />
-                          )}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-50/40">
+              {(() => {
+                const role = user?.role || "";
+                const r = role.toUpperCase();
+                const isAdminOrRegional =
+                  r === "ADMIN" ||
+                  r === "GLOBAL" ||
+                  r.includes("SUPER") ||
+                  r.includes("GENERAL") ||
+                  r === "ADMINISTRADOR" ||
+                  r.includes("DIRESA") ||
+                  r.includes("OGESS");
+
+                const showJurisdiction = (() => {
+                  if (!isAdminOrRegional) return false;
+                  const jurisdictionUsernames = Array.from(
+                    new Set(
+                      allJurisdictionConfigs
+                        .filter(
+                          (u) =>
+                            u.username && u.username !== user?.username,
+                        )
+                        .map((u) => u.username),
+                    ),
+                  );
+                  return jurisdictionUsernames.length > 0;
+                })();
+
+                return (
+                  <div className="space-y-6 lg:space-y-8 max-w-7xl mx-auto">
+                    {/* ---------- ROW 1: EQUAL HEIGHTS HEADER PANEL ---------- */}
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 lg:gap-8 items-stretch font-sans">
+                      {/* Card: Añadir / Editar Origen */}
+                      <div className="xl:col-span-7">
+                        <div className="bg-white border border-gray-200 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 shadow-sm h-full flex flex-col justify-between">
+                          <div>
+                        <h4 className="text-xs sm:text-sm font-black text-gray-800 mb-4 sm:mb-5 flex items-center gap-2 uppercase tracking-tight">
+                          <Plus
+                            className={`h-5 w-5 ${editingIndex !== null ? "text-amber-500" : "text-teal-600"}`}
+                          />
                           {editingIndex !== null
-                            ? "Actualizar en Lista"
-                            : "Añadir a Lista"}
-                        </button>
-                        {editingIndex !== null && (
-                          <button
-                            onClick={() => {
-                              setEditingIndex(null);
-                              setNewUrlInput("");
-                              setNewNameInput("");
-                            }}
-                            className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all font-bold text-sm"
-                          >
-                            Cancelar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                            ? "Editar Origen Manual"
+                            : "Añadir Origen Manual"}
+                        </h4>
 
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center px-1">
-                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">
-                        Lista de Conexiones ({tempUrls.length})
-                      </h4>
-                      {maxUrlsAllowed && (
-                        <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">
-                          Límite: {maxUrlsAllowed}
-                        </span>
-                      )}
-                    </div>
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                      {tempUrls.length > 0 ? (
-                        tempUrls.map((config, idx) => (
-                          <div
-                            key={idx}
-                            className={`group flex gap-3 items-center bg-white border p-3 rounded-2xl transition-all shadow-sm ${editingIndex === idx ? "border-amber-500 bg-amber-50/30" : "border-gray-100 hover:border-gray-200"}`}
-                          >
-                            <div
-                              className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${editingIndex === idx ? "bg-amber-100 text-amber-600" : "bg-gray-50 text-gray-400"}`}
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black text-gray-400 ml-1 uppercase tracking-wider">
+                                Nombre de la UNGET
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="Ej: UNGET CENTRO"
+                                value={newNameInput}
+                                onChange={(e) =>
+                                  setNewNameInput(e.target.value)
+                                }
+                                className="w-full text-xs sm:text-sm rounded-xl border-gray-200 focus:border-teal-500 focus:ring-teal-500 shadow-sm py-2.5 px-3 font-bold text-gray-700 bg-gray-50/50"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black text-gray-400 ml-1 uppercase tracking-wider">
+                                URL Web App (Apps Script)
+                              </label>
+                              <input
+                                type="url"
+                                placeholder="https://script.google.com/..."
+                                value={newUrlInput}
+                                onChange={(e) => setNewUrlInput(e.target.value)}
+                                onKeyDown={(e) =>
+                                  e.key === "Enter" && handleAddUrl()
+                                }
+                                className="w-full text-[10px] sm:text-xs rounded-xl border-gray-200 focus:border-teal-500 focus:ring-teal-500 shadow-sm py-2.5 px-3 font-mono bg-gray-50/50"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2.5 pt-1">
+                            <button
+                              onClick={handleAddUrl}
+                              className={`flex-1 py-2.5 rounded-xl text-white font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 ${editingIndex !== null ? "bg-amber-500 shadow-amber-500/20 hover:bg-amber-600 hover:shadow-amber-600/30" : "bg-teal-600 shadow-teal-600/20 hover:bg-teal-700 hover:shadow-teal-700/30"}`}
                             >
-                              <LinkIcon className="h-4 w-4" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-black text-gray-800 truncate uppercase">
-                                {config.name}
-                              </div>
-                              <div className="text-[9px] text-gray-400 truncate font-mono">
-                                {config.url}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1">
+                              {editingIndex !== null ? (
+                                <Check className="h-3.5 w-3.5" />
+                              ) : (
+                                <Plus className="h-3.5 w-3.5" />
+                              )}
+                              {editingIndex !== null
+                                ? "Actualizar en Lista"
+                                : "Añadir a Lista"}
+                            </button>
+                            {editingIndex !== null && (
                               <button
-                                onClick={(e) => handleEditUrl(idx, e)}
-                                className={`p-1.5 rounded-lg transition-colors ${editingIndex === idx ? "text-amber-600 bg-white" : "text-gray-400 hover:bg-gray-100 hover:text-blue-600"}`}
-                                title="Editar"
+                                onClick={() => {
+                                  setEditingIndex(null);
+                                  setNewUrlInput("");
+                                  setNewNameInput("");
+                                }}
+                                className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all font-bold text-[10px] sm:text-xs uppercase tracking-wider"
                               >
-                                <Settings className="h-4 w-4" />
+                                Cancelar
                               </button>
-                              <button
-                                onClick={() => handleRemoveUrl(idx)}
-                                className="p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
-                                title="Quitar"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                          <LinkIcon className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                          <p className="text-xs font-bold text-gray-400">
-                            No hay orígenes en la lista
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="bg-blue-50/50 border border-blue-100 rounded-[2rem] p-6 h-full flex flex-col">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-black">
-                        ?
-                      </div>
-                      <h4 className="text-sm font-black text-blue-900 uppercase">
-                        ¿Cómo obtener la URL?
-                      </h4>
-                    </div>
-                    <div className="flex-1 space-y-4">
-                      <div className="space-y-4 text-[11px] text-blue-800 font-medium leading-relaxed">
-                        <div className="flex gap-3">
-                          <div className="w-5 h-5 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0 font-black">
-                            1
-                          </div>
-                          <p>
-                            Cree un Nuevo Proyecto en{" "}
-                            <a
-                              href="https://script.google.com"
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-black underline decoration-2"
-                            >
-                              script.google.com
-                            </a>{" "}
-                            con el código adjunto.
-                          </p>
-                        </div>
-                        <div className="flex gap-3">
-                          <div className="w-5 h-5 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0 font-black">
-                            2
-                          </div>
-                          <p>
-                            Click en{" "}
-                            <span className="font-black">
-                              Implementar &gt; Nueva Implementación
-                            </span>
-                            .
-                          </p>
-                        </div>
-                        <div className="flex gap-3">
-                          <div className="w-5 h-5 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0 font-black">
-                            3
-                          </div>
-                          <p>
-                            Tipo:{" "}
-                            <span className="font-black text-blue-900">
-                              Aplicación Web
-                            </span>
-                            , Acceso:{" "}
-                            <span className="bg-blue-900 text-white px-1.5 py-0.5 rounded text-[9px]">
-                              Cualquier persona
-                            </span>
-                            .
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="relative mt-4">
-                        <div className="absolute -top-3 left-4 bg-blue-600 text-[10px] text-white px-2 py-0.5 rounded font-black tracking-wider shadow-sm z-10">
-                          CÓDIGO RECOMENDADO
-                        </div>
-                        <div className="relative pt-2">
-                          <pre className="text-[10px] bg-slate-900 text-slate-300 p-5 rounded-3xl overflow-hidden h-44 overflow-y-auto font-mono scrollbar-thin scrollbar-thumb-slate-700 border border-slate-800 shadow-xl">
-                            {scriptCode}
-                          </pre>
-                          <button
-                            onClick={copyScript}
-                            className="absolute top-5 right-5 bg-white/10 hover:bg-white/20 p-2 rounded-xl text-white backdrop-blur-sm transition-all border border-white/5"
-                          >
-                            {copied ? (
-                              <Check className="h-4 w-4 text-green-400" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
                             )}
+                          </div>
+                        </div>
+                      </div>
+
+                    {/* Instructions Banner */}
+                    <div className="xl:col-span-5">
+                      <div className="bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-800 rounded-[1.5rem] sm:rounded-[2rem] p-5 sm:p-6 shadow-xl shadow-blue-900/10 text-white relative flex flex-col justify-between h-full overflow-hidden">
+                        <div className="absolute right-0 top-0 opacity-[0.07] pointer-events-none transform translate-x-10 -translate-y-10">
+                          <HelpCircle className="w-40 h-40" />
+                        </div>
+                        <div className="relative z-10 flex flex-col justify-between h-full flex-1">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center backdrop-blur-sm shadow-sm ring-1 ring-white/20">
+                                <HelpCircle className="w-4 h-4 text-blue-100" />
+                              </div>
+                              <h3 className="text-xs sm:text-sm font-black uppercase tracking-tight">
+                                Instrucciones de Conexión
+                              </h3>
+                            </div>
+                            <p className="text-blue-100 text-[10px] sm:text-[11px] font-medium leading-relaxed pr-6 mt-1">
+                              Instrucciones rápidas para vincular Google Sheets a esta
+                              plataforma y recuperar información de stocks detallados.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsInstructionModalOpen(true)}
+                            className="bg-white text-blue-700 hover:bg-blue-50 hover:shadow-lg w-full py-2.5 rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-all mt-4"
+                          >
+                            Ver paso a paso
+                            <ArrowRight className="w-3.5 h-3.5 ml-1" />
                           </button>
                         </div>
                       </div>
                     </div>
                   </div>
+
+                  {/* ---------- ROW 2: CONNECTIONS & JURISDICTION ---------- */}
+                  <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 lg:gap-8 items-stretch animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    {/* Card: Lista de conexiones */}
+                    <div className={showJurisdiction ? "xl:col-span-7" : "xl:col-span-12"}>
+                      <div
+                        className={`bg-white border border-gray-200 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-6 shadow-sm flex flex-col h-full ${
+                          isAdminOrRegional
+                            ? "min-h-[300px]"
+                            : "h-auto max-h-[350px]"
+                        }`}
+                      >
+                        <div className="flex flex-wrap gap-2 justify-between items-center mb-4">
+                          <h4 className="text-[10px] sm:text-xs font-black text-gray-400 uppercase tracking-widest">
+                            ORÍGENES CONFIGURADOS (
+                            {tempUrls.length + tempSubscribedUsernames.length})
+                          </h4>
+                          {typeof maxUrlsAllowed === "number" && maxUrlsAllowed > 0 ? (
+                            <span className="text-[9px] font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-1 rounded-full uppercase tracking-widest shrink-0">
+                              Límite de URLs: {maxUrlsAllowed}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-2.5 flex-1 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar max-h-[258px]">
+                          {/* Map subscriptions */}
+                          {tempSubscribedUsernames.map((uName, idx) => {
+                            const uUser = allUsersList.find(
+                              (x) => x.username === uName,
+                            );
+                            const configsOfUser = allJurisdictionConfigs.filter(
+                              (c) => c.username === uName,
+                            );
+                            const configNames = configsOfUser
+                              .map((c) => c.name)
+                              .join(" / ");
+                            const fallbackName = uUser?.personnelData
+                              ? `${uUser.personnelData.firstName} ${uUser.personnelData.lastName}`
+                              : uName;
+                            const nameLabel = configNames || fallbackName;
+
+                            const personnel = uUser?.personnelData || uUser?.personnel;
+                            const personnelFullName = personnel
+                              ? `${personnel.firstName || ""} ${personnel.lastName || ""}`.trim()
+                              : "";
+
+                            return (
+                              <div
+                                key={`sub_${idx}`}
+                                className="group relative flex gap-2 sm:gap-3 items-center bg-gradient-to-r from-teal-50/50 to-emerald-50/40 border border-teal-100 p-3 rounded-2xl transition-all shadow-sm hover:border-teal-200"
+                              >
+                                <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-teal-100/70 text-teal-600 shadow-sm">
+                                  <Building2 className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1 min-w-0 pr-1">
+                                  <div className="text-[10px] sm:text-xs font-extrabold text-teal-900 truncate uppercase mt-0.5 tracking-tight">
+                                    SUCRIPCIÓN ACTIVA: {nameLabel}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                    <div className="flex items-center gap-1 text-teal-700 font-medium text-[8.5px] uppercase tracking-wide">
+                                      <User className="h-2.5 w-2.5 text-teal-400 shrink-0" />
+                                      <span className="truncate max-w-[130px] font-mono">
+                                        {personnelFullName || uName}
+                                      </span>
+                                    </div>
+                                    <span className="text-[8px] text-teal-600 font-extrabold bg-teal-100/60 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                      {configsOfUser.length} URL{configsOfUser.length === 1 ? '' : 'S'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setTempSubscribedUsernames(
+                                      tempSubscribedUsernames.filter(
+                                        (name) => name !== uName,
+                                      ),
+                                    )
+                                  }
+                                  className="p-1.5 sm:p-2 text-teal-600/50 bg-white border border-teal-100 hover:border-red-200 hover:text-red-500 rounded-xl transition-all hover:shadow-sm shrink-0"
+                                  title="Cancelar Suscripción"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
+
+                          {/* Map own URLs */}
+                          {tempUrls.length > 0 ||
+                          tempSubscribedUsernames.length > 0 ? (
+                            tempUrls.map((config, idx) => (
+                              <div
+                                key={idx}
+                                className={`group relative flex gap-2 sm:gap-3 items-center border p-3 rounded-2xl transition-all duration-200 shadow-sm ${
+                                  editingIndex === idx
+                                    ? "border-amber-400 bg-amber-50/40 shadow-md shadow-amber-500/5"
+                                    : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-md hover:shadow-slate-500/5"
+                                }`}
+                              >
+                                <div
+                                  className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
+                                    editingIndex === idx
+                                      ? "bg-amber-100 text-amber-600 border border-amber-200/50"
+                                      : "bg-slate-50 border border-slate-100 text-slate-400"
+                                  }`}
+                                >
+                                  <LinkIcon className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1 min-w-0 pr-1">
+                                  <div className="text-[10px] sm:text-xs font-black text-slate-800 truncate uppercase mt-0.5 tracking-tight">
+                                    {config.name}
+                                  </div>
+                                  <div className="text-[8.5px] sm:text-[9.5px] text-slate-400 truncate font-mono mt-1 flex items-center gap-1 border-b border-transparent group-hover:border-slate-100 pb-0.5 max-w-[240px] md:max-w-xs xl:max-w-none">
+                                    {config.url}
+                                  </div>
+                                  {config.username &&
+                                    config.username !== user?.username && (
+                                      <div className="text-[8px] font-extrabold text-teal-700 bg-teal-50 border border-teal-100/60 px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 uppercase tracking-tight mt-1.5">
+                                        <User className="h-2 w-2 text-teal-400" />
+                                        Asociado a: {config.username}
+                                      </div>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleEditUrl(idx, e)}
+                                    className={`p-1.5 sm:p-2 rounded-xl border transition-all ${
+                                      editingIndex === idx
+                                        ? "border-amber-200 text-amber-600 bg-amber-50/50 shadow-sm"
+                                        : "border-slate-100 bg-slate-50 text-slate-400 hover:border-blue-200 hover:bg-blue-50/50 hover:text-blue-600 hover:shadow-sm"
+                                    }`}
+                                    title="Editar Origen"
+                                  >
+                                    <Settings className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveUrl(idx)}
+                                    className="p-1.5 sm:p-2 border border-slate-100 bg-slate-50 text-slate-400 hover:border-red-200 hover:bg-red-50/50 hover:text-red-500 rounded-xl transition-all hover:shadow-sm"
+                                    title="Eliminar Origen"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="py-8 sm:py-10 text-center bg-slate-50/80 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center">
+                              <div className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center mb-3">
+                                <LinkIcon className="h-5 w-5 text-slate-300" />
+                              </div>
+                              <h4 className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-widest">
+                                La lista está vacía
+                              </h4>
+                              <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium max-w-[200px] mt-1.5 leading-relaxed">
+                                Añada nuevos orígenes manualmente arriba.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ---------- JURISDICTION COLUMN ---------- */}
+                    {showJurisdiction && (
+                      <div className="xl:col-span-5">
+                        {(() => {
+                          const jurisdictionUsernames = Array.from(
+                            new Set(
+                              allJurisdictionConfigs
+                                .filter(
+                                  (u) =>
+                                    u.username && u.username !== user?.username,
+                                )
+                                .map((u) => u.username),
+                            ),
+                          );
+
+                          return (
+                            <div className="bg-white border border-gray-200 rounded-[1.5rem] sm:rounded-[2rem] p-4 sm:p-5 shadow-sm flex flex-col h-full">
+                            <div className="flex items-center gap-2.5 mb-2">
+                              <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+                                <Building2 className="w-4 h-4" />
+                              </div>
+                              <h4 className="text-[10px] sm:text-xs font-black text-slate-800 uppercase tracking-tight">
+                                Directorio de Jurisdicción
+                              </h4>
+                            </div>
+                            <p className="text-[9px] sm:text-[10px] font-medium text-slate-500 mb-3 leading-relaxed">
+                              Suscríbase a las entidades de su jurisdicción para
+                              poder ver el stock de cada UNGET.
+                            </p>
+
+                            <div className="space-y-2 max-h-[258px] overflow-y-auto pr-1.5 custom-scrollbar">
+                              {jurisdictionUsernames.map((uName, idx) => {
+                                const isAdded =
+                                  tempSubscribedUsernames.includes(uName);
+                                const uUser = allUsersList.find(
+                                  (x) => x.username === uName,
+                                );
+                                const configsOfUser =
+                                  allJurisdictionConfigs.filter(
+                                    (c) => c.username === uName,
+                                  );
+
+                                const configNames = configsOfUser
+                                  .map((c) => c.name)
+                                  .join(" / ");
+                                const fallbackName = uUser?.personnelData
+                                  ? `${uUser.personnelData.firstName} ${uUser.personnelData.lastName}`
+                                  : uName;
+                                const nameLabel = configNames || fallbackName;
+
+                                const personnel = uUser?.personnelData || uUser?.personnel;
+                                const personnelFullName = personnel
+                                  ? `${personnel.firstName || ""} ${personnel.lastName || ""}`.trim()
+                                  : "";
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className={`relative flex items-center justify-between p-2.5 sm:p-3 rounded-2xl border transition-all duration-200 ${
+                                      isAdded
+                                        ? "bg-slate-50 border-slate-100 opacity-60"
+                                        : "bg-white border-slate-200 hover:border-teal-300 hover:shadow-md hover:shadow-teal-500/5 group"
+                                    }`}
+                                  >
+                                    <div className="flex flex-col min-w-0 flex-1 pr-2">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div
+                                          className="text-[11px] sm:text-xs font-extrabold text-slate-800 truncate uppercase tracking-tight"
+                                          title={nameLabel}
+                                        >
+                                          {nameLabel}
+                                        </div>
+                                        <div className="shrink-0 flex items-center gap-1 bg-teal-50 text-teal-700 border border-teal-100/60 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider">
+                                          <span className="w-1 h-1 bg-teal-500 rounded-full animate-pulse"></span>
+                                          {configsOfUser.length} {configsOfUser.length === 1 ? 'URL' : 'URLs'}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                        <div className="flex items-center gap-1 bg-slate-50 border border-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider">
+                                          <User className="h-2.5 w-2.5 shrink-0 text-slate-400" />
+                                          <span className="truncate max-w-[240px] font-sans">
+                                            {personnelFullName || uName}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      disabled={isAdded}
+                                      onClick={() => {
+                                        setTempSubscribedUsernames([
+                                          ...tempSubscribedUsernames,
+                                          uName,
+                                        ]);
+                                      }}
+                                      className={`shrink-0 ml-2 px-3.5 py-2 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1 ${
+                                        isAdded
+                                          ? "bg-slate-100 text-slate-400 border border-slate-200/50"
+                                          : "bg-teal-50 border border-teal-200/60 text-teal-700 hover:bg-teal-600 hover:text-white hover:border-teal-600 shadow-sm"
+                                      }`}
+                                    >
+                                      {isAdded ? (
+                                        <>
+                                          <Check className="h-3 w-3" />
+                                          <span>Suscrito</span>
+                                        </>
+                                      ) : (
+                                        <span>Suscribirse</span>
+                                      )}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
+                );
+              })()}
             </div>
 
             {/* Footer Modal */}
@@ -2868,11 +3372,164 @@ function processSheet(sheet) {
               </button>
               <button
                 onClick={handleSaveConfig}
-                disabled={isLoading || tempUrls.length === 0}
+                disabled={isLoading}
                 className="bg-teal-600 text-white px-8 py-2.5 rounded-2xl text-sm font-black hover:bg-teal-700 transition-all shadow-lg shadow-teal-600/20 flex items-center gap-2 disabled:opacity-50"
               >
                 <Save className="h-4 w-4" />
                 GUARDAR Y SINCRONIZAR CAMBIOS
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* INSTRUCTIONS MODAL */}
+      {isInstructionModalOpen && (
+        <div className="fixed inset-0 z-[10000000] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-2xl overflow-hidden rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col border border-white/20">
+            {/* Header Modal with Gradient */}
+            <div className="p-6 sm:p-8 bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-800 text-white relative flex items-center justify-between overflow-hidden">
+              <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-10 -translate-y-10">
+                <HelpCircle className="w-48 h-48" />
+              </div>
+              <div className="flex items-center gap-4 relative z-10">
+                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-blue-50 backdrop-blur-sm border border-white/20">
+                  <HelpCircle className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-white text-lg sm:text-xl uppercase tracking-tight">
+                    ¿Cómo obtener la URL?
+                  </h3>
+                  <p className="text-xs sm:text-sm text-blue-100 font-medium tracking-tight mt-1">
+                    Guía de conexión paso a paso para Google Apps Script
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsInstructionModalOpen(false)}
+                className="p-2.5 sm:p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white active:scale-95 relative z-10"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 sm:p-8 overflow-y-auto max-h-[70vh] bg-slate-50/50">
+              <div className="space-y-6 text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+                <div className="flex gap-4">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0 font-black text-blue-700 text-lg shadow-sm">
+                    1
+                  </div>
+                  <div>
+                    <p className="mt-1 sm:mt-1.5 font-bold uppercase tracking-tight text-slate-800">
+                      Crear Proyecto
+                    </p>
+                    <p className="text-slate-500 mt-1">
+                      Ingrese a{" "}
+                      <a
+                        href="https://script.google.com"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 font-black hover:underline decoration-2"
+                      >
+                        script.google.com
+                      </a>{" "}
+                      con la cuenta donde tiene sus archivos Excel (Google
+                      Sheets). Cree un "Nuevo Proyecto" y pegue el código
+                      adjunto borrando lo que haya.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0 font-black text-blue-700 text-lg shadow-sm">
+                    2
+                  </div>
+                  <div>
+                    <p className="mt-1 sm:mt-1.5 font-bold uppercase tracking-tight text-slate-800">
+                      Implementar
+                    </p>
+                    <p className="text-slate-500 mt-1">
+                      En la parte superior derecha, haga click en el botón azul{" "}
+                      <span className="font-black bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 border border-slate-200/60">
+                        Implementar
+                      </span>{" "}
+                      y luego seleccione{" "}
+                      <span className="font-black bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 border border-slate-200/60">
+                        Nueva Implementación
+                      </span>
+                      .
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0 font-black text-blue-700 text-lg shadow-sm">
+                    3
+                  </div>
+                  <div>
+                    <p className="mt-1 sm:mt-1.5 font-bold uppercase tracking-tight text-slate-800">
+                      Configurar Permisos
+                    </p>
+                    <p className="text-slate-500 mt-1">
+                      En Tipo, haga click en el engranaje "⚙️" y elija{" "}
+                      <span className="font-black text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                        Aplicación Web
+                      </span>
+                      .<br />
+                      En la sección Seguridad (Acceso), cambie a{" "}
+                      <span className="font-black text-white bg-slate-800 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">
+                        Cualquier persona
+                      </span>{" "}
+                      y presione el botón "Implementar".
+                      <br />
+                      <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2.5 py-1.5 rounded-lg inline-block mt-3 border border-amber-200/50 leading-relaxed shadow-sm">
+                        Nota: Al autorizar, Google mostrará una advertencia.
+                        Haga click en "Avanzado" e "Ir al proyecto".
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="relative mt-8 group">
+                  <div className="absolute -top-3 left-6 bg-slate-800 text-[10px] text-white px-3.5 py-1 rounded-full font-black tracking-widest shadow-sm z-10 uppercase">
+                    CÓDIGO RECOMENDADO
+                  </div>
+                  <div className="relative pt-3 border border-slate-200 rounded-[1.5rem] bg-slate-900 shadow-xl overflow-hidden">
+                    <pre className="text-[11px] text-slate-300 p-6 sm:p-8 h-56 overflow-y-auto font-mono scrollbar-thin scrollbar-thumb-slate-700">
+                      {scriptCode}
+                    </pre>
+                    <button
+                      onClick={copyScript}
+                      className="absolute top-6 right-6 bg-white/10 hover:bg-white/20 p-2.5 rounded-xl text-white backdrop-blur-sm transition-all border border-white/10 flex items-center gap-2 hover:scale-105 active:scale-95"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-4 w-4 text-green-400" />
+                          <span className="text-[10px] font-bold text-green-400 tracking-wider">
+                            COPIADO
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4" />
+                          <span className="text-[10px] font-bold hidden sm:inline-block tracking-wider">
+                            COPIAR SCRIPT
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-5 sm:p-6 border-t border-slate-100 bg-white flex items-center justify-end">
+              <button
+                onClick={() => setIsInstructionModalOpen(false)}
+                className="bg-blue-600 text-white hover:bg-blue-700 px-8 py-3 rounded-2xl text-xs sm:text-sm font-black transition-all shadow-md hover:shadow-lg hover:shadow-blue-600/20 active:scale-95 uppercase tracking-wide"
+              >
+                Entendido, Cerrar
               </button>
             </div>
           </div>
@@ -2886,7 +3543,9 @@ function processSheet(sheet) {
         </div>
       )}
 
-      <div className={`bg-white sm:rounded-[1.25rem] border-y sm:border border-slate-200 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden mx-0 sm:mx-10 lg:mx-14 xl:mx-16 ${viewLevel === "data" ? "h-auto shrink-0 mb-8" : "flex-1 min-h-[300px]"}`}>
+      <div
+        className={`bg-white sm:rounded-[1.25rem] border-y sm:border border-slate-200 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden mx-0 sm:mx-10 lg:mx-14 xl:mx-16 ${viewLevel === "data" ? "h-auto shrink-0 mb-8" : "flex-1 min-h-[300px]"}`}
+      >
         {/* TOOLBAR */}
         <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col gap-4">
           {/* Search & Actions */}
@@ -3184,7 +3843,9 @@ function processSheet(sheet) {
               </button>
             </div>
           ) : (
-            <div className={`p-4 sm:p-6 flex flex-col gap-6 ${viewLevel === "data" ? "pb-4 sm:pb-4" : "pb-32 sm:pb-6"}`}>
+            <div
+              className={`p-4 sm:p-6 flex flex-col gap-6 ${viewLevel === "data" ? "pb-4 sm:pb-4" : "pb-32 sm:pb-6"}`}
+            >
               {/* LEVEL 1: UNGET CARDS */}
               {viewLevel === "ungets" && (
                 <div className="animate-in fade-in zoom-in-95 duration-300">
@@ -3202,32 +3863,35 @@ function processSheet(sheet) {
                             className="group bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer relative overflow-hidden"
                           >
                             {/* Botones de acción rápidos */}
-                            <div className="absolute top-4 right-4 flex items-center gap-2 opacity-100 sm:opacity-40 group-hover:opacity-100 transition-opacity z-10">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleDirectEdit(originalIdx, e);
-                                }}
-                                className="p-1.5 sm:p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all"
-                                title="Editar conexión"
-                              >
-                                <Settings className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleDirectDelete(originalIdx, e);
-                                }}
-                                className="p-1.5 sm:p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 transition-all"
-                                title="Eliminar conexión"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
+                            {(!config.username ||
+                              config.username === user?.username) && (
+                              <div className="absolute top-4 right-4 flex items-center gap-2 opacity-100 sm:opacity-40 group-hover:opacity-100 transition-opacity z-10">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDirectEdit(originalIdx, e);
+                                  }}
+                                  className="p-1.5 sm:p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all"
+                                  title="Editar conexión"
+                                >
+                                  <Settings className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDirectDelete(originalIdx, e);
+                                  }}
+                                  className="p-1.5 sm:p-2 bg-white/90 backdrop-blur-sm shadow-sm border border-gray-100 rounded-lg text-gray-500 hover:text-red-600 hover:border-red-200 transition-all"
+                                  title="Eliminar conexión"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
 
                             <div className="w-12 h-12 shrink-0 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center sm:mb-4 group-hover:bg-teal-600 group-hover:text-white transition-colors">
                               <Building2 className="h-6 w-6" />
@@ -3547,21 +4211,22 @@ function processSheet(sheet) {
                                     onClick={() => handleSelectSheet(sheet.id)}
                                     className="group relative bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer overflow-hidden"
                                   >
-                                    {lastGlobalSync === null && (isLoading || isSilentSyncing) && (
-                                      <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
-                                        <div className="flex flex-col items-center gap-1.5 p-4">
-                                          <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
-                                            <RefreshCw className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin text-teal-600" />
+                                    {lastGlobalSync === null &&
+                                      (isLoading || isSilentSyncing) && (
+                                        <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
+                                          <div className="flex flex-col items-center gap-1.5 p-4">
+                                            <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
+                                              <RefreshCw className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin text-teal-600" />
+                                            </div>
+                                            <span className="text-[9.5px] sm:text-[10.5px] font-black text-teal-700 uppercase tracking-widest text-center">
+                                              Actualizando...
+                                            </span>
                                           </div>
-                                          <span className="text-[9.5px] sm:text-[10.5px] font-black text-teal-700 uppercase tracking-widest text-center">
-                                            Actualizando...
-                                          </span>
                                         </div>
-                                      </div>
-                                    )}
+                                      )}
                                     <div className="hidden sm:flex absolute top-4 right-4 sm:top-6 sm:right-6 flex-col gap-1.5 items-end z-10 p-1">
                                       {renderSyncStatusPill(
-                                        sheet.lastUpdateTime
+                                        sheet.lastUpdateTime,
                                       )}
                                       {expiredCount > 0 && (
                                         <div
@@ -3606,7 +4271,10 @@ function processSheet(sheet) {
                                     </div>
                                     <div className="flex-1 sm:mb-4 min-w-0">
                                       {(() => {
-                                        const description = sheet.name.replace(/^FARM\s*-\s*/i, "");
+                                        const description = sheet.name.replace(
+                                          /^FARM\s*-\s*/i,
+                                          "",
+                                        );
                                         const code = getAlmCodeForSheet(
                                           sheet.id,
                                           data,
@@ -3738,7 +4406,9 @@ function processSheet(sheet) {
                                                 <div className="flex items-center justify-between bg-white border border-slate-200/80 shadow-sm rounded-lg p-2">
                                                   <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[10.5px]">
                                                     <FileClock className="h-3.5 w-3.5" />
-                                                    <span>Historial de cambios</span>
+                                                    <span>
+                                                      Historial de cambios
+                                                    </span>
                                                   </div>
                                                   <div className="flex items-center gap-1.5 text-teal-600 bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
                                                     <RefreshCw className="h-3 w-3 animate-spin" />
@@ -3756,7 +4426,9 @@ function processSheet(sheet) {
                                                 <div className="flex items-center justify-between bg-white border border-slate-200/80 shadow-sm rounded-lg p-2">
                                                   <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[10.5px]">
                                                     <FileClock className="h-3.5 w-3.5" />
-                                                    <span>Historial de cambios</span>
+                                                    <span>
+                                                      Historial de cambios
+                                                    </span>
                                                   </div>
                                                   <span className="bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded font-extrabold uppercase text-[9px] tracking-wide">
                                                     Sin verificar
@@ -3860,18 +4532,19 @@ function processSheet(sheet) {
                                     onClick={() => handleSelectSheet(sheet.id)}
                                     className="group relative bg-white border border-gray-200 p-4 sm:p-5 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left w-full cursor-pointer overflow-hidden"
                                   >
-                                    {lastGlobalSync === null && (isLoading || isSilentSyncing) && (
-                                      <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
-                                        <div className="flex flex-col items-center gap-1.5 p-4">
-                                          <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
-                                            <RefreshCw className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin text-teal-600" />
+                                    {lastGlobalSync === null &&
+                                      (isLoading || isSilentSyncing) && (
+                                        <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
+                                          <div className="flex flex-col items-center gap-1.5 p-4">
+                                            <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
+                                              <RefreshCw className="h-4.5 w-4.5 sm:h-5 sm:w-5 animate-spin text-teal-600" />
+                                            </div>
+                                            <span className="text-[9.5px] sm:text-[10.5px] font-black text-teal-700 uppercase tracking-widest text-center">
+                                              Actualizando...
+                                            </span>
                                           </div>
-                                          <span className="text-[9.5px] sm:text-[10.5px] font-black text-teal-700 uppercase tracking-widest text-center">
-                                            Actualizando...
-                                          </span>
                                         </div>
-                                      </div>
-                                    )}
+                                      )}
                                     <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-4 w-full">
                                       {/* Column 1: Hospital Info & Status (Flexible width) */}
                                       <div className="flex items-center gap-3 md:gap-4 flex-[1_1_240px] min-w-[200px]">
@@ -4052,18 +4725,19 @@ function processSheet(sheet) {
                                     onClick={() => handleSelectSheet(sheet.id)}
                                     className="group relative bg-white border border-gray-200 p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col justify-between h-full min-h-[175px] cursor-pointer overflow-hidden"
                                   >
-                                    {lastGlobalSync === null && (isLoading || isSilentSyncing) && (
-                                      <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
-                                        <div className="flex flex-col items-center gap-1.5 p-4">
-                                          <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
-                                            <RefreshCw className="h-4 w-4 animate-spin text-teal-600" />
+                                    {lastGlobalSync === null &&
+                                      (isLoading || isSilentSyncing) && (
+                                        <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px] flex flex-col items-center justify-center z-30 transition-all duration-300 rounded-xl sm:rounded-2xl">
+                                          <div className="flex flex-col items-center gap-1.5 p-4">
+                                            <div className="p-2 bg-teal-50 text-teal-600 rounded-xl shrink-0">
+                                              <RefreshCw className="h-4 w-4 animate-spin text-teal-600" />
+                                            </div>
+                                            <span className="text-[9px] font-black text-teal-700 uppercase tracking-widest text-center">
+                                              Actualizando...
+                                            </span>
                                           </div>
-                                          <span className="text-[9px] font-black text-teal-700 uppercase tracking-widest text-center">
-                                            Actualizando...
-                                          </span>
                                         </div>
-                                      </div>
-                                    )}
+                                      )}
                                     <div className="w-full">
                                       {/* Compact Top Row: SISMED code with Establishment style icon, and stats/status dot on the right */}
                                       <div className="flex items-center justify-between mb-3.5">
@@ -4182,18 +4856,20 @@ function processSheet(sheet) {
                             <div
                               className={`bg-white rounded-2xl border border-slate-200/50 relative overflow-hidden ${isTableFullscreen ? "shadow-lg border-slate-200/60 m-1 sm:m-2" : "shadow-sm animate-in fade-in duration-200"}`}
                             >
-                              {lastGlobalSync === null && (isLoading || isSilentSyncing) && (
-                                <div className="absolute inset-0 bg-white/85 backdrop-blur-[1.5px] flex flex-col items-center justify-center z-30 transition-all duration-300">
-                                  <div className="flex flex-col items-center gap-2 p-6">
-                                    <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl shrink-0 shadow-xs">
-                                      <RefreshCw className="h-6 w-6 animate-spin text-teal-600" />
+                              {lastGlobalSync === null &&
+                                (isLoading || isSilentSyncing) && (
+                                  <div className="absolute inset-0 bg-white/85 backdrop-blur-[1.5px] flex flex-col items-center justify-center z-30 transition-all duration-300">
+                                    <div className="flex flex-col items-center gap-2 p-6">
+                                      <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl shrink-0 shadow-xs">
+                                        <RefreshCw className="h-6 w-6 animate-spin text-teal-600" />
+                                      </div>
+                                      <span className="text-xs font-black text-teal-700 uppercase tracking-widest text-center">
+                                        Actualizando listado de
+                                        establecimientos...
+                                      </span>
                                     </div>
-                                    <span className="text-xs font-black text-teal-700 uppercase tracking-widest text-center">
-                                      Actualizando listado de establecimientos...
-                                    </span>
                                   </div>
-                                </div>
-                              )}
+                                )}
                               <div className="overflow-auto scrollbar-thin">
                                 <table className="min-w-full divide-y divide-slate-100 text-left font-sans">
                                   <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-wider shadow-[0_1px_0_0_rgba(226,232,240,0.8)]">
@@ -6624,22 +7300,32 @@ function processSheet(sheet) {
 
                   {/* Filter Section: Update Date Limit */}
                   {renderRangeFilter(
-                    filterDateUnit, setFilterDateUnit,
-                    filterDateValue, setFilterDateValue,
-                    filterDateCondition, setFilterDateCondition,
+                    filterDateUnit,
+                    setFilterDateUnit,
+                    filterDateValue,
+                    setFilterDateValue,
+                    filterDateCondition,
+                    setFilterDateCondition,
                     "Antigüedad de Sincronización",
-                    "ACT.", "NO ACT.",
-                    "ACTUALIZADOS", "NO ACTUALIZADOS"
+                    "ACT.",
+                    "NO ACT.",
+                    "ACTUALIZADOS",
+                    "NO ACTUALIZADOS",
                   )}
 
                   {/* Filter Section: Movements Date Limit */}
                   {renderRangeFilter(
-                    filterMovementsUnit, setFilterMovementsUnit,
-                    filterMovementsValue, setFilterMovementsValue,
-                    filterMovementsCondition, setFilterMovementsCondition,
+                    filterMovementsUnit,
+                    setFilterMovementsUnit,
+                    filterMovementsValue,
+                    setFilterMovementsValue,
+                    filterMovementsCondition,
+                    setFilterMovementsCondition,
                     "Antigüedad de Últimos Movimientos",
-                    "CON MOV.", "SIN MOV.",
-                    "CON MOVIMIENTOS", "SIN MOVIMIENTOS"
+                    "CON MOV.",
+                    "SIN MOV.",
+                    "CON MOVIMIENTOS",
+                    "SIN MOVIMIENTOS",
                   )}
 
                   {/* Filter Section: Sorting */}
@@ -7252,12 +7938,17 @@ function processSheet(sheet) {
 
               {/* Section: Update Date Limit */}
               {renderRangeFilter(
-                exportDateUnit, setExportDateUnit,
-                exportDateValue, setExportDateValue,
-                exportDateCondition, setExportDateCondition,
+                exportDateUnit,
+                setExportDateUnit,
+                exportDateValue,
+                setExportDateValue,
+                exportDateCondition,
+                setExportDateCondition,
                 "Antigüedad de Sincronización",
-                "ACT.", "NO ACT.",
-                "ACTUALIZADOS", "NO ACTUALIZADOS"
+                "ACT.",
+                "NO ACT.",
+                "ACTUALIZADOS",
+                "NO ACTUALIZADOS",
               )}
 
               {/* Section: Expirations filter */}

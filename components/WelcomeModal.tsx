@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { User } from '../types';
 import { Sparkles, ArrowRight, ShieldCheck, Building2, Calendar, Layers } from 'lucide-react';
+import { api } from '../services/api';
 
 interface WelcomeModalProps {
   user: User;
@@ -12,6 +13,8 @@ interface WelcomeModalProps {
 export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => {
   const [greeting, setGreeting] = useState('');
   const [show, setShow] = useState(false);
+  const [jurisdictionName, setJurisdictionName] = useState<string>('Cargando...');
+  const [jurisdictionLabel, setJurisdictionLabel] = useState<string>('Establecimiento Activo');
 
   useEffect(() => {
     // Trigger animation after mount
@@ -23,6 +26,170 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
     else if (hour < 18) setGreeting('Buenas tardes');
     else setGreeting('Buenas noches');
   }, []);
+
+  useEffect(() => {
+    const resolveJurisdiction = async () => {
+      try {
+        const p = user.personnelData;
+        if (!p) {
+          setJurisdictionLabel('Establecimiento Activo');
+          setJurisdictionName(user.facilityData?.name || 'Red de Salud');
+          return;
+        }
+
+        // Get Role Configurations to find exact jurisdictionLevel
+        const roles = await api.getRolesConfig();
+        const userRoleConfig = roles.find(r => r.role === user.role);
+        const level = (userRoleConfig?.jurisdictionLevel || user.role || '').toUpperCase();
+
+        if (level === 'GLOBAL' || level === 'ADMIN' || level === 'SUPERADMIN') {
+          setJurisdictionLabel('Jurisdicción');
+          setJurisdictionName('Área Nacional');
+          return;
+        }
+
+        if (level === 'DIRESA' && p.diresaId) {
+          setJurisdictionLabel('DIRESA Activa');
+          const diresas = await api.getDiresas();
+          const found = diresas.find(d => d.id === p.diresaId);
+          if (found) {
+            setJurisdictionName(found.name);
+            return;
+          }
+        }
+
+        if (level === 'OGESS' && p.ogessId) {
+          setJurisdictionLabel('OGESS Activa');
+          const ogess = await api.getOgess();
+          const found = ogess.find(o => o.id === p.ogessId);
+          if (found) {
+            setJurisdictionName(found.name);
+            return;
+          }
+        }
+
+        if (level === 'UNGET' && p.ungetId) {
+          setJurisdictionLabel('UNGET Activa');
+          const ungets = await api.getUngets();
+          const found = ungets.find(u => u.id === p.ungetId);
+          if (found) {
+            setJurisdictionName(found.name);
+            return;
+          }
+        }
+
+        if (level === 'MICRORED' && p.microredId) {
+          setJurisdictionLabel('Microred Activa');
+          const microredes = await api.getMicroredes();
+          const found = microredes.find(m => m.id === p.microredId);
+          if (found) {
+            setJurisdictionName(found.name);
+            return;
+          }
+        }
+
+        // Fallback checks using role name directly if userRoleConfig wasn't explicitly matching level
+        const roleStr = String(user.role).toUpperCase();
+        if (roleStr === 'DIRESA') {
+          setJurisdictionLabel('DIRESA Activa');
+          if (p.diresaId) {
+            const diresas = await api.getDiresas();
+            const found = diresas.find(d => d.id === p.diresaId);
+            if (found) {
+              setJurisdictionName(found.name);
+              return;
+            }
+          }
+        }
+
+        if (roleStr === 'OGESS') {
+          setJurisdictionLabel('OGESS Activa');
+          if (p.ogessId) {
+            const ogess = await api.getOgess();
+            const found = ogess.find(o => o.id === p.ogessId);
+            if (found) {
+              setJurisdictionName(found.name);
+              return;
+            }
+          }
+        }
+
+        if (roleStr === 'UNGET') {
+          setJurisdictionLabel('UNGET Activa');
+          if (p.ungetId) {
+            const ungets = await api.getUngets();
+            const found = ungets.find(u => u.id === p.ungetId);
+            if (found) {
+              setJurisdictionName(found.name);
+              return;
+            }
+          }
+        }
+
+        if (roleStr === 'MICRORED') {
+          setJurisdictionLabel('Microred Activa');
+          if (p.microredId) {
+            const microredes = await api.getMicroredes();
+            const found = microredes.find(m => m.id === p.microredId);
+            if (found) {
+              setJurisdictionName(found.name);
+              return;
+            }
+          }
+        }
+
+        // Catch-all hierarchy fallback matching the deepest available ID
+        if (p.microredId) {
+          setJurisdictionLabel('Microred Activa');
+          const microredes = await api.getMicroredes();
+          const found = microredes.find(m => m.id === p.microredId);
+          if (found) {
+            setJurisdictionName(found.name);
+            return;
+          }
+        }
+
+        if (p.ungetId) {
+          setJurisdictionLabel('UNGET Activa');
+          const ungets = await api.getUngets();
+          const found = ungets.find(u => u.id === p.ungetId);
+          if (found) {
+            setJurisdictionName(found.name);
+            return;
+          }
+        }
+
+        if (p.ogessId) {
+          setJurisdictionLabel('OGESS Activa');
+          const ogess = await api.getOgess();
+          const found = ogess.find(o => o.id === p.ogessId);
+          if (found) {
+            setJurisdictionName(found.name);
+            return;
+          }
+        }
+
+        if (p.diresaId) {
+          setJurisdictionLabel('DIRESA Activa');
+          const diresas = await api.getDiresas();
+          const found = diresas.find(d => d.id === p.diresaId);
+          if (found) {
+            setJurisdictionName(found.name);
+            return;
+          }
+        }
+
+        setJurisdictionLabel('Establecimiento Activo');
+        setJurisdictionName(user.facilityData?.name || p.facilityCode || 'Red de Salud');
+      } catch (err) {
+        console.error("Error resolving jurisdiction", err);
+        setJurisdictionLabel('Establecimiento Activo');
+        setJurisdictionName(user.facilityData?.name || 'Red de Salud');
+      }
+    };
+
+    resolveJurisdiction();
+  }, [user]);
 
   const handleStart = () => {
       setShow(false);
@@ -58,10 +225,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
                     </div>
 
                     {/* Status Badge - Light text for readability */}
-                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-400/10 border border-cyan-400/20 text-cyan-200 text-[11px] font-bold uppercase tracking-wider backdrop-blur-md mb-6 shadow-lg">
-                        <Sparkles className="h-3 w-3 text-cyan-300" />
-                        ToolKit SISMED Web Conectado
-                    </div>
+
 
                     {/* Greeting - White Text */}
                     <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight mb-2 drop-shadow-md">
@@ -87,9 +251,9 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
                             <Building2 className="h-5 w-5 text-gray-700" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-[10px] uppercase text-gray-400 font-bold tracking-wide">Establecimiento Activo</p>
+                            <p className="text-[10px] uppercase text-gray-400 font-bold tracking-wide">{jurisdictionLabel}</p>
                             <p className="text-sm font-bold text-gray-900 truncate">
-                                {user.facilityData?.name || 'Red de Salud'}
+                                {jurisdictionName}
                             </p>
                         </div>
                     </div>
@@ -134,7 +298,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({ user, onClose }) => 
                 
                 <div className="mt-6 flex justify-center">
                      <p className="text-[10px] text-gray-300 font-medium bg-gray-50 px-3 py-1 rounded-full">
-                        v2.6 &bull; Red de Salud Bellavista
+                        v2.1 &bull; ToolKit SISMED
                     </p>
                 </div>
             </div>

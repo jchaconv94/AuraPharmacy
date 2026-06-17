@@ -95,7 +95,58 @@ export const AdminStockAssignmentModule: React.FC = () => {
   const [facilities, setFacilities] = useState<any[]>([]);
   const [ungetConfigs, setUngetConfigs] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Solución de ámbitos organizacionales para segmentar la visualización
+  const userDiresaId = currentUser?.personnelData?.diresaId || currentUser?.facilityData?.diresaId || (currentUser as any)?.diresaId;
+  const userOgessId = currentUser?.personnelData?.ogessId || currentUser?.facilityData?.ogessId || (currentUser as any)?.ogessId;
+  const userUngetId = currentUser?.personnelData?.ungetId || currentUser?.facilityData?.ungetId || (currentUser as any)?.ungetId;
+  const userMicroredId = currentUser?.personnelData?.microredId || currentUser?.facilityData?.microredId || (currentUser as any)?.microredId;
+  const userFacilityCode = currentUser?.personnelData?.facilityCode || currentUser?.facilityData?.code || (currentUser as any)?.facilityCode;
+
+  const getJurisdictionLevel = (): string => {
+    if (!currentUser) return '';
+    const userRole = currentUser.role;
+    const config = roles.find(r => r.role === userRole);
+    if (config?.jurisdictionLevel) {
+      return config.jurisdictionLevel;
+    }
+    const r = (userRole || '').toUpperCase();
+    if (r === 'ADMIN' || r === 'GLOBAL' || r.includes('SUPER') || r.includes('GENERAL') || r === 'ADMINISTRADOR') return 'GLOBAL';
+    if (r.includes('DIRESA')) return 'DIRESA';
+    if (r.includes('OGESS')) return 'OGESS';
+    if (r.includes('UNGET')) return 'UNGET';
+    if (r.includes('MICRORED')) return 'MICRORED';
+    if (r.includes('FARMACIA') || r.includes('IPRESS') || r.includes('PERSONAL')) return 'IPRESS';
+    return '';
+  };
+
+  const getFilteredAssignments = () => {
+    const level = getJurisdictionLevel();
+    return assignments.filter(assig => {
+      const f = facilities.find(fac => fac.code === assig.facilityCode);
+      if (!f) return false;
+
+      if (level === 'GLOBAL') return true;
+      if (level === 'MICRORED' && userMicroredId) return f.microredId === userMicroredId;
+      if (level === 'UNGET' && userUngetId) return f.ungetId === userUngetId;
+      if (level === 'OGESS' && userOgessId) return f.ogessId === userOgessId;
+      if (level === 'DIRESA' && userDiresaId) return f.diresaId === userDiresaId;
+      if (level === 'IPRESS' && userFacilityCode) return f.code === userFacilityCode;
+
+      // Fallback
+      if (userMicroredId) return f.microredId === userMicroredId;
+      if (userUngetId) return f.ungetId === userUngetId;
+      if (userOgessId) return f.ogessId === userOgessId;
+      if (userDiresaId) return f.diresaId === userDiresaId;
+      if (userFacilityCode) return f.code === userFacilityCode;
+
+      return false;
+    });
+  };
+
+  const activeAssignments = getFilteredAssignments();
 
   // Form State
   const [selectedFacilityCode, setSelectedFacilityCode] = useState("");
@@ -123,11 +174,62 @@ export const AdminStockAssignmentModule: React.FC = () => {
         const allFacilities = await api.getFacilities();
         setFacilities(allFacilities);
 
-        const configs = await api.getUngetConfigs(currentUser.username);
+        let configs = [];
+        const role = currentUser.role;
+        let level = '';
+        const r = (role || '').toUpperCase();
+        if (r === 'ADMIN' || r === 'GLOBAL' || r.includes('SUPER') || r.includes('GENERAL') || r === 'ADMINISTRADOR') level = 'GLOBAL';
+        else if (r.includes('DIRESA')) level = 'DIRESA';
+        else if (r.includes('OGESS')) level = 'OGESS';
+        else if (r.includes('UNGET')) level = 'UNGET';
+        else if (r.includes('MICRORED')) level = 'MICRORED';
+        else if (r.includes('FARMACIA') || r.includes('IPRESS') || r.includes('PERSONAL')) level = 'IPRESS';
+
+        const userDiresaId = currentUser.personnelData?.diresaId || currentUser.facilityData?.diresaId || (currentUser as any).diresaId;
+        const userOgessId = currentUser.personnelData?.ogessId || currentUser.facilityData?.ogessId || (currentUser as any).ogessId;
+
+        if (level === 'GLOBAL' || level === 'DIRESA' || level === 'OGESS' || level === 'UNGET' || level === 'MICRORED') {
+          try {
+            const [allConfigs, allUsers] = await Promise.all([
+              api.getAllUngetConfigs(),
+              api.getUsers()
+            ]);
+            
+            configs = allConfigs.filter(config => {
+              if (config.username === currentUser.username) return true;
+              if (level === 'GLOBAL') return true;
+              
+              const creator = allUsers.find(u => u.username === config.username);
+              if (!creator) return false;
+              
+              const creatorDiresaId = creator.personnelData?.diresaId || creator.facilityData?.diresaId || (creator as any).diresaId;
+              const creatorOgessId = creator.personnelData?.ogessId || creator.facilityData?.ogessId || (creator as any).ogessId;
+              const creatorUngetId = creator.personnelData?.ungetId || creator.facilityData?.ungetId || (creator as any).ungetId;
+              const creatorMicroredId = creator.personnelData?.microredId || creator.facilityData?.microredId || (creator as any).microredId;
+              
+              if (level === 'DIRESA' && userDiresaId) return creatorDiresaId === userDiresaId;
+              if (level === 'OGESS' && userOgessId) return creatorOgessId === userOgessId;
+              if (level === 'UNGET' && userUngetId) return creatorUngetId === userUngetId;
+              if (level === 'MICRORED' && userMicroredId) return creatorMicroredId === userMicroredId;
+              return false;
+            });
+          } catch (err) {
+            configs = await api.getUngetConfigs(currentUser.username);
+          }
+        } else {
+          configs = await api.getUngetConfigs(currentUser.username);
+        }
         setUngetConfigs(configs);
 
-        const pastAssignments = await api.getStockAssignmentsByAdmin(currentUser.username);
+        const pastAssignments = await api.getAllStockAssignments();
         setAssignments(pastAssignments);
+
+        try {
+          const allRoles = await api.getRolesConfig();
+          setRoles(allRoles);
+        } catch (roleError) {
+          console.warn("Could not load roles configs, falling back to key checking", roleError);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -304,9 +406,33 @@ export const AdminStockAssignmentModule: React.FC = () => {
                   value={selectedFacilityCode}
                   onChange={setSelectedFacilityCode}
                   placeholder="-- Seleccionar --"
-                  options={facilities
-                    .filter(f => !assignments.map(a => a.facilityCode).includes(f.code) || f.code === selectedFacilityCode)
-                    .map(f => ({ value: f.code, label: `${f.name} (${f.code})` }))}
+                  options={(() => {
+                    const level = getJurisdictionLevel();
+                    return facilities
+                      .filter(f => {
+                        // Excluir si ya está asignado (a menos que estemos editando ese mismo)
+                        const isAssigned = activeAssignments.some(a => a.facilityCode === f.code) && f.code !== selectedFacilityCode;
+                        if (isAssigned) return false;
+
+                        // Filtrar por ámbito/nivel de jurisdicción del usuario
+                        if (level === 'GLOBAL') return true;
+                        if (level === 'MICRORED' && userMicroredId) return f.microredId === userMicroredId;
+                        if (level === 'UNGET' && userUngetId) return f.ungetId === userUngetId;
+                        if (level === 'OGESS' && userOgessId) return f.ogessId === userOgessId;
+                        if (level === 'DIRESA' && userDiresaId) return f.diresaId === userDiresaId;
+                        if (level === 'IPRESS' && userFacilityCode) return f.code === userFacilityCode;
+
+                        // Fallback por jerarquías asignadas
+                        if (userMicroredId) return f.microredId === userMicroredId;
+                        if (userUngetId) return f.ungetId === userUngetId;
+                        if (userOgessId) return f.ogessId === userOgessId;
+                        if (userDiresaId) return f.diresaId === userDiresaId;
+                        if (userFacilityCode) return f.code === userFacilityCode;
+
+                        return false;
+                      })
+                      .map(f => ({ value: f.code, label: `${f.name} (${f.code})` }));
+                  })()}
                 />
                 
                 <SearchableSelect
@@ -326,7 +452,7 @@ export const AdminStockAssignmentModule: React.FC = () => {
                   loading={loadingSheets}
                   options={availableSheets
                     .filter(s => {
-                       const isAssigned = assignments.some(a => a.sheetName === s.name && a.id !== editingId);
+                       const isAssigned = activeAssignments.some(a => a.sheetName === s.name && a.id !== editingId);
                        return !isAssigned;
                     })
                     .map(s => ({ value: s.name, label: s.name }))}
@@ -381,7 +507,7 @@ export const AdminStockAssignmentModule: React.FC = () => {
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 h-full flex flex-col">
               <h3 className="font-semibold text-gray-800 flex items-center gap-2 mb-3 shrink-0">
                 <Shield className="w-4 h-4 text-blue-600" />
-                Asignaciones Activas ({assignments.length})
+                Asignaciones Activas ({activeAssignments.length})
               </h3>
               
               <div className="relative mb-3 shrink-0">
@@ -396,7 +522,7 @@ export const AdminStockAssignmentModule: React.FC = () => {
               </div>
 
               <div className="space-y-3 overflow-y-auto max-h-[320px] pr-2 flex-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-                {assignments.filter(assig => {
+                {activeAssignments.filter(assig => {
                    const facilityName = facilities.find(f => f.code === assig.facilityCode)?.name || "";
                    const fullSearchText = `${assig.facilityCode} ${facilityName} ${assig.sheetName}`.toLowerCase();
                    return fullSearchText.includes(assignmentsSearch.toLowerCase());
@@ -405,7 +531,7 @@ export const AdminStockAssignmentModule: React.FC = () => {
                     {assignmentsSearch ? "No hay coincidencias" : "No hay asignaciones creadas"}
                   </p>
                 ) : (
-                  assignments.filter(assig => {
+                  activeAssignments.filter(assig => {
                    const facilityName = facilities.find(f => f.code === assig.facilityCode)?.name || "";
                    const fullSearchText = `${assig.facilityCode} ${facilityName} ${assig.sheetName}`.toLowerCase();
                    return fullSearchText.includes(assignmentsSearch.toLowerCase());
