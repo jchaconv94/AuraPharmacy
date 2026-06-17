@@ -1429,7 +1429,7 @@ export const AdminOrganizationModule: React.FC = () => {
                                             <table className="w-full text-left text-sm border-collapse">
                                                 <thead>
                                                     <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
-                                                        <th className="p-4 px-6">Razón Social DIRESA</th>
+                                                        <th className="p-4 px-6">DIRESA</th>
                                                         <th className="p-4">RUC</th>
                                                         <th className="p-4">
                                                             {renderHeaderFilter("Distrito", filterDistrict, filterOptions.districts, setFilterDistrict, "diresa-district")}
@@ -1536,7 +1536,7 @@ export const AdminOrganizationModule: React.FC = () => {
                                             <table className="w-full text-left text-sm border-collapse">
                                                 <thead>
                                                     <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
-                                                        <th className="p-4 px-6">Identificación OGESS</th>
+                                                        <th className="p-4 px-6">OGESS</th>
                                                         <th className="p-4">Código / RUC</th>
                                                         <th className="p-4">
                                                             {renderHeaderFilter("Distrito", filterDistrict, filterOptions.districts, setFilterDistrict, "ogess-district")}
@@ -1545,7 +1545,7 @@ export const AdminOrganizationModule: React.FC = () => {
                                                             {renderHeaderFilter("Provincia", filterProvince, filterOptions.provinces, setFilterProvince, "ogess-province")}
                                                         </th>
                                                         <th className="p-4">
-                                                            {renderHeaderFilter("DIRESA Superior", filterDiresaId, [{ value: '', label: 'Todas las DIRESA' }, ...diresas.map(d => ({ value: d.id, label: d.name }))], setFilterDiresaId, "ogess-diresa")}
+                                                            {renderHeaderFilter("DIRESA", filterDiresaId, [{ value: '', label: 'Todas las DIRESA' }, ...diresas.map(d => ({ value: d.id, label: d.name }))], setFilterDiresaId, "ogess-diresa")}
                                                         </th>
                                                         <th className="p-4 text-right pr-6">Acciones</th>
                                                     </tr>
@@ -1643,7 +1643,7 @@ export const AdminOrganizationModule: React.FC = () => {
                                             <table className="w-full text-left text-sm border-collapse">
                                                 <thead>
                                                     <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
-                                                        <th className="p-4 px-6">Razón Social UNGET</th>
+                                                        <th className="p-4 px-6">UNGET</th>
                                                         <th className="p-4">
                                                             {renderHeaderFilter("Distrito", filterDistrict, filterOptions.districts, setFilterDistrict, "unget-district")}
                                                         </th>
@@ -1651,13 +1651,13 @@ export const AdminOrganizationModule: React.FC = () => {
                                                             {renderHeaderFilter("Provincia", filterProvince, filterOptions.provinces, setFilterProvince, "unget-province")}
                                                         </th>
                                                         <th className="p-4">
-                                                            {renderHeaderFilter("OGESS Superior", filterOgessId, [{ value: '', label: 'Todas las OGESS' }, ...ogess.filter(o => !filterDiresaId || o.diresaId === filterDiresaId).map(o => ({ value: o.id, label: o.name }))], (val) => {
+                                                            {renderHeaderFilter("OGESS", filterOgessId, [{ value: '', label: 'Todas las OGESS' }, ...ogess.filter(o => !filterDiresaId || o.diresaId === filterDiresaId).map(o => ({ value: o.id, label: o.name }))], (val) => {
                                                                 setFilterOgessId(val);
                                                                 setFilterUngetId('');
                                                             }, "unget-ogess")}
                                                         </th>
                                                         <th className="p-4">
-                                                            {renderHeaderFilter("DIRESA Red", filterDiresaId, [{ value: '', label: 'Todas las DIRESA' }, ...diresas.map(d => ({ value: d.id, label: d.name }))], (val) => {
+                                                            {renderHeaderFilter("DIRESA", filterDiresaId, [{ value: '', label: 'Todas las DIRESA' }, ...diresas.map(d => ({ value: d.id, label: d.name }))], (val) => {
                                                                 setFilterDiresaId(val);
                                                                 setFilterOgessId('');
                                                                 setFilterUngetId('');
@@ -1761,12 +1761,12 @@ export const AdminOrganizationModule: React.FC = () => {
                                             <table className="w-full text-left text-sm border-collapse">
                                                 <thead>
                                                     <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
-                                                        <th className="p-4 px-6">Identificación Microred</th>
+                                                        <th className="p-4 px-6">Microred</th>
                                                         <th className="p-4">
-                                                            {renderHeaderFilter("UNGET Jerárquica Asignada", filterUngetId, [{ value: '', label: 'Todas las UNGET' }, ...ungets.filter(u => !filterOgessId || u.ogessId === filterOgessId).map(u => ({ value: u.id, label: u.name }))], setFilterUngetId, "microred-unget")}
+                                                            {renderHeaderFilter("UNGET", filterUngetId, [{ value: '', label: 'Todas las UNGET' }, ...ungets.filter(u => !filterOgessId || u.ogessId === filterOgessId).map(u => ({ value: u.id, label: u.name }))], setFilterUngetId, "microred-unget")}
                                                         </th>
                                                         <th className="p-4">
-                                                            {renderHeaderFilter("OGESS Superior", filterOgessId, [{ value: '', label: 'Todas las OGESS' }, ...ogess.filter(o => !filterDiresaId || o.diresaId === filterDiresaId).map(o => ({ value: o.id, label: o.name }))], (val) => {
+                                                            {renderHeaderFilter("OGESS", filterOgessId, [{ value: '', label: 'Todas las OGESS' }, ...ogess.filter(o => !filterDiresaId || o.diresaId === filterDiresaId).map(o => ({ value: o.id, label: o.name }))], (val) => {
                                                                 setFilterOgessId(val);
                                                                 setFilterUngetId('');
                                                             }, "microred-ogess")}
@@ -1873,7 +1873,7 @@ export const AdminOrganizationModule: React.FC = () => {
                                                 <thead>
                                                     <tr className="bg-slate-50/50 text-slate-500 border-b border-slate-100 text-[10px] font-black uppercase tracking-wider">
                                                         <th className="p-4 px-6">Establecimiento de Salud</th>
-                                                        <th className="p-4">Código RENIPRESS</th>
+                                                        <th className="p-4">Código IPRESS</th>
                                                         <th className="p-4">
                                                             {renderHeaderFilter("Categoría", filterCategory, [{ value: '', label: 'Todas' }, ...['I-1', 'I-2', 'I-3', 'I-4', 'II-1', 'II-2', 'III-1'].map(cat => ({ value: cat, label: cat }))], setFilterCategory, "ipress-category")}
                                                         </th>
