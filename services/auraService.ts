@@ -217,43 +217,56 @@ export const analyzeInventoryWithAura = async (
   try {
     const analyzedMedications = inventory.map(analyzeItemLocally);
 
-    // Calculate Indicators
-    const availableItems = analyzedMedications.filter(m => 
-      m.status === StockStatus.NORMOSTOCK || 
-      m.status === StockStatus.SOBRESTOCK || 
-      m.status === StockStatus.SIN_ROTACION
-    ).length;
+    // Indicator 39 Classification
+    const normoCount = analyzedMedications.filter(m => m.status === StockStatus.NORMOSTOCK).length;
+    const sobreCount = analyzedMedications.filter(m => m.status === StockStatus.SOBRESTOCK).length;
+    const desabastecidoCount = analyzedMedications.filter(m => m.status === StockStatus.DESABASTECIDO).length;
+    const subCount = analyzedMedications.filter(m => m.status === StockStatus.SUBSTOCK).length;
+    const sinRotacionCount = analyzedMedications.filter(m => m.status === StockStatus.SIN_ROTACION).length;
+
+    // Evaluated items for indicator (excluding Sin Rotación / Sin Consumo)
+    const evaluatedItemsCount = normoCount + sobreCount + desabastecidoCount + subCount;
+    // Adequate availability (Numerator)
+    const availableItems = normoCount + sobreCount;
+
+    const dmeScore = evaluatedItemsCount > 0 ? (availableItems / evaluatedItemsCount) * 100 : 0;
     
-    const totalItems = analyzedMedications.length;
-    const dmeScore = totalItems > 0 ? (availableItems / totalItems) * 100 : 0;
-    
-    let indicatorStatus: 'OPTIMO' | 'ALTO' | 'REGULAR' | 'BAJO' = 'BAJO';
-    if (dmeScore >= 90) indicatorStatus = 'OPTIMO';
-    else if (dmeScore >= 80) indicatorStatus = 'ALTO';
-    else if (dmeScore >= 70) indicatorStatus = 'REGULAR';
-    else indicatorStatus = 'BAJO';
+    let indicatorStatus: 'ÓPTIMA' | 'ACEPTABLE' | 'EN ALERTA' | 'CRÍTICA' = 'CRÍTICA';
+    let rawStatus: 'OPTIMO' | 'ALTO' | 'REGULAR' | 'BAJO' = 'BAJO';
+
+    if (dmeScore >= 90) { indicatorStatus = 'ÓPTIMA'; rawStatus = 'OPTIMO'; }
+    else if (dmeScore >= 80) { indicatorStatus = 'ACEPTABLE'; rawStatus = 'ALTO'; }
+    else if (dmeScore >= 70) { indicatorStatus = 'EN ALERTA'; rawStatus = 'REGULAR'; }
+    else { indicatorStatus = 'CRÍTICA'; rawStatus = 'BAJO'; }
 
     // Calculate Stats for Summary
     const spikesFound = analyzedMedications.filter(m => m.hasSpikes).length;
-    const itemsDesabastecidos = analyzedMedications.filter(m => m.status === StockStatus.DESABASTECIDO).length;
-    
     const investment = analyzedMedications.reduce((sum, m) => sum + m.estimatedInvestment, 0);
 
-    let summary = `Resumen Ejecutivo Toolkit (${new Date().toLocaleDateString()}):\n\n`;
-    summary += `Se han analizado ${totalItems} ítems. Disponibilidad (DME): ${dmeScore.toFixed(1)}% (${indicatorStatus}).\n\n`;
+    let summary = `ANÁLISIS DE DISPONIBILIDAD (Ficha Técnica Indicador 39)\n\n`;
+    summary += `Se han procesado ${analyzedMedications.length} ítems en total. Para el cálculo del indicador se evaluaron ${evaluatedItemsCount} medicamentos esenciales (excluyendo aquellos sin rotación o sin consumo reciente según normativa).\n\n`;
+    summary += `Disponibilidad de Medicamentos Esenciales (DME): ${dmeScore.toFixed(1)}% — Disponibilidad ${indicatorStatus.toUpperCase()}.\n\n`;
     
+    summary += `Distribución de Stock:\n`;
+    summary += ` • Normostock: ${normoCount} ítems\n`;
+    summary += ` • Sobrestock: ${sobreCount} ítems\n`;
+    summary += ` • Substock: ${subCount} ítems (Riesgo inminente de desabastecimiento)\n`;
+    summary += ` • Desabastecidos: ${desabastecidoCount} ítems (Con CPM > 0 y Stock 0)\n`;
+    summary += ` • Sin Rotación / Consumo nulo: ${sinRotacionCount} ítems (Excluidos de la evaluación)\n\n`;
+
+    summary += `Análisis de Requerimientos y Ajustes (Toolkit):\n`;
     if (spikesFound > 0) {
-        summary += `El sistema ajustó ${spikesFound} ítems con picos atípicos para evitar sobrestock.\n`;
+        summary += `El sistema re-calculó el CPM ajustando ${spikesFound} ítems detectados con picos atípicos de consumo para evitar un sobrestock futuro injustificado.\n`;
     }
-    summary += `Estrategia Baja Rotación (< 6 meses/año): Se asegura cobertura de 3 meses. Esto evita caer en desabastecimiento inmediato tras una salida, manteniéndose en rango Normostock.\n`;
-    summary += `ESTADO: ${itemsDesabastecidos} ítems críticos. Inversión Sugerida: S/ ${investment.toLocaleString('es-PE', { minimumFractionDigits: 2 })}.`;
+    summary += `Estrategia de Baja Rotación: Los ítems con movimiento esporádico (< 6 meses al año) asegurarán una cobertura de 3 meses para evitar desabastecimientos inmediatos.\n`;
+    summary += `Inversión Sugerida para Reabastecimiento del Petitorio: S/ ${investment.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`;
 
     return {
       medications: analyzedMedications,
       indicators: {
         dmeScore,
-        status: indicatorStatus,
-        totalItems,
+        status: rawStatus,
+        totalItems: evaluatedItemsCount, // Total evaluated for indicator
         availableItems
       },
       executiveSummary: summary,

@@ -15,7 +15,8 @@ import {
   Shield,
   Building2,
   Sliders,
-  Briefcase
+  Briefcase,
+  RefreshCw
 } from 'lucide-react';
 import { AppModule, User } from '../types';
 
@@ -281,6 +282,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <ShieldCheck className="h-4 w-4 shrink-0" />
                       Asignar Stock
+                    </button>
+                  )}
+                  {hasPermission('ADMIN_SYNC_DEVICES') && (
+                    <button
+                      onClick={() => setCurrentView('ADMIN_SYNC_DEVICES')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'ADMIN_SYNC_DEVICES'
+                          ? 'text-teal-400 bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <RefreshCw className="h-4 w-4 shrink-0" />
+                      Dispositivos Sync
                     </button>
                   )}
                 </div>

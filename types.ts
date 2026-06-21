@@ -9,6 +9,7 @@ export enum StockStatus {
 
 export interface MedicationInput {
   id: string;
+  code?: string;
   name: string;
   currentStock: number;
   monthlyConsumption: number[]; // Array of last 12 meses
@@ -21,6 +22,7 @@ export interface MedicationInput {
 
 export interface AnalyzedMedication {
   id: string; 
+  code?: string;
   name: string;
   currentStock: number; 
   unitPrice: number;
@@ -85,6 +87,10 @@ export interface AuraAnalysisResult {
   analysisConfig?: {
     vaccinesExcluded: boolean; // Tracks if vaccines were filtered at input
   };
+  microred?: string;
+  codEess?: string;
+  establishmentName?: string;
+  category?: string;
 }
 
 export interface ChartDataPoint {
@@ -96,7 +102,7 @@ export interface ChartDataPoint {
 
 export type UserRole = string;
 
-export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'ADMIN_FACILITIES' | 'ADMIN_PARAMS' | 'ADMIN_MIGRATION' | 'PROFILE' | 'REDISTRIBUTION' | 'SIG_SEARCH' | 'ADMIN_CATALOGS' | 'ADMIN_STOCK_ASSIGN' | 'IPRESS_STOCK';
+export type AppModule = 'DASHBOARD' | 'ANALYSIS' | 'ADMIN_USERS' | 'ADMIN_ROLES' | 'ADMIN_FACILITIES' | 'ADMIN_PARAMS' | 'ADMIN_MIGRATION' | 'PROFILE' | 'REDISTRIBUTION' | 'SIG_SEARCH' | 'ADMIN_CATALOGS' | 'ADMIN_STOCK_ASSIGN' | 'IPRESS_STOCK' | 'ADMIN_SYNC_DEVICES';
 
 export const AVAILABLE_MODULES: { id: AppModule; label: string; description: string }[] = [
   { id: 'DASHBOARD', label: 'Dashboard', description: 'Vista principal y resumen de indicadores' },
@@ -111,6 +117,7 @@ export const AVAILABLE_MODULES: { id: AppModule; label: string; description: str
   { id: 'ADMIN_PARAMS', label: 'Parámetros del Sistema', description: 'Configuraciones generales del sistema' },
   { id: 'ADMIN_MIGRATION', label: 'Migración (Supabase)', description: 'Herramientas de migración de datos' },
   { id: 'ADMIN_STOCK_ASSIGN', label: 'Asignar Stock', description: 'Asignación de vistas de stock a usuarios IPRESS' },
+  { id: 'ADMIN_SYNC_DEVICES', label: 'Dispositivos Sync', description: 'Gestión de dispositivos autorizados de Sync SISMED 2.0' },
   { id: 'PROFILE', label: 'Perfil de Usuario', description: 'Configuración del perfil personal' }
 ];
 

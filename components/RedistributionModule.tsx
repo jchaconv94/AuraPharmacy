@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import localforage from 'localforage';
-import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, ChevronUp, Check, Download, Maximize, Minimize, Edit2, RefreshCw } from 'lucide-react';
+import { Upload, FileSpreadsheet, Search, ArrowRightLeft, Building2, Package, AlertCircle, X, ArrowRight, Merge, Split, CheckCircle2, Circle, Filter, ChevronLeft, ChevronRight, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ClipboardList, Trash2, MousePointerClick, ChevronDown, ChevronUp, Check, Download, Maximize, Minimize, Edit2, RefreshCw, Calendar } from 'lucide-react';
 
 // Hook para persistir estado en localStorage
 function useLocalStorage<T>(key: string, initialValue: T) {
@@ -922,16 +922,18 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
     const [lastMonthYear, setLastMonthYear] = useState<string>(
         `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
     );
+    const [detectedMonthsCount, setDetectedMonthsCount] = useState<number>(12);
 
     const downloadTemplate = () => {
-        const headers = [
-            "RED", "MICRORED", "COD EESS", "ESTABLECIMIENTO", "CAT",
-            "COD PRODUCTO", "PRODUCTO", "F.F", "PRECIO", "TIPO", "PET", "EST",
-            "MES_1", "MES_2", "MES_3", "MES_4", "MES_5", "MES_6",
-            "MES_7", "MES_8", "MES_9", "MES_10", "MES_11", "MES_12",
-            "STOCK"
+        const header = [
+          "RED", "MICRORED", "COD EESS", "ESTABLECIMIENTO", "CAT",
+          "MED COD", "DESCRIPCION DEL PRODUCTO", "MEDFF", "PRECIO",
+          "MEDTIP", "MEDPET", "MEDEST",
+          "MES_1", "MES_2", "MES_3", "MES_4", "MES_5", "MES_6",
+          "MES_7", "MES_8", "MES_9", "MES_10", "MES_11", "MES_12", "STOCK_FIN"
         ];
-        const ws = XLSX.utils.aoa_to_sheet([headers]);
+
+        const ws = XLSX.utils.json_to_sheet([], { header });
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
         XLSX.writeFile(wb, "Plantilla_Disponibilidad.xlsx");
@@ -948,8 +950,60 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
             return;
         }
 
-        setFileToProcess(file);
-        setIsLastMonthModalOpen(true);
+        // Auto-detect month from headers
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const data = ev.target?.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                // Only take the first few rows to find headers quickly
+                const jsonData = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
+                
+                let detectedCount = 12;
+                if (jsonData.length > 0) {
+                    for (let i = 0; i < Math.min(jsonData.length, 5); i++) {
+                        const row = jsonData[i];
+                        if (Array.isArray(row)) {
+                            const numKeys = row.filter(k => /^\d{6}$/.test(String(k).trim())).sort();
+                            if (numKeys.length > 0) {
+                                detectedCount = numKeys.length;
+                                const lastYyyyMm = String(numKeys[numKeys.length - 1]).trim();
+                                const year = lastYyyyMm.substring(0, 4);
+                                const month = lastYyyyMm.substring(4, 6);
+                                setLastMonthYear(`${year}-${month}`);
+                                break;
+                            } else {
+                                const monthNames = [
+                                    ['enero', 'ene', 'mes01', 'mes1'], ['febrero', 'feb', 'mes02', 'mes2'], ['marzo', 'mar', 'mes03', 'mes3'],
+                                    ['abril', 'abr', 'mes04', 'mes4'], ['mayo', 'may', 'mes05', 'mes5'], ['junio', 'jun', 'mes06', 'mes6'],
+                                    ['julio', 'jul', 'mes07', 'mes7'], ['agosto', 'ago', 'mes08', 'mes8'], ['setiembre', 'septiembre', 'set', 'sep', 'mes09', 'mes9'],
+                                    ['octubre', 'oct', 'mes10'], ['noviembre', 'nov', 'mes11'], ['diciembre', 'dic', 'mes12']
+                                ];
+                                
+                                const findKey = (keys: string[]) => row.find(k => typeof k === 'string' && keys.some(key => k.toLowerCase().includes(key.toLowerCase())));
+                                let countFound = 0;
+                                monthNames.forEach(names => {
+                                    if (findKey(names)) countFound++;
+                                });
+                                if (countFound > 0) {
+                                    detectedCount = countFound;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                setDetectedMonthsCount(detectedCount);
+            } catch (err) {
+                // Ignore parsing errors here, it will fallback to current month
+            }
+            
+            setFileToProcess(file);
+            setIsLastMonthModalOpen(true);
+        };
+        reader.readAsBinaryString(file);
     };
 
     const confirmFileProcessing = () => {
@@ -2785,29 +2839,40 @@ export const RedistributionModule: React.FC<RedistributionModuleProps> = ({ onBa
 
                                 {/* Last Month Selection Modal */}
                                 {isLastMonthModalOpen && (
-                                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
-                                        <div className="bg-white p-6 rounded-2xl shadow-xl w-96">
-                                            <h3 className="text-lg font-bold text-gray-900 mb-4">Confirme la Fecha del Reporte</h3>
-                                            <p className="text-sm text-gray-500 mb-6">Para realizar un cálculo preciso, el sistema necesita saber a qué mes corresponde la última columna de datos.</p>
-                                            <div className="mb-6">
-                                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">MES DE CORTE (MES 12)</label>
-                                                <input 
-                                                    type="month"
-                                                    className="w-full p-3 border rounded-lg text-center font-bold text-lg"
-                                                    value={lastMonthYear}
-                                                    onChange={(e) => setLastMonthYear(e.target.value)}
-                                                />
+                                    <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                                        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-t-4 border-teal-600">
+                                            <div className="p-6 sm:p-8 flex flex-col items-center text-center">
+                                                <div className="bg-teal-100 p-4 rounded-full mb-4">
+                                                    <Calendar className="h-8 w-8 text-teal-700" />
+                                                </div>
+                                                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Confirme la Fecha del Reporte</h3>
+                                                <p className="text-xs sm:text-sm text-gray-500 mb-6">Para realizar un cálculo preciso, el sistema necesita saber a qué mes corresponde la última columna de datos.</p>
+                                                
+                                                <div className="w-full bg-gray-50 p-5 rounded-xl border border-gray-200 mb-6 shadow-sm">
+                                                    <label className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center justify-center gap-1 mb-4">
+                                                        MES DE CORTE (MES {detectedMonthsCount})
+                                                    </label>
+                                                    <input 
+                                                        type="month"
+                                                        value={lastMonthYear}
+                                                        onChange={(e) => setLastMonthYear(e.target.value)}
+                                                        className="w-full text-center px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-gray-900 font-bold text-lg shadow-sm bg-white hover:bg-gray-50 transition-colors cursor-pointer cursor-text"
+                                                    />
+                                                </div>
+
+                                                <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg flex gap-3 text-left mb-6 w-full">
+                                                    <span className="text-blue-600 shrink-0">ℹ️</span>
+                                                    <p className="text-xs text-blue-800"><strong>Nota:</strong> Si descargó el reporte hoy, la fecha por defecto suele ser correcta.</p>
+                                                </div>
+                                                
+                                                <button 
+                                                    onClick={confirmFileProcessing}
+                                                    className="w-full py-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 font-bold flex items-center justify-center gap-2 transition-all shadow-md transform hover:scale-[1.02]"
+                                                >
+                                                    <Check className="h-5 w-5" />
+                                                    Confirmar y Cargar Datos
+                                                </button>
                                             </div>
-                                            <div className="bg-blue-50 p-4 rounded-lg mb-6 flex gap-3">
-                                                <span className="text-blue-600">ℹ️</span>
-                                                <p className="text-xs text-blue-800"><strong>Nota:</strong> Si descargó el reporte hoy, la fecha por defecto suele ser correcta.</p>
-                                            </div>
-                                            <button 
-                                                onClick={confirmFileProcessing}
-                                                className="w-full py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-bold flex items-center justify-center gap-2"
-                                            >
-                                                ✓ Confirmar y Cargar Datos
-                                            </button>
                                         </div>
                                     </div>
                                 )}

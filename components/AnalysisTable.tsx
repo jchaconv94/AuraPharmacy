@@ -20,7 +20,8 @@ import {
   ListFilter,
   ShoppingCart,
   Timer,
-  ChevronDown
+  ChevronDown,
+  Play
 } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
 import { ConsumptionModal } from './ConsumptionModal';
@@ -239,6 +240,22 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
     }));
   };
 
+  const handleStartAnalysis = () => {
+    const pendingMedication = filteredItems.find(item => {
+        const isOverstock = item.status === StockStatus.SOBRESTOCK;
+        const isNoRotation = item.status === StockStatus.SIN_ROTACION;
+        const needsReview = !isOverstock && !isNoRotation;
+        const isReviewed = reviewedIds.has(item.id);
+        return needsReview && !isReviewed;
+    });
+
+    if (pendingMedication) {
+        setSelectedMedicationId(pendingMedication.id);
+    } else if (filteredItems.length > 0) {
+        setSelectedMedicationId(filteredItems[0].id);
+    }
+  };
+
   const handleFilterToggle = (key: string, value: string) => {
     const current = activeFilters[key] || [];
     const updated = current.includes(value)
@@ -280,12 +297,13 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
       ? filteredItems[currentIndex + 1].id 
       : null;
 
-  // 2. Smart "Next To Review" (Skip to next item that is NOT Sobrestock AND NOT Sin Rotacion)
+  // 2. Smart "Next To Review" (Skip to next item that is NOT Sobrestock AND NOT Sin Rotacion AND NOT Reviewed)
   // Look ahead from current index
   const nextReviewItem = currentIndex >= 0 
       ? filteredItems.slice(currentIndex + 1).find(m => 
           m.status !== StockStatus.SOBRESTOCK && 
-          m.status !== StockStatus.SIN_ROTACION
+          m.status !== StockStatus.SIN_ROTACION &&
+          !reviewedIds.has(m.id)
         )
       : null;
 
@@ -459,7 +477,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
 
             {/* Dropdown Menu */}
             {isOpen && field && createPortal(
-                <div ref={localDropdownRef} className="fixed z-[100000] bg-white border border-gray-200 rounded-lg shadow-xl w-56 p-2 text-left font-normal normal-case flex flex-col" style={menuStyles}>
+                <div ref={localDropdownRef} className="fixed z-[120000] bg-white border border-gray-200 rounded-lg shadow-xl w-56 p-2 text-left font-normal normal-case flex flex-col" style={menuStyles}>
                     <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-100 shrink-0">
                         <span className="text-xs font-bold text-gray-700">Filtrar por {label}</span>
                         {isActive && (
@@ -579,7 +597,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
                       </button>
 
                       {isMainFilterOpen && createPortal(
-                          <div ref={mainFilterDropdownRef} className="fixed z-[100000] bg-white rounded-lg shadow-xl border border-gray-200 py-1 text-gray-900 animate-in fade-in zoom-in-95 duration-100 w-56" style={{
+                          <div ref={mainFilterDropdownRef} className="fixed z-[120000] bg-white rounded-lg shadow-xl border border-gray-200 py-1 text-gray-900 animate-in fade-in zoom-in-95 duration-100 w-56" style={{
                               top: mainFilterRef.current ? mainFilterRef.current.getBoundingClientRect().bottom + 4 : 0,
                               left: mainFilterRef.current 
                                 ? (mainFilterRef.current.getBoundingClientRect().left + 224 > window.innerWidth 
@@ -647,6 +665,14 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
 
               {/* RIGHT SIDE: Progress + Exit */}
               <div className="flex items-center gap-3 sm:gap-6 ml-3 shrink-0">
+                  <button 
+                      onClick={handleStartAnalysis}
+                      className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 bg-teal-600 hover:bg-teal-500 hover:scale-[1.05] active:scale-95 text-white rounded-lg transition-all shadow-[0_0_12px_rgba(20,184,166,0.3)] shrink-0 group animate-pulse"
+                      title="Comenzar análisis del primer ítem pendiente"
+                  >
+                      <Play className="h-4 w-4 fill-current group-hover:scale-110 transition-transform" />
+                  </button>
+
                   <div className="hidden md:flex items-center gap-3 sm:gap-6">
                       <div className="text-right hidden lg:block">
                           <div className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">
@@ -709,19 +735,30 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
             {/* Bottom Row: Search & Actions */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 w-full">
                 
-                {/* Search Bar */}
-                <div className="relative w-full lg:w-96">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-6 text-gray-400" />
-                    <input 
-                        type="text" 
-                        placeholder="Buscar por código o descripción..." 
-                        className="pl-9 pr-4 py-2.5 sm:py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none w-full bg-white text-gray-900 shadow-sm"
-                        value={searchTerm}
-                        onChange={(e) => {
-                            onSearchChange(e.target.value);
-                            setCurrentPage(1); 
-                        }}
-                    />
+                {/* Search Bar & Primary Actions */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+                    <div className="relative w-full lg:w-96">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-6 text-gray-400" />
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por código o descripción..." 
+                            className="pl-9 pr-4 py-2.5 sm:py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none w-full bg-white text-gray-900 shadow-sm"
+                            value={searchTerm}
+                            onChange={(e) => {
+                                onSearchChange(e.target.value);
+                                setCurrentPage(1); 
+                            }}
+                        />
+                    </div>
+
+                    <button 
+                        onClick={handleStartAnalysis}
+                        className="flex justify-center items-center gap-2 px-4 py-2.5 sm:py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-lg transition-all shadow-sm whitespace-nowrap shrink-0 group transform hover:scale-[1.02]"
+                        title="Comenzar análisis del primer ítem pendiente"
+                    >
+                        <Play className="h-4 w-4 fill-current group-hover:scale-110 transition-transform" />
+                        <span>Comenzar Análisis</span>
+                    </button>
                 </div>
                 
                 {/* Buttons */}

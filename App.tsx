@@ -4,7 +4,7 @@ import { InputSection } from './components/InputSection';
 import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppModule, QuickFilterOption } from './types';
 import { analyzeInventoryWithAura } from './services/auraService';
 import { generateFullReportPDF } from './services/pdfService';
-import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle, LogOut, Settings, BarChart2, LayoutGrid, ChevronDown, ArrowRightLeft } from 'lucide-react';
+import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle, LogOut, Settings, BarChart2, LayoutGrid, ChevronDown, ArrowRightLeft, Building2, Hash, Calendar, Clock, Network } from 'lucide-react';
 
 // NEW IMPORTS
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -42,6 +42,23 @@ const STORAGE_KEY = 'aura_data_v1';
 const REVIEW_KEY = 'aura_reviews_v1';
 const ADDITIONAL_ITEMS_KEY = 'aura_additional_v1';
 const WELCOME_KEY = 'aura_welcome_shown_session'; // Clave de sesión
+
+const formatCorteDate = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const parts = dateStr.trim().split('-');
+    if (parts.length === 2) {
+        const year = parts[0];
+        const monthNum = parseInt(parts[1], 10);
+        const months = [
+            'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+            'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+        ];
+        if (monthNum >= 1 && monthNum <= 12) {
+            return `${months[monthNum - 1]} ${year}`;
+        }
+    }
+    return dateStr;
+};
 
 // --- MAIN APP COMPONENT WRAPPED IN AUTH CONTEXT ---
 const App: React.FC = () => {
@@ -217,6 +234,12 @@ const AnalysisModule: React.FC = () => {
     }
   });
 
+  // NEW: Detect if current loaded data has legacy UUID-style IDs from old session
+  const hasLegacyUuidCodes = useMemo(() => {
+    if (!result || !result.medications || result.medications.length === 0) return false;
+    return result.medications.some(m => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id));
+  }, [result]);
+
   // --- NEW: LIFTED STATE FOR INPUT DATA ---
   const [inputData, setInputData] = useState<MedicationInput[]>([]);
 
@@ -332,11 +355,30 @@ const AnalysisModule: React.FC = () => {
       } catch(e) { console.warn(e); }
   }, [additionalItems]);
 
-  const handleAnalyze = useCallback(async (data: MedicationInput[], referenceDate: string, vaccinesExcluded: boolean) => {
+  const handleAnalyze = useCallback(async (
+    data: MedicationInput[], 
+    referenceDate: string, 
+    vaccinesExcluded: boolean,
+    metadata?: {
+      microred?: string;
+      codEess?: string;
+      establishmentName?: string;
+      category?: string;
+    }
+  ) => {
     setLoading(true);
     setError(null);
     try {
       const analysisResult = await analyzeInventoryWithAura(data, referenceDate, vaccinesExcluded);
+      
+      // Inject imported metadata if available
+      if (metadata) {
+        analysisResult.microred = metadata.microred || undefined;
+        analysisResult.codEess = metadata.codEess || undefined;
+        analysisResult.establishmentName = metadata.establishmentName || undefined;
+        analysisResult.category = metadata.category || undefined;
+      }
+
       setResult(analysisResult);
       setSearchTerm('');
       setActiveFilters({});
@@ -437,7 +479,8 @@ const AnalysisModule: React.FC = () => {
         const lower = searchTerm.toLowerCase();
         items = items.filter(item => 
             item.name.toLowerCase().includes(lower) ||
-            item.id.toLowerCase().includes(lower)
+            item.id.toLowerCase().includes(lower) ||
+            (item.code && item.code.toLowerCase().includes(lower))
         );
     }
 
@@ -568,6 +611,11 @@ const AnalysisModule: React.FC = () => {
                 hasAnalyzedData={!!result}
                 currentItems={inputData}
                 onItemsChange={setInputData}
+                onResultChange={setResult}
+                reviewedIds={reviewedIds}
+                onReviewedIdsChange={setReviewedIds}
+                additionalItems={additionalItems}
+                onAdditionalItemsChange={setAdditionalItems}
             />
         </div>
 
@@ -580,13 +628,59 @@ const AnalysisModule: React.FC = () => {
 
         {result && dashboardResult && (
           <div className={`space-y-4 2xl:space-y-8 ${!isFullScreen ? 'animate-in fade-in slide-in-from-bottom-4 duration-700' : ''}`}>
+             {!isFullScreen && hasLegacyUuidCodes && (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                    <div className="flex gap-3 sm:gap-4 items-start">
+                        <div className="bg-amber-100 text-amber-700 p-2.5 rounded-xl shrink-0">
+                            <Info className="h-5 sm:h-6 w-5 sm:w-6" />
+                        </div>
+                        <div>
+                            <h4 className="font-black text-amber-900 text-base">⚠️ Historial con Códigos Desactualizados (UUID)</h4>
+                            <p className="text-amber-800 text-xs sm:text-sm mt-1 leading-relaxed max-w-4xl">
+                                Los datos actuales corresponden a una carga previa que usó identificadores temporales (UUID). Para visualizar los códigos reales y únicos de medicamentos de la columna <strong>F ("MED COD")</strong>, simplemente vuelve a cargar tu archivo de SISMED en la sección de arriba. El sistema actualizará de inmediato la base de datos con los códigos reales.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+             )}
+
              {!isFullScreen && (
                 <div className="flex flex-col xl:flex-row items-end xl:items-center justify-between gap-6 border-b border-gray-200 pb-4 2xl:pb-6">
                     <div>
                         <h2 className="text-2xl 2xl:text-3xl font-bold text-gray-900 tracking-tight">Resultados del Análisis</h2>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-2">
-                            <span className="text-xs 2xl:text-sm text-gray-500 font-medium">Generado: {new Date(result.timestamp).toLocaleString()}</span>
-                            {result.referenceDate && <span className="text-xs font-bold text-teal-700 bg-teal-50 border border-teal-100 px-3 py-1 rounded-full uppercase tracking-wide">Corte: {result.referenceDate}</span>}
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                            {/* ESTABLECIMIENTO Y CÓDIGO */}
+                            {result.establishmentName && (
+                                <div className="flex items-center gap-1.5 text-teal-900 bg-teal-50/80 border border-teal-100 rounded-lg px-2.5 py-1 tracking-tight font-extrabold text-xs">
+                                    <Building2 className="h-3.5 w-3.5 text-teal-600 animate-pulse" />
+                                    <span>
+                                        {result.codEess ? `${result.codEess} - ` : ''}
+                                        {result.establishmentName.toUpperCase()}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* MICRORED */}
+                            {result.microred && (
+                                <div className="flex items-center gap-1.5 text-teal-800 bg-teal-50/50 border border-teal-100 rounded-lg px-2.5 py-1 text-xs font-semibold">
+                                    <Network className="h-3.5 w-3.5 text-teal-600" />
+                                    <span>MR: <span className="font-bold text-teal-800">{result.microred.toUpperCase()}</span></span>
+                                </div>
+                            )}
+
+                            {/* CORTE */}
+                            {result.referenceDate && (
+                                <div className="flex items-center gap-1.5 text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1 text-xs font-bold uppercase tracking-wide">
+                                    <Calendar className="h-3.5 w-3.5 text-amber-600" />
+                                    <span>CORTE: {formatCorteDate(result.referenceDate)}</span>
+                                </div>
+                            )}
+
+                            {/* GENERADO */}
+                            <div className="flex items-center gap-1.5 text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-medium">
+                                <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                <span>Generado: {new Date(result.timestamp).toLocaleString()}</span>
+                            </div>
                         </div>
                     </div>
                     

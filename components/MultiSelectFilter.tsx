@@ -66,7 +66,7 @@ export const MultiSelectFilter: React.FC<MultiSelectFilterProps> = ({ options, s
 
   const dropdownContent = isOpen && (
     <div 
-      className="bg-white border border-gray-200 rounded-lg shadow-lg z-[100000] w-64 p-3 flex flex-col gap-2 fixed"
+      className="bg-white border border-gray-200 rounded-lg shadow-lg z-[120000] w-64 p-3 flex flex-col gap-2 fixed"
       style={menuStyles}
     >
       <div className="text-xs font-bold">{label}</div>

@@ -47,14 +47,18 @@ const COLORS = {
 
 const formatCurrency = (val: number) => `S/ ${val.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
-const getMonthHeaders = (refDate?: string) => {
-    if (!refDate) return ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "M11", "M12"];
+const getMonthHeaders = (refDate?: string, numMonths = 12) => {
+    if (!refDate) {
+        const headers = [];
+        for (let i = 1; i <= numMonths; i++) headers.push(`M${i}`);
+        return headers;
+    }
     const [yearStr, monthStr] = refDate.split('-');
     const date = new Date(parseInt(yearStr), parseInt(monthStr) - 1, 1);
     const headers = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < numMonths; i++) {
         const d = new Date(date);
-        d.setMonth(d.getMonth() - (11 - i));
+        d.setMonth(d.getMonth() - ((numMonths - 1) - i));
         const mName = d.toLocaleString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
         const yShort = d.getFullYear().toString().slice(2);
         headers.push(`${mName}-${yShort}`);
@@ -161,28 +165,36 @@ export const generateFullReportPDF = (
       
       doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(24);
-      doc.text("TOOLKIT SISMED WEB", 15, 16);
-      
+      doc.setFontSize(22);
+      doc.text("DISPONIBILIDAD DE MEDICAMENTOS", 15, 14);
+
+      // Date subtitle on left
+      const formattedDate = formatDateToMonthYear(result.referenceDate);
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(230, 230, 230);
-      doc.text("SISTEMA INTELIGENTE DE GESTIÓN FARMACÉUTICA", 45, 16);
+      doc.setTextColor(240, 240, 240);
+      doc.text(`CORTE: ${formattedDate}`, 15, 20);
       
-      // Establishment Name on Page 1
+      // Establishment Info (with Code & Category if available)
+      const facilityName = result.establishmentName ? result.establishmentName.toUpperCase() : establishmentName.toUpperCase();
+      const facilityText = result.codEess 
+        ? `${result.codEess.toUpperCase()} - ${facilityName}`
+        : facilityName;
+
+      const hasMicrored = !!result.microred;
+
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
-      doc.text(establishmentName.toUpperCase(), pageWidth - 15, 9, { align: "right" });
+      doc.text(facilityText, pageWidth - 15, hasMicrored ? 12 : 15, { align: "right" });
 
-      // Responsible Name
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, 14, { align: "right" });
-
-      // Date
-      const formattedDate = formatDateToMonthYear(result.referenceDate);
-      doc.text(`CORTE: ${formattedDate}`, pageWidth - 15, 19, { align: "right" });
+      // Microred Info
+      if (hasMicrored) {
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(220, 245, 235); // Slight minty white highlight for microred
+        doc.text(`MICRORED: ${result.microred!.toUpperCase()}`, pageWidth - 15, 18, { align: "right" });
+      }
 
       // --- LAYOUT CALCULATIONS (SYMMETRY) ---
       const margin = 15;
@@ -396,6 +408,13 @@ export const generateFullReportPDF = (
       doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
       doc.text(total.toString(), rightX + rightColW - 10, distY + 66, { align: "right" });
 
+      // Footer Page 1
+      const pageHeight = doc.internal.pageSize.height;
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(150, 150, 150);
+      doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, pageHeight - 10, { align: "right" });
+
 
       // ==========================================
       // PAGE 2: EXECUTIVE SUMMARY (DEDICATED)
@@ -404,22 +423,153 @@ export const generateFullReportPDF = (
       
       // Header Page 2 - BLACK
       doc.setFillColor(COLORS.BLACK[0], COLORS.BLACK[1], COLORS.BLACK[2]);
-      doc.rect(0, 0, pageWidth, 24, "F"); // Slightly larger header for section page
+      doc.rect(0, 0, pageWidth, 24, "F"); 
       
       // Title
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(16);
+      doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
-      doc.text("RESUMEN EJECUTIVO", 15, 16);
+      doc.text("RESUMEN EJECUTIVO", 15, 12);
 
-      // Summary Content - Large text for readability since it's a full page
+      // Subtitle
       doc.setFontSize(12);
-      doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
       doc.setFont("helvetica", "normal");
+      doc.setTextColor(240, 240, 240);
+      doc.text(`CORTE: ${formattedDate}`, 15, 18);
 
-      // Split text
-      const summaryLines = doc.splitTextToSize(result.executiveSummary, pageWidth - 30);
-      doc.text(summaryLines, 15, 40);
+      // Establishment Info (Right side page 2)
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
+      doc.text(facilityText, pageWidth - 15, hasMicrored ? 12 : 15, { align: "right" });
+
+      if (hasMicrored) {
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(220, 245, 235);
+        doc.text(`MICRORED: ${result.microred!.toUpperCase()}`, pageWidth - 15, 18, { align: "right" });
+      }
+
+      // Compute Indicator Metrics
+      const normoCount = result.medications.filter((m: any) => m.status === 'NORMOSTOCK').length;
+      const sobreCount = result.medications.filter((m: any) => m.status === 'SOBRESTOCK').length;
+      const desabastecidoCount = result.medications.filter((m: any) => m.status === 'DESABASTECIDO').length;
+      const subCount = result.medications.filter((m: any) => m.status === 'SUBSTOCK').length;
+      const sinRotacionCount = result.medications.filter((m: any) => m.status === 'SIN_ROTACION').length;
+      const execEvaluatedItemsCount = normoCount + sobreCount + desabastecidoCount + subCount;
+      const execAvailableItems = normoCount + sobreCount;
+      const execDmeScore = execEvaluatedItemsCount > 0 ? (execAvailableItems / execEvaluatedItemsCount) * 100 : 0;
+      
+      let execIndicatorStatus = 'CRÍTICA';
+      let execIndicatorColor = COLORS.RED;
+      if (execDmeScore >= 90) { execIndicatorStatus = 'ÓPTIMA'; execIndicatorColor = COLORS.GREEN; }
+      else if (execDmeScore >= 80) { execIndicatorStatus = 'ACEPTABLE'; execIndicatorColor = COLORS.INDIGO; }
+      else if (execDmeScore >= 70) { execIndicatorStatus = 'EN ALERTA'; execIndicatorColor = COLORS.ORANGE; }
+
+      let currentY = 40;
+
+      // BOX 1: MAIN INDICATOR
+      doc.setDrawColor(220, 220, 220);
+      doc.setFillColor(250, 250, 250);
+      doc.roundedRect(15, currentY, pageWidth - 30, 45, 3, 3, "FD");
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+      doc.text("DISPONIBILIDAD DE MEDICAMENTOS ESENCIALES (DME)", 25, currentY + 15);
+      
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
+      doc.text("Ficha Técnica del Indicador 39 (Meta: 100%)", 25, currentY + 22);
+
+      // Score Value
+      doc.setFontSize(28);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(execIndicatorColor[0], execIndicatorColor[1], execIndicatorColor[2]);
+      doc.text(`${execDmeScore.toFixed(1)}%`, pageWidth - 25, currentY + 22, { align: "right" });
+      
+      // Score Label
+      doc.setFontSize(14);
+      doc.text(execIndicatorStatus, pageWidth - 25, currentY + 30, { align: "right" });
+
+      // Evaluated Subtext
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
+      doc.text(`Cálculo basado en ${execEvaluatedItemsCount} ítems con rotación activa`, 25, currentY + 35);
+      
+      currentY += 55;
+
+      // BOX 2: BREAKDOWN
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+      doc.text("SITUACIÓN DE STOCK", 15, currentY);
+      currentY += 8;
+
+      const drawStatRow = (y: number, label: string, count: number, color: number[], description: string) => {
+         doc.setFillColor(color[0], color[1], color[2]);
+         doc.circle(20, y - 1, 3, "F");
+         
+         doc.setFontSize(10);
+         doc.setFont("helvetica", "bold");
+         doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+         doc.text(`${count.toString()}`, 35, y, { align: 'right' });
+         
+         doc.setFontSize(10);
+         doc.setFont("helvetica", "bold");
+         doc.text(label, 45, y);
+
+         doc.setFontSize(9);
+         doc.setFont("helvetica", "normal");
+         doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
+         doc.text(`- ${description}`, 90, y);
+      };
+
+      drawStatRow(currentY, "Normostock", normoCount, COLORS.GREEN, "Cubre de 2 a 6 meses de demanda"); currentY += 10;
+      drawStatRow(currentY, "Sobrestock", sobreCount, COLORS.INDIGO, "Mayor a 6 meses (Riesgo de vencimiento u obsolescencia)"); currentY += 10;
+      drawStatRow(currentY, "Substock", subCount, COLORS.ORANGE, "Menor a 2 meses (Riesgo de desabastecimiento)"); currentY += 10;
+      drawStatRow(currentY, "Desabastecido", desabastecidoCount, COLORS.RED, "Stock agotado (0) con historial de consumo"); currentY += 10;
+      
+      doc.setDrawColor(230, 230, 230);
+      doc.line(15, currentY, pageWidth - 15, currentY);
+      currentY += 10;
+
+      drawStatRow(currentY, "Sin Rotación", sinRotacionCount, COLORS.GRAY, "Sin rotación reciente (Excluidos del cálculo DME)"); currentY += 15;
+
+
+      // BOX 3: INTERVENTIONS & RECOMMENDATIONS
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+      doc.text("INTERVENCIONES Y REQUERIMIENTO", 15, currentY);
+      currentY += 8;
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      
+      const spikesFound = result.medications.filter((m: any) => m.hasSpikes).length;
+
+      const investment = result.medications.reduce((sum: number, m: any) => sum + (m.estimatedInvestment || 0), 0);
+
+      const bullets = [
+         `• Control de Sobrestock: El sistema identificó y ajustó el Consumo Promedio de ${spikesFound} ítems que presentaban picos atípicos.`,
+         `• Estrategia de Baja Rotación: Los ítems con movimiento esporádico (< 6 meses activos al año) aseguran una cobertura preventiva de 3 meses.`,
+         `• Presupuesto Estimado: Se sugiere una inversión proyectada de S/ ${investment.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} para cubrir los requerimientos priorizados y restablecer la disponibilidad al nivel de Normostock.`
+      ];
+
+      bullets.forEach(b => {
+         const lines = doc.splitTextToSize(b, pageWidth - 30);
+         doc.text(lines, 15, currentY);
+         currentY += lines.length * 5;
+      });
+
+      // Footer Page 2
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(150, 150, 150);
+      doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, pageHeight - 10, { align: "right" });
 
 
       // ==========================================
@@ -433,7 +583,8 @@ export const generateFullReportPDF = (
       const tableStartY = 35;
 
       const runAutoTable = (autoTable as any).default || (autoTable as any);
-      const monthHeaders = getMonthHeaders(result.referenceDate);
+      const numMonths = result.medications.length > 0 && result.medications[0].originalHistory ? result.medications[0].originalHistory.length : 12;
+      const monthHeaders = getMonthHeaders(result.referenceDate, numMonths);
       
       const columns = [
         { header: 'COD', dataKey: 'id' },
@@ -510,20 +661,43 @@ export const generateFullReportPDF = (
             doc.rect(0, 0, pageWidth, 24, "F");
 
             doc.setTextColor(255, 255, 255);
-            doc.setFontSize(16);
+            doc.setFontSize(14);
             doc.setFont("helvetica", "bold");
-            doc.text("MATRIZ DE REQUERIMIENTO DETALLADA", 15, 16);
+            doc.text("MATRIZ DE REQUERIMIENTO DETALLADA", 15, 12);
             
-            // Establishment Name & Cut-off Date
-            doc.setFontSize(12);
-            doc.text(establishmentName.toUpperCase(), pageWidth - 15, 10, { align: "right" });
-            
-            doc.setFontSize(8);
-            doc.setFont("helvetica", "normal");
-            doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, 15, { align: "right" });
-
+            // Subtitle
             const formattedDate = formatDateToMonthYear(result.referenceDate);
-            doc.text(`CORTE: ${formattedDate}`, pageWidth - 15, 20, { align: "right" });
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(240, 240, 240);
+            doc.text(`CORTE: ${formattedDate}`, 15, 18);
+
+            // Establishment Info
+            const facilityName = result.establishmentName ? result.establishmentName.toUpperCase() : establishmentName.toUpperCase();
+            const facilityText = result.codEess 
+              ? `${result.codEess.toUpperCase()} - ${facilityName}`
+              : facilityName;
+
+            const hasMicrored = !!result.microred;
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
+            doc.text(facilityText, pageWidth - 15, hasMicrored ? 12 : 15, { align: "right" });
+
+            // Microred Info
+            if (hasMicrored) {
+              doc.setFontSize(10);
+              doc.setFont("helvetica", "bold");
+              doc.setTextColor(220, 245, 235); // Slight minty highlight
+              doc.text(`MICRORED: ${result.microred!.toUpperCase()}`, pageWidth - 15, 18, { align: "right" });
+            }
+
+            // Footer Page 3+
+            const pageHeight = doc.internal.pageSize.height;
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(150, 150, 150);
+            doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, pageHeight - 10, { align: "right" });
         },
         didParseCell: function(data: any) {
             if (data.section !== 'body') return;

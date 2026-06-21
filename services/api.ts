@@ -794,12 +794,17 @@ export const api = {
     },
 
     getUngetConfigs: async (username: string): Promise<any[]> => {
+        const formatName = (name: string): string => {
+            if (!name) return "";
+            return name.replace(/MARICAL C\.?/gi, "MARISCAL CACERES").replace(/\bMARICAL\b/gi, "MARISCAL");
+        };
         try {
             if (supabase) {
                 const { data, error } = await supabase.from('unget_configs').select('*').eq('username', username);
                 if (!error && data) {
                     return data.map(d => ({
-                        name: d.unget_name,
+                        ungetId: d.unget_id || null,
+                        name: formatName(d.unget_name),
                         url: d.url,
                         username: d.username
                     }));
@@ -808,18 +813,29 @@ export const api = {
         } catch(e) {}
         
         const saved = localStorage.getItem(`aura_sig_ungets_${username}`);
-        return saved ? JSON.parse(saved) : [];
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                return parsed.map((p: any) => ({ ...p, name: formatName(p.name) }));
+            } catch(e) { return []; }
+        }
+        return [];
     },
 
     getAllUngetConfigs: async (): Promise<any[]> => {
+        const formatName = (name: string): string => {
+            if (!name) return "";
+            return name.replace(/MARICAL C\.?/gi, "MARISCAL CACERES").replace(/\bMARICAL\b/gi, "MARISCAL");
+        };
         try {
             if (supabase) {
                 const { data, error } = await supabase.from('unget_configs').select('*');
                 if (!error && data) {
                     return data.map(d => ({
                         id: d.id,
+                        ungetId: d.unget_id || null,
                         username: d.username,
-                        name: d.unget_name,
+                        name: formatName(d.unget_name),
                         url: d.url
                     }));
                 }
@@ -839,8 +855,9 @@ export const api = {
                             parsed.forEach(c => {
                                 all.push({
                                     username,
-                                    name: c.name,
-                                    url: c.url
+                                    name: formatName(c.name),
+                                    url: c.url,
+                                    ungetId: c.ungetId || null
                                 });
                             });
                         }
@@ -852,15 +869,35 @@ export const api = {
     },
 
     saveUngetConfigs: async (username: string, configs: any[]): Promise<{ success: boolean; message?: string }> => {
+        const formatName = (name: string): string => {
+            if (!name) return "";
+            return name.replace(/MARICAL C\.?/gi, "MARISCAL CACERES").replace(/\bMARICAL\b/gi, "MARISCAL");
+        };
         try {
             if (supabase) {
                 await supabase.from('unget_configs').delete().eq('username', username);
                 for(const c of configs) {
-                    await supabase.from('unget_configs').insert({
+                    const payload: any = {
                         username,
-                        unget_name: c.name,
+                        unget_name: formatName(c.name),
                         url: c.url
-                    });
+                    };
+                    if (c.ungetId) {
+                        payload.unget_id = c.ungetId;
+                    } else if (c.id) {
+                        payload.unget_id = c.id;
+                    }
+
+                    const { error } = await supabase.from('unget_configs').insert(payload);
+                    if (error) {
+                        // Si ocurre un error de columna inexistente, reintentamos sin el unget_id
+                        if (error.message && (error.message.includes("column") || error.message.includes("unget_id"))) {
+                            delete payload.unget_id;
+                            await supabase.from('unget_configs').insert(payload);
+                        } else {
+                            throw error;
+                        }
+                    }
                 }
             }
             localStorage.setItem(`aura_sig_ungets_${username}`, JSON.stringify(configs));
@@ -1252,5 +1289,195 @@ export const api = {
         } catch (e: any) {
             return { success: false, message: e.message };
         }
+    },
+
+    getSyncInstallations: async (): Promise<any[]> => {
+        try {
+            if (supabase) {
+                const { data, error } = await supabase
+                    .from('sync_installations')
+                    .select('*, facilities(*)');
+                if (!error && data) return data;
+            }
+        } catch (e) {
+            console.error(e);
+        }
+        return [];
+    },
+
+    createSyncInstallation: async (installation: {
+        facilityCode: string;
+        pcName: string;
+        sismedPath?: string;
+        isActive: boolean;
+        allowedAlmcods?: string[];
+    }): Promise<{ success: boolean; rawToken?: string; installation?: any; message?: string }> => {
+        try {
+            if (!supabase) throw new Error("No conectado a Supabase");
+
+            const randomBody = Array.from({ length: 21 }, () => {
+                const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+                return chars.charAt(Math.floor(Math.random() * chars.length));
+            }).join("");
+            const rawToken = `sismed_${randomBody}`;
+            
+            const msgBuffer = new TextEncoder().encode(rawToken);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const tokenHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+            const { data, error } = await supabase
+                .from('sync_installations')
+                .insert({
+                    token_hash: tokenHash,
+                    facility_code: installation.facilityCode,
+                    pc_name: installation.pcName,
+                    sismed_path: installation.sismedPath || null,
+                    is_active: installation.isActive,
+                    allowed_almcods: installation.allowedAlmcods && installation.allowedAlmcods.length > 0 ? installation.allowedAlmcods : null
+                })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            return {
+                success: true,
+                rawToken,
+                installation: data
+            };
+        } catch (e: any) {
+            return { success: false, message: e.message };
+        }
+    },
+
+    updateSyncInstallationStatus: async (id: string, isActive: boolean): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (!supabase) throw new Error("No conectado a Supabase");
+            const { error } = await supabase
+                .from('sync_installations')
+                .update({ is_active: isActive })
+                .eq('id', id);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (e: any) {
+            return { success: false, message: e.message };
+        }
+    },
+
+    regenerateSyncInstallationKey: async (id: string): Promise<{ success: boolean; rawToken?: string; message?: string }> => {
+        try {
+            if (!supabase) throw new Error("No conectado a Supabase");
+
+            const randomBody = Array.from({ length: 21 }, () => {
+                const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+                return chars.charAt(Math.floor(Math.random() * chars.length));
+            }).join("");
+            const rawToken = `sismed_${randomBody}`;
+
+            const msgBuffer = new TextEncoder().encode(rawToken);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const tokenHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+            const { error } = await supabase
+                .from('sync_installations')
+                .update({ token_hash: tokenHash })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            return {
+                success: true,
+                rawToken
+            };
+        } catch (e: any) {
+            return { success: false, message: e.message };
+        }
+    },
+
+    deleteSyncInstallation: async (id: string): Promise<{ success: boolean; message?: string }> => {
+        try {
+            if (!supabase) throw new Error("No conectado a Supabase");
+            const { error } = await supabase
+                .from('sync_installations')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            return { success: true };
+        } catch (e: any) {
+            return { success: false, message: e.message };
+        }
+    },
+
+    getSyncRuns: async (facilityCodes?: string[]): Promise<any[]> => {
+        try {
+            if (supabase) {
+                let query = supabase.from('sync_runs').select('*, sync_installations(*)');
+                if (facilityCodes && facilityCodes.length > 0) {
+                    query = query.in('facility_code', facilityCodes);
+                }
+                const { data, error } = await query.order('started_at', { ascending: false }).limit(200);
+                if (!error && data) return data;
+            }
+        } catch (e) {
+            console.error(e);
+        }
+        return [];
+    },
+
+    getStockActual: async (facilityCodes?: string[]): Promise<any[]> => {
+        try {
+            if (supabase) {
+                let allData: any[] = [];
+                let from = 0;
+                let step = 999;
+                let fetchMore = true;
+
+                while (fetchMore) {
+                    let query = supabase.from('stock_actual').select('*');
+                    if (facilityCodes && facilityCodes.length > 0) {
+                        query = query.in('facility_code', facilityCodes);
+                    }
+                    const { data, error } = await query.range(from, from + step);
+                    if (error) {
+                        console.error("Error fetching stock:", error);
+                        break;
+                    }
+                    if (data && data.length > 0) {
+                        allData = [...allData, ...data];
+                        if (data.length < (step + 1)) {
+                            fetchMore = false;
+                        } else {
+                            from += step + 1;
+                        }
+                    } else {
+                        fetchMore = false;
+                    }
+                }
+                return allData;
+            }
+        } catch (e) {
+            console.error(e);
+        }
+        return [];
+    },
+
+    deleteStockActualByAlmcod: async (almcod: string): Promise<boolean> => {
+        try {
+            if (supabase) {
+                const { error } = await supabase.from('stock_actual').delete().eq('almcod', almcod);
+                if (error) {
+                    console.error("Error deleting stock:", error);
+                    return false;
+                }
+                return true;
+            }
+        } catch (e) {
+            console.error(e);
+        }
+        return false;
     }
 };

@@ -55,6 +55,46 @@ import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import { supabaseService, supabase } from "../services/supabaseClient";
 
+const normalizeName = (name: string): string => {
+  if (!name) return "";
+  let n = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\b(UNGET|UNGETS|OGESS|DIRESA|IPRESS)\b/g, "");
+    
+  // Handlers for common typos and abbreviations in UNGET names
+  n = n.replace(/\bMARICAL\b/g, "MARISCAL");
+  n = n.replace(/\bMARISCAL\s+C\.?/g, "MARISCAL CACERES");
+
+  return n.replace(/[^A-Z0-9]/g, "").trim();
+};
+
+const formatDisplayName = (name: string): string => {
+  if (!name) return "";
+  return name.replace(/MARICAL C\.?/gi, "MARISCAL CACERES").replace(/\bMARICAL\b/gi, "MARISCAL");
+};
+
+const alignConfigsWithOfficialUngets = (configs: any[], ungs: any[]): any[] => {
+  if (!ungs || ungs.length === 0) return configs;
+  return configs.map(config => {
+    const configNorm = normalizeName(config.name);
+    const matching = ungs.find(u => 
+      (config.ungetId && String(u.id) === String(config.ungetId)) ||
+      u.name === config.name || 
+      normalizeName(u.name) === configNorm
+    );
+    if (matching) {
+      return {
+        ...config,
+        ungetId: matching.id,
+        name: matching.name
+      };
+    }
+    return config;
+  });
+};
+
 interface SIGData {
   ALMCOD: string;
   DESC_ALM: string;
@@ -85,6 +125,7 @@ interface SheetSource {
   lastUpdateTime?: number;
   equipmentDate?: string;
   equipmentDateTime?: number;
+  isSupabaseDirect?: boolean;
 }
 
 const parseDataDate = (str?: string): number => {
@@ -392,6 +433,8 @@ const formatDate = (dateValue: any): string => {
 };
 
 interface UngetConfig {
+  id?: string;
+  ungetId?: string;
   url: string;
   name: string;
   username?: string;
@@ -556,6 +599,9 @@ export const SheetSearchModule: React.FC = () => {
   const [data, setData] = useState<SIGData[]>([]);
   const [lastGlobalSync, setLastGlobalSync] = useState<Date | null>(null);
   const [allFacilities, setAllFacilities] = useState<any[]>([]);
+  const [allUngets, setAllUngets] = useState<any[]>([]);
+  const [allDiresas, setAllDiresas] = useState<any[]>([]);
+  const [allOgess, setAllOgess] = useState<any[]>([]);
   const [allAssignments, setAllAssignments] = useState<any[]>([]);
   const [allUsersList, setAllUsersList] = useState<any[]>([]);
   const [allJurisdictionConfigs, setAllJurisdictionConfigs] = useState<any[]>(
@@ -924,6 +970,54 @@ export const SheetSearchModule: React.FC = () => {
 
   const maxUrlsAllowed = user?.maxUrlsAllowed;
 
+  const userDiresaId = user?.personnelData?.diresaId || user?.facilityData?.diresaId || (user as any)?.diresaId;
+  const userOgessId = user?.personnelData?.ogessId || user?.facilityData?.ogessId || (user as any)?.ogessId;
+  const userUngetId = user?.personnelData?.ungetId || user?.facilityData?.ungetId || (user as any)?.ungetId;
+  const userRole = (user?.role || "").toUpperCase();
+
+  const isUngetRole = userRole.includes("UNGET");
+  const isDiresaRole = userRole.includes("DIRESA");
+  const isOgessRole = userRole.includes("OGESS");
+  const isGlobalRole = userRole === "ADMIN" || userRole === "GLOBAL" || userRole.includes("SUPER") || userRole.includes("GENERAL") || userRole === "ADMINISTRADOR";
+
+  const myUnget = useMemo(() => {
+    if (!userUngetId || !allUngets || allUngets.length === 0) return null;
+    return allUngets.find(u => String(u.id) === String(userUngetId));
+  }, [userUngetId, allUngets]);
+
+  const availableUngetsForConfig = useMemo(() => {
+    if (!allUngets || allUngets.length === 0) return [];
+    
+    // Filtramos las UNGETs únicamente por ID de base de datos para permitir homónimos en distintas jurisdicciones
+    const configuredIds = new Set(
+      tempUrls
+        .filter((_, idx) => idx !== editingIndex)
+        .map(u => String(u.ungetId || u.id || ""))
+        .filter(Boolean)
+    );
+    
+    if (isDiresaRole && userDiresaId) {
+      return allUngets.filter(u => String(u.diresaId) === String(userDiresaId) && !configuredIds.has(String(u.id)));
+    }
+    if (isOgessRole && userOgessId) {
+      return allUngets.filter(u => String(u.ogessId) === String(userOgessId) && !configuredIds.has(String(u.id)));
+    }
+    if (isGlobalRole) {
+      return allUngets.filter(u => !configuredIds.has(String(u.id)));
+    }
+    return [];
+  }, [allUngets, isDiresaRole, userDiresaId, isOgessRole, userOgessId, isGlobalRole, tempUrls, editingIndex]);
+
+  useEffect(() => {
+    if (isConfigOpen && editingIndex === null) {
+      if (isUngetRole && myUnget) {
+        setNewNameInput(myUnget.name);
+      } else {
+        setNewNameInput("");
+      }
+    }
+  }, [isConfigOpen, editingIndex, isUngetRole, myUnget]);
+
   // Publicar evento al cambiar el estado de los filtros avanzados para contraer el sidebar de App.tsx
   useEffect(() => {
     window.dispatchEvent(
@@ -989,12 +1083,25 @@ export const SheetSearchModule: React.FC = () => {
       }
 
       // 2. CARGA EN SEGUNDO PLANO DESDE EL SERVIDOR
+      let ungs: any[] = [];
       try {
         try {
           const facs = await api.getFacilities();
           setAllFacilities(facs);
           const assigs = await api.getAllStockAssignments();
           setAllAssignments(assigs);
+          try {
+            ungs = await api.getUngets();
+            setAllUngets(ungs);
+          } catch (e) {}
+          try {
+            const drs = await api.getDiresas();
+            setAllDiresas(drs);
+          } catch (e) {}
+          try {
+            const ogs = await api.getOgess();
+            setAllOgess(ogs);
+          } catch (e) {}
         } catch (err) {
           console.error(
             "Error loading facilities or assignments metadata:",
@@ -1036,13 +1143,16 @@ export const SheetSearchModule: React.FC = () => {
 
         if (level === "GLOBAL" || level === "DIRESA" || level === "OGESS") {
           try {
-            const [allConfigs, allUsers, subscriptions] = await Promise.all([
+            const [allConfigsRaw, allUsers, subscriptions] = await Promise.all([
               api.getAllUngetConfigs(),
               api.getUsers(),
               api.getSubscriptions(user.username),
             ]);
             setAllUsersList(allUsers);
             setSubscribedUsernames(subscriptions);
+
+            // Alinear con los nombres oficiales de la base de datos
+            const allConfigs = alignConfigsWithOfficialUngets(allConfigsRaw, ungs);
 
             const jurisdictionConfigs = allConfigs.filter((config) => {
               // Encontrar usuario creador
@@ -1087,10 +1197,31 @@ export const SheetSearchModule: React.FC = () => {
               "Error loading segmented unget configs from server:",
               fetchErr,
             );
-            remoteConfigs = await api.getUngetConfigs(user.username);
+            remoteConfigs = alignConfigsWithOfficialUngets(await api.getUngetConfigs(user.username), ungs);
           }
         } else {
-          remoteConfigs = await api.getUngetConfigs(user.username);
+          remoteConfigs = alignConfigsWithOfficialUngets(await api.getUngetConfigs(user.username), ungs);
+        }
+
+        // AUTO-CORRECCIÓN SILENCIOSA EN LA BASE DE DATOS (SUPABASE)
+        // Para que deje de estar "maquillado" por fuera y quede corregido realmente por dentro en la base de datos de origen:
+        try {
+          const rawMyConfigs = await api.getUngetConfigs(user.username);
+          const needsDbSync = rawMyConfigs.some((rawConf: any) => {
+            const configNorm = normalizeName(rawConf.name);
+            const matching = ungs.find(u => u.name === rawConf.name || normalizeName(u.name) === configNorm);
+            return matching && matching.name !== rawConf.name;
+          });
+          if (needsDbSync) {
+            const myAlignedToSave = alignConfigsWithOfficialUngets(rawMyConfigs, ungs);
+            api.saveUngetConfigs(user.username, myAlignedToSave).then(res => {
+              if (res.success) {
+                console.log("Auto-alineación: Se corrigieron y guardaron los nombres oficiales en la base de datos (unget_configs) con éxito.");
+              }
+            }).catch(e => console.warn("Error en autoalineación de base de datos:", e));
+          }
+        } catch (syncErr) {
+          console.warn("No se pudo comprobar la sincronía de base de datos de UNGET configs:", syncErr);
         }
 
         if (remoteConfigs && remoteConfigs.length > 0) {
@@ -1129,6 +1260,27 @@ export const SheetSearchModule: React.FC = () => {
                 (config: any) => config.sheets && config.sheets.length > 0,
               );
           }
+          // Deduplicar configs para evitar UNGETS repetidas si vienen de distintos usuarios
+          const deduplicated: typeof visibleConfigs = [];
+          for (const c of visibleConfigs) {
+             const cNorm = normalizeName(c.name);
+             const cId = c.ungetId;
+             const existingIdx = deduplicated.findIndex(e => 
+               (e.ungetId && cId && e.ungetId === cId) || 
+               normalizeName(e.name) === cNorm
+             );
+
+             if (existingIdx >= 0) {
+                // Ya existe. Solo la reemplazamos si la nueva es del usuario actual (tiene prioridad)
+                if (c.username === user.username) {
+                   deduplicated[existingIdx] = c;
+                }
+             } else {
+                deduplicated.push(c);
+             }
+          }
+          visibleConfigs = deduplicated;
+          
           setScriptUrls(visibleConfigs);
         } else if (savedUrls) {
           // Si no hay remoto pero sí local, intentar migrar al servidor
@@ -1258,11 +1410,12 @@ export const SheetSearchModule: React.FC = () => {
     const sourceUrls = overrideUrls || scriptUrls;
 
     // Eliminar posibles duplicados introducidos por roles administrativos al asignar URLs
-    const urlsToUse = Array.from(
+    let urlsToUse = Array.from(
       new Map(sourceUrls.map((u) => [u.url, u])).values(),
     );
 
-    if (urlsToUse.length === 0) {
+    // We will still fetch from Supabase even if there are no URLs
+    /* if (urlsToUse.length === 0) {
       setSources([]);
       setData([]);
 
@@ -1274,7 +1427,7 @@ export const SheetSearchModule: React.FC = () => {
         setTempSubscribedUsernames([...subscribedUsernames]);
       }
       return;
-    }
+    } */
 
     if (!silent) {
       // Limpiar error inmediatamente al iniciar una carga válida
@@ -1307,12 +1460,12 @@ export const SheetSearchModule: React.FC = () => {
               let lastUpdateTime = 0;
               let equipmentDateStr = "";
               let equipmentDateTime = 0;
+              let sheetAlmcod = "";
 
               if (Array.isArray(sheet.data) && sheet.data.length > 0) {
-                // Tomar el dato de la primera fila de datos (que es la segunda de la hoja según el usuario)
                 const firstRow = sheet.data[0];
+                sheetAlmcod = firstRow.ALMCOD || "";
 
-                // Capturar ÚLTIMA ACTUALIZACIÓN
                 if (
                   firstRow.ULTIMA_ACTUALIZACION ||
                   firstRow.Ultima_Actualizacion ||
@@ -1325,7 +1478,6 @@ export const SheetSearchModule: React.FC = () => {
                   lastUpdateTime = parseDataDate(lastUpdateStr);
                 }
 
-                // Capturar FECHA DEL EQUIPO
                 if (firstRow.FECHA_DEL_EQUIPO || firstRow["FECHA DEL EQUIPO"]) {
                   equipmentDateStr =
                     firstRow.FECHA_DEL_EQUIPO || firstRow["FECHA DEL EQUIPO"];
@@ -1333,14 +1485,15 @@ export const SheetSearchModule: React.FC = () => {
                 }
               }
 
-              // Resolve real health facility name if stock assignment exists
               let displayName = sheet.name;
+              let facilityCode = sheet.id;
               if (allAssignments.length > 0 && allFacilities.length > 0) {
                 const matchingAssignment = allAssignments.find(
                   (a) =>
                     a.sheetUrl === config.url && a.sheetName === sheet.name,
                 );
                 if (matchingAssignment) {
+                  facilityCode = matchingAssignment.facilityCode;
                   const matchingF = allFacilities.find(
                     (f) => f.code === matchingAssignment.facilityCode,
                   );
@@ -1524,14 +1677,18 @@ export const SheetSearchModule: React.FC = () => {
       // la procesamos automáticamente aquí para que no se pierda la configuración.
       const pendingUrl = newUrlInput.trim();
       if (pendingUrl) {
-        const pendingName = newNameInput.trim() || `UNGET ${urlsToSave.length + 1}`;
+        const pendingValue = newNameInput.trim() || `UNGET ${urlsToSave.length + 1}`;
+        const matching = allUngets.find(u => String(u.id) === pendingValue || u.name === pendingValue);
+        const pendingName = matching ? matching.name : pendingValue;
+        const pendingUngetId = matching ? matching.id : undefined;
+
         if (editingIndex !== null) {
-          urlsToSave[editingIndex] = { url: pendingUrl, name: pendingName, username: user.username };
+          urlsToSave[editingIndex] = { url: pendingUrl, name: pendingName, ungetId: pendingUngetId, username: user.username };
         } else {
           if (!urlsToSave.find((u) => u.url === pendingUrl)) {
             // Validar límites si corresponde
             if (!maxUrlsAllowed || urlsToSave.length < maxUrlsAllowed) {
-              urlsToSave.push({ url: pendingUrl, name: pendingName, username: user.username });
+              urlsToSave.push({ url: pendingUrl, name: pendingName, ungetId: pendingUngetId, username: user.username });
             }
           }
         }
@@ -1539,8 +1696,11 @@ export const SheetSearchModule: React.FC = () => {
         setNewUrlInput("");
         setNewNameInput("");
         setEditingIndex(null);
-        setTempUrls(urlsToSave);
       }
+
+      // Alinear los nombres de las configs con los de la base de datos oficial antes de guardar de raíz
+      urlsToSave = alignConfigsWithOfficialUngets(urlsToSave, allUngets);
+      setTempUrls(urlsToSave);
 
       const result = await api.saveUngetConfigs(user.username, urlsToSave);
 
@@ -1556,6 +1716,7 @@ export const SheetSearchModule: React.FC = () => {
             username: user.username,
             name: c.name,
             url: c.url,
+            ungetId: c.ungetId
           }));
           return [...others, ...myUpdated];
         });
@@ -1563,7 +1724,7 @@ export const SheetSearchModule: React.FC = () => {
         // Buscar orígenes de las demás entidades suscritas
         const updatedAllJurisdiction = [
           ...allJurisdictionConfigs.filter((c) => c.username !== user.username),
-          ...urlsToSave.map((c) => ({ username: user.username, name: c.name, url: c.url }))
+          ...urlsToSave.map((c) => ({ username: user.username, name: c.name, url: c.url, ungetId: c.ungetId }))
         ];
 
         const subscribedConfigs = updatedAllJurisdiction.filter((config) =>
@@ -1575,7 +1736,28 @@ export const SheetSearchModule: React.FC = () => {
           (u) => u.username !== user.username,
         );
 
-        const mergedScriptUrls = [...othersUrls, ...urlsToSave];
+        let mergedScriptUrls = [...othersUrls, ...urlsToSave];
+        
+        // Deduplicar configs para evitar UNGETS repetidas si vienen de distintos usuarios
+        const deduplicatedMerged: typeof mergedScriptUrls = [];
+        for (const c of mergedScriptUrls) {
+           const cNorm = normalizeName(c.name);
+           const cId = c.ungetId;
+           const existingIdx = deduplicatedMerged.findIndex(e => 
+             (e.ungetId && cId && e.ungetId === cId) || 
+             normalizeName(e.name) === cNorm
+           );
+
+           if (existingIdx >= 0) {
+              if (c.username === user.username) {
+                 deduplicatedMerged[existingIdx] = c;
+              }
+           } else {
+              deduplicatedMerged.push(c);
+           }
+        }
+        mergedScriptUrls = deduplicatedMerged;
+        
         setScriptUrls(mergedScriptUrls);
         setIsConfigOpen(false);
         toast.success("Configuración guardada en la nube con éxito.");
@@ -1595,14 +1777,25 @@ export const SheetSearchModule: React.FC = () => {
   const handleAddUrl = () => {
     if (!user) return;
     const url = newUrlInput.trim();
-    const name = newNameInput.trim() || `UNGET ${tempUrls.length + 1}`;
+    const val = newNameInput.trim();
 
-    if (!url) return;
+    if (!url) {
+      toast.error("Por favor, ingrese la URL de la Web App.");
+      return;
+    }
+    if (!val || val === "" || val.includes("-- Seleccionar")) {
+      toast.error("Por favor, seleccione una UNGET válida de la lista.");
+      return;
+    }
+
+    const matching = allUngets.find(u => String(u.id) === val || u.name === val);
+    const name = matching ? matching.name : val;
+    const ungetId = matching ? matching.id : undefined;
 
     if (editingIndex !== null) {
       // Caso edición
       const updated = [...tempUrls];
-      updated[editingIndex] = { url, name, username: user.username };
+      updated[editingIndex] = { url, name, ungetId, username: user.username };
       setTempUrls(updated);
       setEditingIndex(null);
     } else {
@@ -1617,7 +1810,7 @@ export const SheetSearchModule: React.FC = () => {
         toast.error("Esta URL ya está registrada.");
         return;
       }
-      setTempUrls([...tempUrls, { url, name, username: user.username }]);
+      setTempUrls([...tempUrls, { url, name, ungetId, username: user.username }]);
     }
 
     setNewUrlInput("");
@@ -1629,7 +1822,7 @@ export const SheetSearchModule: React.FC = () => {
     const config = tempUrls[index];
     setEditingIndex(index);
     setNewUrlInput(config.url);
-    setNewNameInput(config.name);
+    setNewNameInput(config.ungetId || config.name);
     setTempSubscribedUsernames([...subscribedUsernames]);
     setIsConfigOpen(true);
   };
@@ -1641,17 +1834,17 @@ export const SheetSearchModule: React.FC = () => {
 
     // Only edit my own URLs, or if I'm editing an old one without a set username it gets adopted
     const visibleUrls = scriptUrls.filter(
-      (u) => !u.username || u.username === user.username,
+      (u) => (!u.username || u.username === user.username),
     );
     setTempUrls(visibleUrls);
     setTempSubscribedUsernames([...subscribedUsernames]);
 
     const targetIdx = visibleUrls.findIndex(
-      (u) => u.url === config.url && u.name === config.name,
+      (u) => u.url === config.url && (u.ungetId === config.ungetId || u.name === config.name),
     );
     setEditingIndex(targetIdx !== -1 ? targetIdx : null);
     setNewUrlInput(config.url);
-    setNewNameInput(config.name);
+    setNewNameInput(config.ungetId || config.name);
     setIsConfigOpen(true);
   };
 
@@ -1668,7 +1861,7 @@ export const SheetSearchModule: React.FC = () => {
           setIsLoading(true);
           try {
             const myOwnUpdated = updated.filter(
-              (u) => !u.username || u.username === user.username,
+              (u) => (!u.username || u.username === user.username),
             );
             const result = await api.saveUngetConfigs(
               user.username,
@@ -1989,7 +2182,7 @@ export const SheetSearchModule: React.FC = () => {
 
     const ungetName =
       exportScope === "single" && selectedUngetIndex !== null
-        ? scriptUrls[selectedUngetIndex]?.name || "UNGET"
+        ? formatDisplayName(scriptUrls[selectedUngetIndex]?.name || "UNGET")
         : "Regional";
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
@@ -2833,7 +3026,7 @@ function processSheet(sheet) {
                   <span
                     className={`truncate max-w-[120px] sm:max-w-[150px] md:max-w-[200px] ${viewLevel === "sheets" ? "font-black text-teal-600" : ""}`}
                   >
-                    {scriptUrls[selectedUngetIndex]?.name || "Documento"}
+                    {formatDisplayName(scriptUrls[selectedUngetIndex]?.name || "Documento")}
                   </span>
                 </button>
               </>
@@ -2875,7 +3068,7 @@ function processSheet(sheet) {
                 if (user) {
                   setTempUrls(
                     scriptUrls.filter(
-                      (u) => !u.username || u.username === user.username,
+                      (u) => (!u.username || u.username === user.username),
                     ),
                   );
                   setTempSubscribedUsernames([...subscribedUsernames]);
@@ -2986,15 +3179,50 @@ function processSheet(sheet) {
                               <label className="text-[9px] font-black text-gray-400 ml-1 uppercase tracking-wider">
                                 Nombre de la UNGET
                               </label>
-                              <input
-                                type="text"
-                                placeholder="Ej: UNGET CENTRO"
-                                value={newNameInput}
-                                onChange={(e) =>
-                                  setNewNameInput(e.target.value)
-                                }
-                                className="w-full text-xs sm:text-sm rounded-xl border-gray-200 focus:border-teal-500 focus:ring-teal-500 shadow-sm py-2.5 px-3 font-bold text-gray-700 bg-gray-50/50"
-                              />
+                              {editingIndex !== null ? (
+                                <input
+                                  type="text"
+                                  placeholder="Ej: UNGET CENTRO"
+                                  value={(() => {
+                                    const matching = allUngets.find(u => String(u.id) === newNameInput || u.name === newNameInput);
+                                    return matching ? matching.name : newNameInput;
+                                  })()}
+                                  disabled
+                                  className="w-full text-xs sm:text-sm rounded-xl border-gray-200 bg-gray-100 cursor-not-allowed shadow-sm py-2.5 px-3 font-bold text-gray-400"
+                                />
+                              ) : isUngetRole ? (
+                                <div className="bg-slate-50 border border-slate-200/60 rounded-xl px-3 py-2 flex flex-col justify-center min-h-[42px]">
+                                  <span className="text-[8px] font-bold text-teal-600 uppercase tracking-widest leading-none mb-1">
+                                    Autocompletado
+                                  </span>
+                                  <span className="text-xs sm:text-sm font-black text-slate-700 truncate">
+                                    {formatDisplayName(myUnget?.name || "SU UNGET")}
+                                  </span>
+                                </div>
+                              ) : availableUngetsForConfig.length === 0 ? (
+                                <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/50 rounded-xl px-3 py-2 font-bold min-h-[42px] leading-tight flex items-center justify-center">
+                                  Todas las UNGETs de su jurisdicción ya están configuradas.
+                                </div>
+                              ) : (
+                                <select
+                                  value={newNameInput}
+                                  onChange={(e) => setNewNameInput(e.target.value)}
+                                  className="w-full text-xs sm:text-sm rounded-xl border-gray-200 focus:border-teal-500 focus:ring-teal-500 shadow-sm py-2 px-3 font-bold text-gray-700 bg-gray-50/50 h-[42px] min-h-[42px]"
+                                >
+                                  <option value="">-- Seleccionar UNGET --</option>
+                                  {availableUngetsForConfig.map((unget: any) => {
+                                    const diresa = allDiresas.find(d => String(d.id) === String(unget.diresaId))?.name || "";
+                                    const ogess = allOgess.find(o => String(o.id) === String(unget.ogessId))?.name || "";
+                                    const ungetSlug = unget.id ? `UNG-${unget.id.substring(0, 5).toUpperCase()}` : "";
+                                    const locationTag = [diresa, ogess].filter(Boolean).join(" - ");
+                                    return (
+                                      <option key={unget.id} value={unget.id}>
+                                        {ungetSlug ? `[${ungetSlug}] ` : ""}{unget.name}{locationTag ? ` (${locationTag})` : ""}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              )}
                             </div>
                             <div className="space-y-1">
                               <label className="text-[9px] font-black text-gray-400 ml-1 uppercase tracking-wider">
@@ -3188,8 +3416,27 @@ function processSheet(sheet) {
                                   <LinkIcon className="h-4 w-4" />
                                 </div>
                                 <div className="flex-1 min-w-0 pr-1">
-                                  <div className="text-[10px] sm:text-xs font-black text-slate-800 truncate uppercase mt-0.5 tracking-tight">
-                                    {config.name}
+                                  <div className="text-[10px] sm:text-xs font-black text-slate-800 truncate uppercase mt-0.5 tracking-tight flex items-center gap-1.5 flex-wrap">
+                                    {(() => {
+                                      const configNorm = normalizeName(config.name);
+                                      const matching = allUngets.find((u) => 
+                                        (config.ungetId && String(u.id) === String(config.ungetId)) || 
+                                        u.name === config.name || 
+                                        normalizeName(u.name) === configNorm
+                                      );
+                                      const nameStr = formatDisplayName(matching ? matching.name : config.name);
+                                      const ungetSlug = matching?.id ? `UNG-${matching.id.substring(0, 5).toUpperCase()}` : "";
+                                      return (
+                                        <>
+                                          <span className="truncate">{nameStr}</span>
+                                          {ungetSlug && (
+                                            <span className="text-[8px] font-black text-teal-600 bg-teal-50/70 border border-teal-100 px-1 py-0.5 rounded leading-none shrink-0 scale-95 origin-left">
+                                              {ungetSlug}
+                                            </span>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
                                   </div>
                                   <div className="text-[8.5px] sm:text-[9.5px] text-slate-400 truncate font-mono mt-1 flex items-center gap-1 border-b border-transparent group-hover:border-slate-100 pb-0.5 max-w-[240px] md:max-w-xs xl:max-w-none">
                                     {config.url}
@@ -3864,15 +4111,41 @@ function processSheet(sheet) {
                         const originalIdx = scriptUrls.findIndex(
                           (u) => u.url === config.url && u.name === config.name,
                         );
+                        const isSupabaseVirtual = config.url === "SUPABASE_NATIVE" || config.url.startsWith("SUPABASE_VIRTUAL_");
+                        
+                        // Encontrar la UNGET en allUngets para obtener su DIRESA y OGESS asignados
+                        const configNorm = normalizeName(config.name);
+                        const matchingUnget = allUngets.find((u) => 
+                          (config.ungetId && String(u.id) === String(config.ungetId)) || 
+                          u.name === config.name || 
+                          normalizeName(u.name) === configNorm
+                        );
+                        let diresaName = "";
+                        let ogessName = "";
+                        if (matchingUnget) {
+                          if (matchingUnget.diresaId) {
+                            const foundD = allDiresas.find((d) => d.id === matchingUnget.diresaId);
+                            if (foundD) diresaName = foundD.name;
+                          }
+                          if (matchingUnget.ogessId) {
+                            const foundO = allOgess.find((o) => o.id === matchingUnget.ogessId);
+                            if (foundO) ogessName = foundO.name;
+                          }
+                        }
+
                         return (
                           <div
                             key={idx}
                             onClick={() => handleSelectUnget(originalIdx)}
-                            className="group bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer relative overflow-hidden"
+                            className={`group p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer relative overflow-hidden border ${
+                              isSupabaseVirtual
+                                ? "bg-gradient-to-b from-white to-slate-50 border-slate-200 hover:bg-white hover:border-teal-500 hover:shadow-md"
+                                : "bg-white border-gray-200 hover:shadow-md hover:border-teal-500"
+                            }`}
                           >
                             {/* Botones de acción rápidos */}
                             {(!config.username ||
-                              config.username === user?.username) && (
+                              config.username === user?.username) && !isSupabaseVirtual && (
                               <div className="absolute top-4 right-4 flex items-center gap-2 opacity-100 sm:opacity-40 group-hover:opacity-100 transition-opacity z-10">
                                 <button
                                   type="button"
@@ -3901,13 +4174,37 @@ function processSheet(sheet) {
                               </div>
                             )}
 
-                            <div className="w-12 h-12 shrink-0 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center sm:mb-4 group-hover:bg-teal-600 group-hover:text-white transition-colors">
-                              <Building2 className="h-6 w-6" />
+                            {isSupabaseVirtual && (
+                              <div className="absolute top-4 right-4 z-10">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                  UNGET
+                                </span>
+                              </div>
+                            )}
+
+                            <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center sm:mb-4 group-hover:bg-teal-600 group-hover:text-white transition-colors ${
+                              "bg-teal-50 text-teal-600"
+                            }`}>
+                              {isSupabaseVirtual ? (
+                                <Building2 className="h-6 w-6" />
+                              ) : (
+                                <Building2 className="h-6 w-6" />
+                              )}
                             </div>
 
                             <div className="flex-1 min-w-0 pr-16 sm:pr-0">
+                              {matchingUnget && (
+                                <div className="text-[9px] font-black text-teal-600 uppercase tracking-widest leading-none mb-1 sm:mb-1.5 flex items-center gap-1.5 flex-wrap">
+                                  <span>CÓDIGO: UNG-{matchingUnget.id.substring(0, 5).toUpperCase()}</span>
+                                  {isSupabaseVirtual && (
+                                    <span className="text-[7.5px] font-extrabold bg-teal-100 text-teal-800 px-1 py-0.2 rounded uppercase">
+                                      Virtual
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                               <h3 className="text-sm sm:text-lg font-black text-gray-900 sm:mb-2 group-hover:text-teal-700 transition-colors uppercase tracking-tight truncate sm:whitespace-normal">
-                                {config.name}
+                                {formatDisplayName(matchingUnget ? matchingUnget.name : config.name)}
                               </h3>
                               {connectionErrors[config.url] && (
                                 <div className="text-[9px] font-black px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-100 inline-flex items-center gap-1 uppercase mb-2">
@@ -3964,12 +4261,47 @@ function processSheet(sheet) {
                                 </div>
                               )}
 
-                              <div className="flex items-center gap-1.5 text-[9px] sm:text-xs text-gray-400 mt-auto">
-                                <LinkIcon className="h-3 w-3 shrink-0" />
-                                <span className="truncate max-w-[120px] sm:max-w-[150px]">
-                                  {config.url}
-                                </span>
-                              </div>
+                              {(matchingUnget || isSupabaseVirtual) ? (
+                                <div className="mt-auto pt-2 border-t border-gray-100 flex flex-col gap-1 w-full shrink-0">
+                                  {diresaName ? (
+                                    <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-slate-500 truncate">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                                      <span className="truncate" title={diresaName}>
+                                        DIRESA: {diresaName}
+                                      </span>
+                                    </div>
+                                  ) : null}
+                                  {ogessName ? (
+                                    <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-slate-500 truncate">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0"></span>
+                                      <span className="truncate" title={ogessName}>
+                                        OGESS: {ogessName}
+                                      </span>
+                                    </div>
+                                  ) : null}
+                                  {!isSupabaseVirtual && (
+                                    <div className="flex items-center gap-1.5 text-[9px] text-gray-400 mt-1 pt-1 border-t border-dashed border-gray-100 italic">
+                                      <LinkIcon className="h-2.5 w-2.5 shrink-0 text-slate-300" />
+                                      <span className="truncate max-w-[120px] sm:max-w-[150px]" title={config.url}>
+                                        {config.url}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {!diresaName && !ogessName && isSupabaseVirtual ? (
+                                    <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-slate-400 italic shrink-0">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0"></span>
+                                      <span>Sin territorio superior</span>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-[9px] sm:text-xs text-gray-400 mt-auto">
+                                  <LinkIcon className="h-3 w-3 shrink-0" />
+                                  <span className="truncate max-w-[120px] sm:max-w-[150px]">
+                                    {config.url}
+                                  </span>
+                                </div>
+                              )}
                             </div>
 
                             <div className="hidden sm:flex items-center justify-between w-full mt-4 pt-4 border-t border-gray-50">
@@ -7500,7 +7832,7 @@ function processSheet(sheet) {
                   <p className="text-[10px] text-teal-600 font-extrabold tracking-widest uppercase">
                     Consolidado:{" "}
                     {exportScope === "single" && selectedUngetIndex !== null
-                      ? scriptUrls[selectedUngetIndex]?.name
+                      ? formatDisplayName(scriptUrls[selectedUngetIndex]?.name || "UNGET")
                       : "TODAS LAS UNGETs (REGIONAL)"}
                   </p>
                 </div>

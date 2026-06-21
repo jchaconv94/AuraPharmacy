@@ -37,7 +37,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
     nextItemId
 }) => {
   const { systemConfig } = useAuth();
-  const [reqQuantity, setReqQuantity] = useState<number>(0);
+  const [reqQuantity, setReqQuantity] = useState<number | ''>(0);
   
   // STATE: CPA MODE SELECTION
   const [cpaMode, setCpaMode] = useState<'ADJUSTED' | 'SIMPLE'>('ADJUSTED');
@@ -140,7 +140,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const needsReview = dynamicData ? (
       (dynamicData.status !== StockStatus.SOBRESTOCK && 
       dynamicData.status !== StockStatus.SIN_ROTACION) ||
-      reqQuantity > 0
+      Number(reqQuantity) > 0
   ) : false;
 
   const isLockedTimer = lockTimer > 0 && needsReview && !isReviewed;
@@ -259,21 +259,22 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       
       setExcludedIndices(newIndices);
       
-      onUpdate(medication.id, reqQuantity, cpaMode, newIndices);
+      onUpdate(medication.id, Number(reqQuantity), cpaMode, newIndices);
   };
 
-  const handleQuantityChange = (val: number) => {
+  const handleQuantityChange = (val: number | '') => {
     if (isReviewed) return;
     setReqQuantity(val);
     if (medication) {
-        onUpdate(medication.id, val, cpaMode, excludedIndices);
+        const numVal = val === '' ? 0 : val;
+        onUpdate(medication.id, numVal, cpaMode, excludedIndices);
     }
   };
 
   const handleConfirmAndNext = useCallback(() => {
       if (!medication || isLockedTimer) return;
       
-      onUpdate(medication.id, reqQuantity, cpaMode, excludedIndices);
+      onUpdate(medication.id, Number(reqQuantity), cpaMode, excludedIndices);
       onToggleReview(medication.id, true);
 
       if (nextReviewId && onNavigate) {
@@ -286,7 +287,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   const handleConfirmAndStay = useCallback(() => {
       if (!medication || isLockedTimer) return;
       
-      onUpdate(medication.id, reqQuantity, cpaMode, excludedIndices);
+      onUpdate(medication.id, Number(reqQuantity), cpaMode, excludedIndices);
       onToggleReview(medication.id, true);
       setShowSaveMenu(false);
       // No navigate called here, so user stays on the validated item
@@ -294,7 +295,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
   const handleManualSave = () => {
       if (!medication) return;
-      onUpdate(medication.id, reqQuantity, cpaMode, excludedIndices);
+      onUpdate(medication.id, Number(reqQuantity), cpaMode, excludedIndices);
       onClose();
   };
 
@@ -325,7 +326,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       const systemValue = dynamicData?.suggestedReq || 0;
       
       // Logic: If manual value differs, SHOW CUSTOM UI instead of window.confirm
-      if (reqQuantity !== systemValue) {
+      if (Number(reqQuantity) !== systemValue) {
           setShowUnlockConfirm(true);
       } else {
           // If values are same, no need to confirm loss of data
@@ -367,14 +368,18 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
   const generateMonthLabels = (): string[] => {
       const labels: string[] = [];
+      const numMonths = medication.originalHistory ? medication.originalHistory.length : 12;
+      
       if (!referenceDate) {
-          return ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+          return Array.from({length: numMonths}, (_, i) => `M${i+1}`);
       }
+      
       const [yearStr, monthStr] = referenceDate.split('-');
       const refDate = new Date(parseInt(yearStr), parseInt(monthStr) - 1, 1);
-      for (let i = 0; i < 12; i++) {
+      
+      for (let i = 0; i < numMonths; i++) {
          const d = new Date(refDate);
-         const offset = 11 - i;
+         const offset = (numMonths - 1) - i;
          d.setMonth(d.getMonth() - offset);
          const monthName = d.toLocaleString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
          const yearShort = d.getFullYear().toString().slice(2);
@@ -384,7 +389,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
   };
 
   const monthsLabels = generateMonthLabels();
-  const coverageFromOrder = dynamicData.cpm > 0 ? (reqQuantity / dynamicData.cpm) : 0;
+  const coverageFromOrder = dynamicData.cpm > 0 ? (Number(reqQuantity) / dynamicData.cpm) : 0;
   const totalProjectedCoverage = (isFinite(dynamicData.months) ? dynamicData.months : 0) + coverageFromOrder;
 
   const getStatusConfig = (status: StockStatus) => {
@@ -419,7 +424,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     </div>
                     <h3 className="text-xl font-bold text-gray-900 mb-2">¿Restaurar cálculo automático?</h3>
                     <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-                        El valor manual ingresado (<strong>{reqQuantity}</strong>) se perderá y se volverá a recalcular el monto requerido.
+                        El valor manual ingresado (<strong>{reqQuantity === '' ? '0' : reqQuantity}</strong>) se perderá y se volverá a recalcular el monto requerido.
                     </p>
                     <div className="flex gap-3">
                         <button 
@@ -474,8 +479,11 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     </h2>
                 </div>
                 {medication.ff && (
-                   <p className="text-gray-400 text-xs sm:text-sm font-medium mt-1">
-                      {medication.ff}
+                   <p className="text-gray-400 text-xs sm:text-sm font-medium mt-1 flex items-center gap-1.5 flex-wrap">
+                      <span>{medication.ff}</span>
+                      <span className="text-gray-600">•</span>
+                      <span className="text-teal-400 font-semibold">Precio Unitario:</span>
+                      <span className="text-white bg-white/10 px-1.5 py-0.5 rounded text-xs font-semibold">S/ {(medication.unitPrice || 0).toFixed(2)}</span>
                    </p>
                 )}
             </div>
@@ -520,16 +528,21 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
           <div className="mb-6 flex flex-wrap gap-4 text-sm items-stretch">
              {/* Read-only Stats & Selection */}
              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full lg:w-auto">
-                <div className="bg-gray-100 px-3 py-2 rounded-lg flex flex-col justify-center">
+                <div className="bg-gray-100 px-3 py-2 rounded-lg flex flex-col items-center justify-center text-center">
                     <span className="text-gray-500 block text-[10px] uppercase">Stock</span>
                     <span className="font-bold text-gray-900 text-lg sm:text-2xl">{(medication.currentStock || 0).toLocaleString()}</span>
                 </div>
 
                 {/* CPA AJUSTADO CARD */}
                 <button 
-                    onClick={() => !isReviewed && !isAdjustedEqualSimple && setCpaMode('ADJUSTED')}
+                    onClick={() => {
+                        if (!isReviewed && !isAdjustedEqualSimple) {
+                            setCpaMode('ADJUSTED');
+                            setExcludedIndices([]);
+                        }
+                    }}
                     disabled={isReviewed || isAdjustedEqualSimple}
-                    className={`px-3 py-2 rounded-lg border flex flex-col justify-center transition-all relative overflow-hidden group ${
+                    className={`px-3 py-2 rounded-lg border flex flex-col items-center justify-center text-center transition-all relative overflow-hidden group ${
                         cpaMode === 'ADJUSTED' 
                         ? 'bg-teal-50 border-teal-500 shadow-md ring-1 ring-teal-500' 
                         : 'bg-white border-gray-200 hover:bg-gray-50'
@@ -538,16 +551,16 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     }`}
                     title={isAdjustedEqualSimple ? "No se detectaron consumos atípicos para ajustar" : ""}
                 >
-                    <div className="flex justify-between items-center w-full">
+                    <div className="flex items-center justify-center gap-1 w-full">
                         <span className={`${cpaMode === 'ADJUSTED' ? 'text-teal-700' : 'text-gray-500'} block text-[10px] uppercase font-bold`}>CPA Ajust.</span>
-                        {cpaMode === 'ADJUSTED' && <CheckCircle className="h-3 w-3 text-teal-600" />}
-                        {isAdjustedEqualSimple && !isReviewed && <Lock className="h-3 w-3 text-gray-400" />}
+                        {cpaMode === 'ADJUSTED' && <CheckCircle className="h-3 w-3 text-teal-600 shrink-0" />}
+                        {isAdjustedEqualSimple && !isReviewed && <Lock className="h-3 w-3 text-gray-400 shrink-0" />}
                     </div>
-                    <span className={`font-bold text-lg sm:text-2xl ${cpaMode === 'ADJUSTED' ? 'text-teal-800' : 'text-gray-400'}`}>
+                    <span className={`font-bold text-lg sm:text-2xl text-center w-full ${cpaMode === 'ADJUSTED' ? 'text-teal-800' : 'text-gray-400'}`}>
                         {(medication.cpm || 0).toFixed(1)}
                     </span>
                     {isAdjustedEqualSimple && (
-                        <span className="text-[8px] text-gray-400 uppercase font-bold mt-1">Sin atípicos</span>
+                        <span className="text-[8px] text-gray-400 uppercase font-bold mt-1 text-center w-full">Sin atípicos</span>
                     )}
                 </button>
 
@@ -555,75 +568,122 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 <button 
                      onClick={() => !isReviewed && setCpaMode('SIMPLE')}
                      disabled={isReviewed}
-                     className={`px-3 py-2 rounded-lg border flex flex-col justify-center transition-all relative overflow-hidden group ${
+                     className={`px-3 py-2 rounded-lg border flex flex-col items-center justify-center text-center transition-all relative overflow-hidden group ${
                         cpaMode === 'SIMPLE' 
                         ? 'bg-blue-50 border-blue-500 shadow-md ring-1 ring-blue-500' 
                         : 'bg-white border-gray-200 hover:bg-gray-50'
                     } ${isReviewed ? 'opacity-70 cursor-not-allowed grayscale-[0.5]' : ''}`}
                 >
-                    <div className="flex justify-between items-center w-full">
+                    <div className="flex items-center justify-center gap-1 w-full">
                         <span className={`${cpaMode === 'SIMPLE' ? 'text-blue-700' : 'text-gray-500'} block text-[10px] uppercase font-bold`}>CPA Simple</span>
-                        {cpaMode === 'SIMPLE' && <CheckCircle className="h-3 w-3 text-blue-600" />}
+                        {cpaMode === 'SIMPLE' && <CheckCircle className="h-3 w-3 text-blue-600 shrink-0" />}
                     </div>
-                    <div className="flex items-center gap-2">
-                        <span className={`font-bold text-lg sm:text-2xl ${cpaMode === 'SIMPLE' ? 'text-blue-800' : 'text-gray-400'} ${medication.hasSpikes && cpaMode !== 'SIMPLE' ? 'line-through decoration-red-400' : ''}`}>
+                    <div className="flex items-center justify-center gap-2 w-full">
+                        <span className={`font-bold text-lg sm:text-2xl text-center ${cpaMode === 'SIMPLE' ? 'text-blue-800' : 'text-gray-400'} ${medication.hasSpikes && cpaMode !== 'SIMPLE' ? 'line-through decoration-red-400' : ''}`}>
                             {(medication.rawCpm || 0).toFixed(1)}
                         </span>
                         {medication.hasSpikes && cpaMode !== 'SIMPLE' && (
-                            <MousePointerClick className="h-4 w-4 text-gray-400 opacity-50" />
+                            <MousePointerClick className="h-4 w-4 text-gray-400 opacity-50 shrink-0" />
                         )}
                     </div>
                 </button>
 
-                <div className="bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 flex flex-col justify-center transition-all duration-300">
+                <div className="bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 flex flex-col items-center justify-center text-center transition-all duration-300">
                     <span className="text-blue-600 block text-[10px] uppercase font-bold">Meses Disp.</span>
-                    <span className="font-bold text-blue-800 text-lg sm:text-2xl">
+                    <span className="font-bold text-blue-800 text-lg sm:text-2xl text-center w-full">
                     {isFinite(dynamicData.months || 0) ? (dynamicData.months || 0).toFixed(1) : '∞'}
                     </span>
                 </div>
              </div>
              
-             <div className={`${statusConfig.bg} px-4 py-2 rounded-lg border ${statusConfig.border} flex flex-col justify-center w-full lg:w-auto transition-colors duration-300`}>
+             <div className={`${statusConfig.bg} px-4 py-2 rounded-lg border ${statusConfig.border} flex flex-col items-center justify-center text-center w-full lg:w-auto transition-colors duration-300`}>
                 <span className={`${statusConfig.label} block text-[10px] uppercase font-bold`}>Estado</span>
-                <span className={`font-bold ${statusConfig.text} text-xl`}>
+                <span className={`font-bold ${statusConfig.text} text-xl text-center w-full`}>
                    {dynamicData.status}
                 </span>
              </div>
 
              {/* Dynamic Calculation Area */}
-             <div className={`w-full lg:flex-1 text-white rounded-lg shadow-md p-3 flex flex-col sm:flex-row items-center gap-4 border lg:ml-auto transition-colors ${isReviewed ? 'bg-teal-900 border-teal-700' : 'bg-gray-900 border-gray-700'}`}>
-                <div className="flex flex-row sm:flex-col gap-2 items-center w-full sm:w-auto justify-between sm:justify-start">
-                    <label className="text-[10px] font-bold uppercase text-teal-400 flex items-center gap-1">
-                        {isReviewed ? <Lock className="h-3 w-3" /> : <Calculator className="h-3 w-3" />}
+             <div className={`w-full lg:flex-1 text-white rounded-lg shadow-md p-4 flex flex-col sm:flex-row items-center gap-5 border lg:ml-auto transition-colors ${isReviewed ? 'bg-teal-900 border-teal-700' : 'bg-gray-900 border-gray-700'}`}>
+                <div className="flex flex-row sm:flex-col gap-4 items-center w-full sm:w-auto justify-between sm:justify-start">
+                    <label className="text-xs font-bold uppercase text-teal-400 flex items-center gap-1 select-none">
+                        {isReviewed ? <Lock className="h-4 w-4" /> : <Calculator className="h-4 w-4" />}
                         {isReviewed ? "Validado" : "Requerimiento"}
                     </label>
-                    <input 
-                        type="number" 
-                        min="0"
-                        value={reqQuantity}
-                        onChange={(e) => handleQuantityChange(Number(e.target.value))}
-                        disabled={isReviewed}
-                        className={`w-24 sm:w-28 px-2 py-1 rounded border font-bold text-lg focus:ring-2 focus:ring-teal-500 outline-none text-center ${
-                            isReviewed 
-                            ? 'bg-black/20 border-white/10 text-gray-300 cursor-not-allowed' 
-                            : 'bg-gray-800 border-gray-600 text-white'
-                        }`}
-                    />
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const current = reqQuantity === '' ? 0 : reqQuantity;
+                                handleQuantityChange(Math.max(0, current - 1));
+                            }}
+                            disabled={isReviewed || (reqQuantity !== '' && Number(reqQuantity) <= 0)}
+                            className="w-8 h-8 sm:w-9 sm:h-9 rounded bg-gray-800 hover:bg-gray-700 active:bg-gray-600 disabled:opacity-20 border border-gray-650 flex items-center justify-center font-bold text-lg sm:text-2xl transition-all select-none text-teal-400 disabled:text-gray-500 hover:border-teal-500/50"
+                        >
+                            −
+                        </button>
+                        
+                        <div className="relative">
+                            <style>{`
+                                .hide-native-spinner::-webkit-outer-spin-button,
+                                .hide-native-spinner::-webkit-inner-spin-button {
+                                    -webkit-appearance: none;
+                                    margin: 0;
+                                }
+                                .hide-native-spinner {
+                                    -moz-appearance: textfield;
+                                }
+                            `}</style>
+                            <input 
+                                type="number" 
+                                min="0"
+                                value={reqQuantity}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '') {
+                                        handleQuantityChange('');
+                                    } else {
+                                        const parsed = Math.max(0, Number(val));
+                                        handleQuantityChange(parsed);
+                                    }
+                                }}
+                                disabled={isReviewed}
+                                className={`hide-native-spinner w-20 sm:w-24 px-1 py-1.5 rounded-md border-2 font-bold text-lg sm:text-2xl focus:ring-2 focus:ring-teal-500 outline-none text-center transition-all ${
+                                    isReviewed 
+                                    ? 'bg-black/20 border-white/10 text-gray-300 cursor-not-allowed' 
+                                    : 'bg-gray-800 border-gray-600 text-white'
+                                }`}
+                                placeholder="0"
+                            />
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const current = reqQuantity === '' ? 0 : reqQuantity;
+                                handleQuantityChange(current + 1);
+                            }}
+                            disabled={isReviewed}
+                            className="w-8 h-8 sm:w-9 sm:h-9 rounded bg-gray-800 hover:bg-gray-700 active:bg-gray-600 disabled:opacity-20 border border-gray-650 flex items-center justify-center font-bold text-lg sm:text-2xl transition-all select-none text-teal-400 disabled:text-gray-500 hover:border-teal-500/50"
+                        >
+                            +
+                        </button>
+                    </div>
                 </div>
                 
-                <ArrowRight className={`h-5 w-5 hidden sm:block ${isReviewed ? 'text-teal-600' : 'text-gray-500'}`} />
+                <ArrowRight className={`h-6 w-6 hidden sm:block ${isReviewed ? 'text-teal-600' : 'text-gray-500'}`} />
 
-                <div className="flex flex-col flex-1 w-full gap-2 sm:gap-0">
-                    <div className="flex justify-between items-baseline mb-0 sm:mb-2">
-                        <span className="text-[10px] uppercase text-gray-400">Cobertura Pedido</span>
-                        <span className="font-bold text-teal-300 text-lg leading-tight">
+                <div className="flex flex-col flex-1 w-full gap-2 sm:gap-1">
+                    <div className="flex justify-between items-baseline mb-1 sm:mb-2">
+                        <span className="text-xs uppercase text-gray-400">Cobertura Pedido</span>
+                        <span className="font-bold text-teal-300 text-xl leading-tight">
                             +{(coverageFromOrder || 0).toFixed(1)} Meses
                         </span>
                     </div>
                     
-                    <div className={`border-t pt-2 mt-auto flex justify-between items-baseline ${isReviewed ? 'border-teal-800' : 'border-gray-700'}`}>
-                        <span className="text-[10px] uppercase text-gray-400">Total Proyectado</span>
-                        <span className="font-bold text-white text-lg leading-tight">
+                    <div className={`border-t pt-3 mt-auto flex justify-between items-baseline ${isReviewed ? 'border-teal-800' : 'border-gray-700'}`}>
+                        <span className="text-xs uppercase text-gray-400">Total Proyectado</span>
+                        <span className="font-bold text-white text-xl leading-tight">
                              {isFinite(totalProjectedCoverage) ? (totalProjectedCoverage || 0).toFixed(1) : '∞'} Meses
                         </span>
                     </div>
@@ -679,11 +739,6 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                             if (cpaMode === 'ADJUSTED' && isSpike) {
                                 canInteract = false;
                             }
-                            
-                            // Also block if it's manually excluded
-                            if (isExcluded) {
-                                canInteract = false;
-                            }
 
                             return (
                                 <td 
@@ -692,7 +747,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                                         console.log('DEBUG: td onClick', { idx, canInteract });
                                         canInteract && handleToggleIndex(idx);
                                     }}
-                                    className={`p-3 text-center font-mono text-base border-r border-gray-200 last:border-0 transition-all ${cellBg} ${cellStyle} ${canInteract ? 'cursor-pointer hover:opacity-80 hover:shadow-inner' : 'cursor-default'}`}
+                                    className={`p-3 text-center font-mono text-lg font-semibold border-r border-gray-200 last:border-0 transition-all ${cellBg} ${cellStyle} ${canInteract ? 'cursor-pointer hover:opacity-80 hover:shadow-inner' : 'cursor-default'}`}
                                     title={canInteract ? (isExcluded ? "Clic para incluir" : "Clic para excluir del promedio") : (isSpike && cpaMode === 'ADJUSTED' ? "Excluido automáticamente por el sistema (Consumo Anómalo)" : "")}
                                 >
                                     {val}

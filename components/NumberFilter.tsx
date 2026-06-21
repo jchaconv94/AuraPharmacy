@@ -141,7 +141,7 @@ export const NumberFilter = ({
             {isOpen && createPortal(
                 <div
                     ref={dropdownRef}
-                    className="fixed min-w-[240px] bg-white border border-slate-200 shadow-xl rounded-xl z-[100000] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
+                    className="fixed min-w-[240px] bg-white border border-slate-200 shadow-xl rounded-xl z-[120000] p-2 font-normal text-left text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2"
                     style={{ ...menuStyles, visibility: Object.keys(menuStyles).length === 0 ? 'hidden' : 'visible' }}
                     onClick={(e) => e.stopPropagation()}
                 >
