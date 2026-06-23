@@ -6521,7 +6521,7 @@ function processSheet(sheet) {
                       scope="col"
                       className="px-4 py-3 text-left text-xs font-black text-gray-500 uppercase tracking-wider whitespace-nowrap"
                     >
-                      Cód. SISMED / SIGA
+                      Cód. SISMED
                     </th>
                     <th
                       scope="col"
@@ -6561,9 +6561,6 @@ function processSheet(sheet) {
                           <span className="text-xs font-black text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded w-fit mb-1">
                             {row.ID_Producto || "-"}
                           </span>
-                          <span className="text-[10px] text-gray-400 font-bold">
-                            {row.CODIGO_SIG}
-                          </span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -6572,12 +6569,6 @@ function processSheet(sheet) {
                           title={row.Nombre}
                         >
                           {row.Nombre || "-"}
-                        </div>
-                        <div
-                          className="text-[10px] text-gray-400 mt-0.5 break-words line-clamp-1 truncate"
-                          title={row.Reg_Sanitario}
-                        >
-                          RS: {row.Reg_Sanitario || "S/N"}
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right">
@@ -8768,6 +8759,7 @@ function processSheet(sheet) {
                                 changes = Array.isArray(parsed)
                                   ? parsed
                                   : parsed?.changes || [];
+                                changes = changes.filter((c: any) => c.change !== 0);
                               }
 
                               if (
@@ -8778,7 +8770,7 @@ function processSheet(sheet) {
                                   <div className="text-[10px] text-slate-400 bg-slate-50/50 border-t border-slate-100 p-4 shadow-inner italic text-center font-medium">
                                     El detalle específico de los items
                                     modificados no está disponible para este
-                                    registro histórico.
+                                    registro histórico o no hubo cambios reales de stock.
                                   </div>
                                 );
                               }
@@ -8794,7 +8786,6 @@ function processSheet(sheet) {
                                   </summary>
                                   <div className="bg-slate-50/80 p-0 max-h-72 overflow-y-auto w-full border-t border-slate-100/50">
                                     {changes
-                                      .filter((c: any) => c.change !== 0)
                                       .map((change: any, i: number) => {
                                         const isPositive = change.change > 0;
                                         return (

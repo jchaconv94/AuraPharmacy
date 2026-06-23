@@ -90,6 +90,40 @@ const AVAILABLE_COLUMNS = [
   { key: "Precio_Cab", label: "Precio Paquete", defaultState: false },
 ];
 
+const normalizeName = (name: string): string => {
+  if (!name) return "";
+  let n = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\b(UNGET|UNGETS|OGESS|DIRESA|IPRESS)\b/g, "");
+    
+  n = n.replace(/\bMARICAL\b/g, "MARISCAL");
+  n = n.replace(/\bMARISCAL\s+C\.?/g, "MARISCAL CACERES");
+
+  return n.replace(/[^A-Z0-9]/g, "").trim();
+};
+
+const alignConfigsWithOfficialUngets = (configs: any[], ungs: any[]): any[] => {
+  if (!ungs || ungs.length === 0) return configs;
+  return configs.map(config => {
+    const configNorm = normalizeName(config.name);
+    const matching = ungs.find(u => 
+      (config.ungetId && String(u.id) === String(config.ungetId)) ||
+      u.name === config.name || 
+      normalizeName(u.name) === configNorm
+    );
+    if (matching) {
+      return {
+        ...config,
+        ungetId: matching.id,
+        name: matching.name
+      };
+    }
+    return config;
+  });
+};
+
 export const AdminStockAssignmentModule: React.FC = () => {
   const { user: currentUser } = useAuth();
   const [facilities, setFacilities] = useState<any[]>([]);
@@ -171,7 +205,10 @@ export const AdminStockAssignmentModule: React.FC = () => {
     if (!silent) setIsLoading(true);
     try {
       if (currentUser?.username) {
-        const allFacilities = await api.getFacilities();
+        const [allFacilities, officialUngets] = await Promise.all([
+          api.getFacilities(),
+          api.getUngets()
+        ]);
         setFacilities(allFacilities);
 
         let configs = [];
@@ -219,7 +256,19 @@ export const AdminStockAssignmentModule: React.FC = () => {
         } else {
           configs = await api.getUngetConfigs(currentUser.username);
         }
-        setUngetConfigs(configs);
+
+        // Align and unique by official UNGET names to prevent duplicates
+        const aligned = alignConfigsWithOfficialUngets(configs, officialUngets);
+        const uniqueConfigs: any[] = [];
+        const seenNames = new Set<string>();
+        for (const c of aligned) {
+          const uName = c.name.toUpperCase();
+          if (!seenNames.has(uName)) {
+            seenNames.add(uName);
+            uniqueConfigs.push(c);
+          }
+        }
+        setUngetConfigs(uniqueConfigs);
 
         const pastAssignments = await api.getAllStockAssignments();
         setAssignments(pastAssignments);

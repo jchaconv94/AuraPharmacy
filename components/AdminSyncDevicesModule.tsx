@@ -26,6 +26,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { createPortal } from 'react-dom';
 
 export const AdminSyncDevicesModule: React.FC = () => {
   const { user: currentUser } = useAuth();
@@ -696,7 +697,7 @@ export const AdminSyncDevicesModule: React.FC = () => {
       )}
 
       {/* modal - autorizar un dispositivo */}
-      {isCreateModalOpen && (
+      {isCreateModalOpen && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110000] flex items-center justify-center p-4">
           <form 
             onSubmit={handleRegister} 
@@ -804,11 +805,12 @@ export const AdminSyncDevicesModule: React.FC = () => {
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* success / credentials display modal - MUST BE DISPLAYED ONLY ONCE */}
-      {successData && (
+      {successData && createPortal(
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200000] flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-2xl shadow-2xl border border-gray-250 w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300">
             
@@ -900,7 +902,8 @@ export const AdminSyncDevicesModule: React.FC = () => {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

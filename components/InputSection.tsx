@@ -20,6 +20,7 @@ interface InputSectionProps {
   onReset: () => void;
   isAnalyzing: boolean;
   hasAnalyzedData: boolean; // Prop to know if there is active data
+  analysisResult?: any;
   // PROPS FOR LIFTED STATE
   currentItems: MedicationInput[];
   onItemsChange: (items: MedicationInput[]) => void;
@@ -72,6 +73,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
     onReset, 
     isAnalyzing, 
     hasAnalyzedData,
+    analysisResult,
     currentItems,
     onItemsChange,
     onResultChange,
@@ -84,7 +86,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
   const items = currentItems;
   const setItems = onItemsChange;
 
-  const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(false);
+  const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(() => hasAnalyzedData);
   const [tempItems, setTempItems] = useState<MedicationInput[]>([]); // Store items temporarily while asking for date
   
   // Modal State
@@ -109,6 +111,27 @@ export const InputSection: React.FC<InputSectionProps> = ({
     const d = new Date();
     return d.toISOString().slice(0, 7);
   });
+
+  // Sync state if there is already an analysisResult loaded (e.g. page reload)
+  React.useEffect(() => {
+    if (analysisResult) {
+      if (analysisResult.establishmentName) setImportedEstablishmentName(analysisResult.establishmentName);
+      if (analysisResult.codEess) setImportedCodEess(analysisResult.codEess);
+      if (analysisResult.microred) setImportedMicrored(analysisResult.microred);
+      if (analysisResult.category) setImportedCategory(analysisResult.category);
+      if (analysisResult.referenceDate) setReferenceDate(analysisResult.referenceDate);
+      setIsUploadSectionCollapsed(true);
+    }
+  }, [analysisResult]);
+
+  // Collapsed state synchronization
+  React.useEffect(() => {
+    if (hasAnalyzedData) {
+      setIsUploadSectionCollapsed(true);
+    } else {
+      setIsUploadSectionCollapsed(false);
+    }
+  }, [hasAnalyzedData]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -127,6 +150,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
           aura_data_v1: window.localStorage.getItem('aura_data_v1'),
           aura_reviews_v1: window.localStorage.getItem('aura_reviews_v1'),
           aura_additional_v1: window.localStorage.getItem('aura_additional_v1'),
+          aura_input_data_v1: window.localStorage.getItem('aura_input_data_v1'),
         },
         rawInputItems: items,
         metadata: {
@@ -192,6 +216,17 @@ export const InputSection: React.FC<InputSectionProps> = ({
             window.localStorage.setItem('aura_additional_v1', importedData.localStorage.aura_additional_v1);
           } else {
             window.localStorage.removeItem('aura_additional_v1');
+          }
+
+          if (importedData.localStorage.aura_input_data_v1) {
+            window.localStorage.setItem('aura_input_data_v1', importedData.localStorage.aura_input_data_v1);
+          } else {
+            const rawItems = importedData.rawInputItems || [];
+            if (rawItems.length > 0) {
+              window.localStorage.setItem('aura_input_data_v1', JSON.stringify(rawItems));
+            } else {
+              window.localStorage.removeItem('aura_input_data_v1');
+            }
           }
 
           // Restore React States

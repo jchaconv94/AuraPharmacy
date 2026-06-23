@@ -350,7 +350,9 @@ export const supabaseService = {
       > = {};
       currentStock.forEach((item) => {
         const codSismed = String(
-          item.ID_Producto ||
+          item.medcod ||
+            item.Id_Producto ||
+            item.ID_Producto ||
             item.Codigo_Sismed ||
             item.CODIGO_SISMED ||
             item.CODIGO_SIG ||

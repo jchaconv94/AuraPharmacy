@@ -19,12 +19,20 @@ import {
   AlertCircle,
   TrendingDown,
   Info,
-  Trash2
+  Trash2,
+  Monitor,
+  FileClock,
+  Database,
+  Package,
+  CheckCircle2,
+  ChevronDown,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import { api } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
-import { supabase } from "../services/supabaseClient";
+import { supabase, supabaseService, StockSyncRecord } from "../services/supabaseClient";
 import { HealthFacility } from "../types";
 
 export interface CalculatedItem {
@@ -48,23 +56,173 @@ export interface CalculatedItem {
   last_update: string;
 }
 
+const datesMatch = (ts1?: number | null, ts2?: number | null): boolean => {
+  if (!ts1 || !ts2) return true;
+  const d1 = new Date(ts1);
+  const d2 = new Date(ts2);
+  return (
+    d1.getDate() === d2.getDate() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getFullYear() === d2.getFullYear()
+  );
+};
+
+const getItemExpirationStatus = (fechaStr?: string | null, saldo?: number) => {
+  if (!fechaStr || (saldo !== undefined && saldo <= 0)) return "NORMAL";
+  
+  const today = new Date();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+  
+  const str = String(fechaStr).trim();
+  const parts = str.split(/[\/\-]/);
+  
+  if (parts.length === 3) {
+    const p0 = parseInt(parts[0], 10);
+    const p1 = parseInt(parts[1], 10);
+    const p2 = parseInt(parts[2], 10);
+
+    let day = 1, month = 0, year = 2000;
+    if (p0 > 1000) { 
+      year = p0; month = p1 - 1; day = p2;
+    } else if (p2 > 1000 || p2 < 100) {
+      year = p2 < 100 ? p2 + 2000 : p2;
+      if (p0 > 12) { day = p0; month = p1 - 1; }
+      else if (p1 > 12) { day = p1; month = p0 - 1; }
+      else { day = p0; month = p1 - 1; }
+    }
+
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+      const expDate = new Date(year, month, day);
+      expDate.setHours(23, 59, 59, 999);
+      if (expDate < today) {
+        return "EXPIRED";
+      } else if (month === currentMonth && year === currentYear) {
+        return "EXPIRING";
+      }
+    }
+  } else if (parts.length === 2) {
+    const p0 = parseInt(parts[0], 10);
+    const p1 = parseInt(parts[1], 10);
+    if (!isNaN(p0) && !isNaN(p1)) {
+      const month = p0 - 1;
+      const year = p1 < 100 ? p1 + 2000 : p1;
+      const expDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+      if (expDate < today) {
+        return "EXPIRED";
+      } else if (month === currentMonth && year === currentYear) {
+        return "EXPIRING";
+      }
+    }
+  }
+  
+  return "NORMAL";
+};
+
+const parseDataDate = (str?: string | null): number => {
+  if (!str) return 0;
+  // Intentar parseo nativo primero
+  let d = new Date(str);
+  if (!isNaN(d.getTime())) return d.getTime();
+
+  // Intentar DD/MM/YYYY HH:MM:SS
+  try {
+    const parts = str.trim().split(/\s+/);
+    const datePart = parts[0].replace(",", "");
+    const timePart = parts[1] || "00:00:00";
+    const dateMatch = datePart.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (dateMatch) {
+      const [, day, month, year] = dateMatch;
+      d = new Date(
+        `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${timePart}`,
+      );
+      return d.getTime() || 0;
+    }
+  } catch (e) {}
+
+  return 0;
+};
+
 const getUpdateStatus = (timestamp?: number | null) => {
   if (!timestamp || timestamp === 0)
     return { color: "bg-gray-400", label: "Sin datos", text: "text-gray-500", bg: "bg-gray-50" };
 
   const now = new Date().getTime();
   const diffMs = now - timestamp;
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = diffMs / (1000 * 60 * 60);
 
   if (diffMs < 0 || diffHours <= 1) {
-    return { color: "bg-emerald-500", label: "Actualizado recientemente", text: "text-emerald-700", bg: "bg-emerald-50" };
+    const minLabel = diffMinutes <= 0 ? "< 1m" : `${diffMinutes}m`;
+    return {
+      color: "bg-emerald-500",
+      label: diffMinutes <= 0 ? "Actualizado recientemente" : `Hace ${minLabel}`,
+      text: "text-emerald-700",
+      bg: "bg-emerald-50"
+    };
   }
 
   if (diffHours <= 24) {
-    return { color: "bg-amber-500", label: `Hace ${Math.floor(diffHours)}h`, text: "text-amber-700", bg: "bg-amber-50" };
+    const hrs = Math.floor(diffHours);
+    const mins = diffMinutes % 60;
+    return {
+      color: "bg-amber-500",
+      label: `Hace ${hrs}h ${mins}m`,
+      text: "text-amber-700",
+      bg: "bg-amber-50"
+    };
   }
 
-  return { color: "bg-red-500", label: `Hace ${Math.floor(diffHours / 24)}d`, text: "text-red-700", bg: "bg-red-50" };
+  const days = Math.floor(diffHours / 24);
+  const hrs = Math.floor(diffHours) % 24;
+  return {
+    color: "bg-red-500",
+    label: `Hace ${days}d ${hrs}h`,
+    text: "text-red-700",
+    bg: "bg-red-50"
+  };
+};
+
+const renderSyncStatusPill = (timestamp?: number | null) => {
+  if (!timestamp) return null;
+  const statusObj = getUpdateStatus(timestamp);
+  const isEmerald =
+    statusObj.color.includes("emerald") ||
+    statusObj.color.includes("bg-emerald-500");
+  const isAmber =
+    statusObj.color.includes("amber") ||
+    statusObj.color.includes("bg-amber-500");
+  const isRed =
+    statusObj.color.includes("red") || statusObj.color.includes("bg-red-500");
+
+  let containerClass = "bg-slate-50 text-slate-500 border-slate-200";
+  let dotClass = "bg-slate-400";
+
+  if (isEmerald) {
+    containerClass =
+      "bg-[#f0fdf4] text-[#166534] border-[#bbf7d0] hover:bg-[#e8fbf0]";
+    dotClass = "bg-[#22c55e]";
+  } else if (isAmber) {
+    containerClass =
+      "bg-[#fffbeb] text-[#92400e] border-[#fef08a] hover:bg-[#fff9db]";
+    dotClass = "bg-[#f59e0b]";
+  } else if (isRed) {
+    containerClass =
+      "bg-[#fef2f2] text-[#991b1b] border-[#fecaca] hover:bg-[#fee2e2]";
+    dotClass = "bg-[#ef4444]";
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-black tracking-wide border shadow-3xs transition-colors select-none whitespace-nowrap overflow-hidden ${containerClass}`}
+      title={statusObj.label}
+    >
+      <span
+        className={`h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full shrink-0 ${dotClass}`}
+      />
+      <span className="truncate">{statusObj.label}</span>
+    </span>
+  );
 };
 
 export const IpressStockModule: React.FC = () => {
@@ -73,6 +231,7 @@ export const IpressStockModule: React.FC = () => {
   // State
   const [facilities, setFacilities] = useState<HealthFacility[]>([]);
   const [stockRecords, setStockRecords] = useState<any[]>([]);
+  const [supabaseSyncs, setSupabaseSyncs] = useState<Record<string, StockSyncRecord>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
@@ -90,6 +249,48 @@ export const IpressStockModule: React.FC = () => {
   // Custom delete confirmation state
   const [deleteConfirmData, setDeleteConfirmData] = useState<{almcod: string, almName: string} | null>(null);
 
+  const [isSyncHistoryModalOpen, setIsSyncHistoryModalOpen] = useState(false);
+  const [selectedFacilitySyncHistory, setSelectedFacilitySyncHistory] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [activeHistoryFacility, setActiveHistoryFacility] = useState<{ id: string; name: string } | null>(null);
+
+  // Expiration modal state
+  const [isExpirationModalOpen, setIsExpirationModalOpen] = useState(false);
+  const [expirationModalType, setExpirationModalType] = useState<"expired" | "expiring" | null>(null);
+  const [expirationFacilityCode, setExpirationFacilityCode] = useState<string | null>(null);
+
+
+  const handleShowSyncHistory = async (facilityCode: string, facilityName: string) => {
+    if (!supabase) return;
+    setActiveHistoryFacility({ id: facilityCode, name: facilityName });
+    setIsSyncHistoryModalOpen(true);
+    setSelectedFacilitySyncHistory([]);
+    setIsLoadingHistory(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("stock_sync_history")
+        .select("*")
+        .eq("establishment_id", facilityCode)
+        .order("sync_date", { ascending: false })
+        .limit(15);
+        
+      if (!error && data) {
+         setSelectedFacilitySyncHistory(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleShowExpirations = (facilityCode: string, type: "expired" | "expiring") => {
+    setExpirationFacilityCode(facilityCode);
+    setExpirationModalType(type);
+    setIsExpirationModalOpen(true);
+  };
+
   useEffect(() => {
     loadBaseData();
   }, []);
@@ -103,6 +304,12 @@ export const IpressStockModule: React.FC = () => {
       ]);
       setFacilities(allFacilities);
       setStockRecords(allStock);
+      
+      if (allFacilities.length > 0) {
+        const activeIds = allFacilities.map(f => f.code);
+        const syncs = await supabaseService.getLatestSyncs(activeIds);
+        setSupabaseSyncs(syncs);
+      }
       
       // If user is at IPRESS level, auto-select their facility
       const userFacility = currentUser?.personnelData?.facilityCode || currentUser?.facilityData?.code || (currentUser as any)?.facilityCode;
@@ -122,6 +329,13 @@ export const IpressStockModule: React.FC = () => {
     try {
       const allStock = await api.getStockActual();
       setStockRecords(allStock);
+      
+      if (facilities.length > 0) {
+        const activeIds = facilities.map(f => f.code);
+        const syncs = await supabaseService.getLatestSyncs(activeIds);
+        setSupabaseSyncs(syncs);
+      }
+      
       toast.success("Información de stock sincronizada");
     } catch (err) {
       toast.error("Error de conexión al refrescar stock");
@@ -206,9 +420,56 @@ export const IpressStockModule: React.FC = () => {
       const uniqueWarehouses = new Set(fStock.map(r => r.almcod).filter(Boolean));
       const lastUpdateTimes = fStock.map(r => new Date(r.ultima_actualizacion).getTime()).filter(Boolean);
       const lastUpdateTime = lastUpdateTimes.length > 0 ? Math.max(...lastUpdateTimes) : null;
+      
+      const syncRecord = supabaseSyncs[f.code];
+      const lastModDateStr = syncRecord ? (syncRecord.last_modification_date || syncRecord.sync_date) : null;
+      const lastModTime = lastModDateStr ? new Date(lastModDateStr).getTime() : null;
+
+      const lastEquipoTimes = fStock.map(r => r.fecha_equipo).filter(Boolean);
+      let maxEquipoTime = 0;
+      let latestFechaEquipoStr = lastEquipoTimes.length > 0 ? lastEquipoTimes[0] : null;
+      
+      lastEquipoTimes.forEach(timeStr => {
+        const ts = parseDataDate(timeStr);
+        if (ts > maxEquipoTime) {
+          maxEquipoTime = ts;
+          latestFechaEquipoStr = timeStr;
+        }
+      });
+      
+      const fechaEquipoDateTime = lastModTime || (maxEquipoTime > 0 ? maxEquipoTime : null);
+      
+      let fechaEquipo = latestFechaEquipoStr;
+      if (lastModDateStr) {
+        const md = new Date(lastModDateStr);
+        const day = md.getDate().toString().padStart(2, '0');
+        const month = (md.getMonth() + 1).toString().padStart(2, '0');
+        const year = md.getFullYear();
+        const hrs = md.getHours().toString().padStart(2, '0');
+        const mins = md.getMinutes().toString().padStart(2, '0');
+        const secs = md.getSeconds().toString().padStart(2, '0');
+        fechaEquipo = `${day}/${month}/${year} ${hrs}:${mins}:${secs}`;
+      }
+
+      // Calculate expirations
+      let expiredCount = 0;
+      let expiringThisMonthCount = 0;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+
+      fStock.forEach(r => {
+        const expStatus = getItemExpirationStatus(r.fecha, Number(r.saldo));
+        if (expStatus === "EXPIRED") {
+          expiredCount++;
+        } else if (expStatus === "EXPIRING") {
+          expiringThisMonthCount++;
+        }
+      });
 
       // Include all medications/lots, not just those with > 0 stock (based on user feedback)
-      const uniqueMeds = new Set(fStock.map(r => r.codigo_sig || r.medcod));
+      const uniqueMeds = new Set(fStock.map(r => r.medcod));
 
       return {
         ...f,
@@ -217,7 +478,11 @@ export const IpressStockModule: React.FC = () => {
         totalItemsCount: fStock.length, // Include all items/lotes (even zero stock)
         uniqueMedicinesCount: uniqueMeds.size,
         totalUnitsSum: fStock.reduce((acc, r) => acc + (Number(r.saldo) || 0), 0),
-        lastUpdateTime
+        lastUpdateTime,
+        fechaEquipo,
+        fechaEquipoDateTime,
+        expiredCount,
+        expiringThisMonthCount,
       };
     }).sort((a, b) => {
       if (b.hasStock !== a.hasStock) {
@@ -225,7 +490,7 @@ export const IpressStockModule: React.FC = () => {
       }
       return a.name.localeCompare(b.name);
     });
-  }, [activeJurisdictionFacilities, stockRecords]);
+  }, [activeJurisdictionFacilities, stockRecords, supabaseSyncs]);
 
   // Get stock records belonging to the selected facility
   const calculatedStockItems = useMemo<CalculatedItem[]>(() => {
@@ -291,7 +556,7 @@ export const IpressStockModule: React.FC = () => {
     }>();
 
     calculatedStockItems.forEach(item => {
-      uniqueMedsSet.add(item.codigo_sig || item.medcod);
+      uniqueMedsSet.add(item.medcod);
       totalUnits += item.saldo;
       const price = item.precio_det || item.preciocab || 0;
       totalEstimatedValue += item.saldo * price;
@@ -308,7 +573,7 @@ export const IpressStockModule: React.FC = () => {
         };
         warehouseGroupMap.set(item.almcod, wh);
       }
-      wh.uniqueMeds.add(item.codigo_sig || item.medcod);
+      wh.uniqueMeds.add(item.medcod);
       wh.batchesCount += 1;
       wh.totalUnits += item.saldo;
       wh.estimatedValue += item.saldo * price;
@@ -363,7 +628,7 @@ export const IpressStockModule: React.FC = () => {
       if (searchTerm) {
         const query = searchTerm.toLowerCase();
         const matchesName = item.xnom.toLowerCase().includes(query);
-        const matchesCode = item.codigo_sig.toLowerCase().includes(query);
+        const matchesCode = item.medcod.toLowerCase().includes(query) || item.codigo_sig.toLowerCase().includes(query);
         const matchesLote = item.lote.toLowerCase().includes(query);
         if (!matchesName && !matchesCode && !matchesLote) return false;
       }
@@ -396,6 +661,11 @@ export const IpressStockModule: React.FC = () => {
     return facilities.find(f => f.code === selectedFacilityCode);
   }, [facilities, selectedFacilityCode]);
 
+  // Selected active stock facility reference object
+  const activeStockFacilityObj = useMemo(() => {
+    return stockFacilitiesList.find(f => f.code === selectedFacilityCode);
+  }, [stockFacilitiesList, selectedFacilityCode]);
+
   // Format Helper for timestamps
   const formatTextTimestamp = (tsStr: string) => {
     if (!tsStr) return "Nacional";
@@ -412,7 +682,7 @@ export const IpressStockModule: React.FC = () => {
     try {
       const headers = ["Cod SISMED", "Descripcion", "Lote", "Vencimiento", "Almacen", "Financiamiento", "Suministro", "Stock Actual"];
       const rows = finalFilteredItems.map(item => [
-        item.codigo_sig,
+        item.medcod,
         `"${item.xnom.replace(/"/g, '""')}"`,
         item.lote,
         item.fecha,
@@ -437,26 +707,217 @@ export const IpressStockModule: React.FC = () => {
     }
   };
 
+  const expirationRecords = useMemo(() => {
+    if (!expirationFacilityCode || !expirationModalType) return [];
+    const facilityRecords = stockRecords.filter(r => (r.facility_code === expirationFacilityCode || r.facility_code.startsWith(expirationFacilityCode)) && Number(r.saldo) > 0 && r.fecha);
+    
+    return facilityRecords.filter(r => {
+      const expStatus = getItemExpirationStatus(r.fecha, Number(r.saldo));
+      if (expirationModalType === "expired") {
+         return expStatus === "EXPIRED";
+      } else {
+         return expStatus === "EXPIRING";
+      }
+    }).map(r => ({
+      name: r.xnom || "N/A",
+      codigo: r.medcod,
+      codigo_sig: r.codigo_sig || "",
+      medregsan: r.medregsan || "S/N",
+      lote: r.lote || "S/L",
+      fecha: r.fecha || "-",
+      saldo: Number(r.saldo) || 0,
+      desc_alm: r.desc_alm || "Almacén",
+      ffinan_des: r.ffinan_des || "N/A"
+    }));
+  }, [stockRecords, expirationFacilityCode, expirationModalType]);
+
+  const establishmentSummary = useMemo(() => {
+    const counts = {
+      cs: 0,
+      ps: 0,
+      alm: 0,
+      hosp: 0,
+      total: 0,
+      online: 0,
+      delayed: 0,
+      offline: 0,
+      expiredTotal: 0,
+      expiringTotal: 0,
+    };
+
+    stockFacilitiesList.forEach(f => {
+      const name = f.name.toUpperCase();
+      if (name.includes("C.S.") || name.includes("CENTRO DE SALUD") || name.includes("C. S.")) {
+        counts.cs++;
+      } else if (name.includes("P.S.") || name.includes("PUESTO DE SALUD") || name.includes("P. S.")) {
+        counts.ps++;
+      } else if (name.includes("ALM") || name.includes("ALMACEN")) {
+        counts.alm++;
+      } else if (name.includes("HOSP") || name.includes("HOSPITAL")) {
+        counts.hosp++;
+      }
+      
+      counts.total++;
+      counts.expiredTotal += f.expiredCount || 0;
+      counts.expiringTotal += f.expiringThisMonthCount || 0;
+      
+      const status = getUpdateStatus(f.lastUpdateTime).color;
+      if (status.includes("emerald")) {
+        counts.online++;
+      } else if (status.includes("amber")) {
+        counts.delayed++;
+      } else {
+        counts.offline++;
+      }
+    });
+
+    return counts;
+  }, [stockFacilitiesList]);
+
+  const activeExpirationFacility = useMemo(() => {
+     return facilities.find(f => f.code === expirationFacilityCode);
+  }, [facilities, expirationFacilityCode]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
 
       {/* Main Grid: Directory of Jurisdictional Establishments */}
       {!selectedFacilityCode && (
         <div className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-            <div>
-              <h2 className="text-base font-bold text-gray-800">Directorio de Stock Territorial</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Nivel de jurisdicción consultada: <strong className="text-teal-600 uppercase font-bold">{level || "Cargando"}</strong></p>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-gray-250 shadow-sm">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="w-1.5 h-6 bg-teal-500 rounded-full"></span>
+                <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+                  <Database className="h-5 w-5 text-teal-600 shrink-0" />
+                  <span>Directorio de Stock Territorial SISMED</span>
+                </h2>
+                <span className="text-[10px] whitespace-nowrap font-black bg-teal-50 text-teal-850 px-2.5 py-0.5 rounded-full border border-teal-100/70 shadow-xs uppercase tracking-wide">
+                  {stockFacilitiesList.length} {stockFacilitiesList.length === 1 ? "establecimiento" : "establecimientos"}
+                </span>
+              </div>
+              
+              <p className="text-xs text-gray-500">
+                Nivel de jurisdicción consultada: <strong className="text-teal-600 uppercase font-black">{level || "Cargando"}</strong>
+              </p>
+
+              {/* Beautiful Premium Type KPIs */}
+              {establishmentSummary && (
+                <div className="flex flex-wrap gap-2 pt-0.5">
+                  <div
+                    className="flex items-center gap-1.5 bg-sky-50/70 border border-sky-100/50 text-sky-850 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-xs"
+                    title="Centros de Salud"
+                  >
+                    <span className="w-1.5 h-1.5 bg-sky-500 rounded-full"></span>
+                    <span className="text-slate-500 font-bold">C.S.:</span>
+                    <span className="font-extrabold">{establishmentSummary.cs}</span>
+                  </div>
+                  <div
+                    className="flex items-center gap-1.5 bg-amber-50/70 border border-amber-100/50 text-amber-850 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-xs"
+                    title="Puestos de Salud"
+                  >
+                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                    <span className="text-slate-500 font-bold">P.S.:</span>
+                    <span className="font-extrabold">{establishmentSummary.ps}</span>
+                  </div>
+                  <div
+                    className="flex items-center gap-1.5 bg-indigo-50/70 border border-indigo-100/50 text-indigo-850 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-xs"
+                    title="Almacenes"
+                  >
+                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
+                    <span className="text-slate-500 font-bold">ALM:</span>
+                    <span className="font-extrabold">{establishmentSummary.alm}</span>
+                  </div>
+                  <div
+                    className="flex items-center gap-1.5 bg-violet-50/70 border border-violet-100/50 text-violet-850 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-xs"
+                    title="Hospitales"
+                  >
+                    <span className="w-1.5 h-1.5 bg-violet-500 rounded-full"></span>
+                    <span className="text-slate-500 font-bold">HOSP:</span>
+                    <span className="font-extrabold">{establishmentSummary.hosp}</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing || loading}
-              className="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-teal-600 border border-gray-200 rounded-lg text-xs font-bold transition-all flex items-center gap-2"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin text-teal-600' : ''}`} />
-              Sincronizar Stock
-            </button>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing || loading}
+                className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-teal-600 border border-slate-250 rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-xs cursor-pointer select-none active:scale-95 duration-150 shrink-0 justify-center"
+              >
+                <RefreshCw className={`h-4 w-4 text-teal-600 ${refreshing ? 'animate-spin' : ''}`} />
+                Sincronizar Stock
+              </button>
+            </div>
           </div>
+
+          {/* Connection KPIs row */}
+          {establishmentSummary && (
+            <div className="flex flex-row items-center gap-2 sm:gap-4 overflow-x-auto hide-scrollbar w-full justify-start py-1">
+              {/* En Línea */}
+              <div className="flex items-center gap-2 sm:gap-2.5 bg-white border border-slate-100/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2 shrink-0">
+                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-teal-50 flex items-center justify-center shrink-0">
+                  <Wifi className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-600" />
+                </div>
+                <div className="flex flex-col justify-center gap-0.5 pr-2">
+                  <span className="text-sm sm:text-lg font-black text-slate-800 leading-none">
+                    {establishmentSummary.online}
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-teal-600 leading-none uppercase">
+                    En Línea
+                  </span>
+                </div>
+              </div>
+
+              {/* Desconectados */}
+              <div className="flex items-center gap-2 sm:gap-2.5 bg-white border border-slate-100/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2 shrink-0">
+                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-amber-50 flex items-center justify-center shrink-0 border border-amber-100/50">
+                  <FileClock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
+                </div>
+                <div className="flex flex-col justify-center gap-0.5 pr-2">
+                  <span className="text-sm sm:text-lg font-black text-slate-800 leading-none">
+                    {establishmentSummary.delayed}
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-amber-600 leading-none uppercase">
+                    Desconectados
+                  </span>
+                </div>
+              </div>
+
+              {/* Fuera de Línea */}
+              <div className="flex items-center gap-2 sm:gap-2.5 bg-white border border-slate-100/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2 shrink-0">
+                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-red-50 flex items-center justify-center shrink-0 border border-red-100/50">
+                  <WifiOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />
+                </div>
+                <div className="flex flex-col justify-center gap-0.5 pr-2">
+                  <span className="text-sm sm:text-lg font-black text-slate-800 leading-none">
+                    {establishmentSummary.offline}
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-red-500 leading-none uppercase">
+                    Fuera Línea
+                  </span>
+                </div>
+              </div>
+
+              {/* Lotes Vencidos */}
+              {establishmentSummary.expiredTotal > 0 && (
+                <div className="flex items-center gap-2 sm:gap-2.5 bg-rose-50 border border-rose-200/50 shadow-[0_2px_12px_-4px_rgba(244,63,94,0.12)] rounded-xl sm:rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2 shrink-0 animate-pulse">
+                  <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-rose-100 flex items-center justify-center shrink-0 border border-rose-200/30">
+                    <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-600" />
+                  </div>
+                  <div className="flex flex-col justify-center gap-0.5 pr-2">
+                    <span className="text-sm sm:text-lg font-black text-rose-800 leading-none">
+                      {establishmentSummary.expiredTotal}
+                    </span>
+                    <span className="text-[9px] sm:text-[10px] font-bold text-rose-650 leading-none uppercase">
+                      Lotes Vencidos
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {loading ? (
             <div className="flex flex-col items-center justify-center p-16 bg-white border border-gray-200 rounded-xl shadow-sm">
@@ -467,95 +928,156 @@ export const IpressStockModule: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4 sm:gap-6 animate-in fade-in duration-200">
               {stockFacilitiesList.map(f => {
                 const statusObj = getUpdateStatus(f.lastUpdateTime);
-
+                
                 return (
-                 <div
+                  <div
                   key={f.code}
-                  className={`bg-white rounded-xl border transition-all relative overflow-hidden flex flex-col h-full ${
+                  className={`bg-white rounded-2xl border transition-all relative overflow-hidden flex flex-col h-full group ${
                     f.hasStock 
-                      ? 'border-gray-200 hover:border-teal-500 hover:shadow-md' 
-                      : 'border-dashed border-gray-300 opacity-70'
+                      ? f.expiredCount > 0
+                        ? 'border-rose-200/80 hover:border-rose-400 bg-gradient-to-b from-white to-rose-50/10 hover:shadow-lg'
+                        : 'border-slate-200 hover:border-teal-400 hover:shadow-xl' 
+                      : 'border-dashed border-slate-200 opacity-70'
                   }`}
                 >
+                  {/* Subtle top gradient line */}
+                  <div className={`h-1 w-full absolute top-0 left-0 transition-colors ${f.hasStock ? (f.expiredCount > 0 ? 'bg-gradient-to-r from-rose-400 to-rose-600' : 'bg-gradient-to-r from-teal-400 to-emerald-500') : 'bg-slate-200'}`} />
+                  
                   {/* Top bar indicators */}
-                  <div className="p-5 flex-1 space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="w-12 h-12 shrink-0 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center relative">
+                  <div className="p-6 flex-1 flex flex-col">
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center shadow-sm relative ${f.hasStock ? (f.expiredCount > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-700') : 'bg-slate-50 text-slate-400'}`}>
                         <Hospital className="h-6 w-6" />
                         {f.hasStock && (
-                          <div className="absolute -top-1 -right-1 flex h-4 w-4" title={statusObj.label}>
+                          <div className="absolute -top-1 -right-1 flex h-3.5 w-3.5" title={statusObj.label}>
                             <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusObj.color}`} />
-                            <span className={`relative inline-flex rounded-full h-4 w-4 border-2 border-white ${statusObj.color}`} />
+                            <span className={`relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-white ${statusObj.color}`} />
                           </div>
                         )}
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-gray-400 font-bold uppercase block mb-1">CÓDIGO IPRESS</span>
-                        <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border">{f.code}</span>
+                      <div className="flex flex-col items-end gap-2 pt-0.5">
+                        <span className="text-[10px] font-mono font-black text-slate-500 tracking-widest">{f.code}</span>
+                        {f.hasStock && (
+                          <div>
+                            {renderSyncStatusPill(f.lastUpdateTime)}
+                          </div>
+                        )}
+                        {f.hasStock && f.expiredCount > 0 && (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); handleShowExpirations(f.code, "expired"); }}
+                            className="flex items-center gap-1 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-md text-[10px] font-bold border border-rose-200 hover:bg-rose-100 hover:border-rose-300 transition-colors cursor-pointer select-none"
+                            title="Vencido en stock - Ver listado"
+                          >
+                            <AlertTriangle className="h-3 w-3 shrink-0" />
+                            <span>{f.expiredCount} Vencido{f.expiredCount !== 1 && 's'}</span>
+                          </div>
+                        )}
+                        {f.hasStock && f.expiringThisMonthCount > 0 && (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); handleShowExpirations(f.code, "expiring"); }}
+                            className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-md text-[10px] font-bold border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer select-none"
+                            title="Vence este mes - Ver listado"
+                          >
+                            <Clock className="h-3 w-3 shrink-0" />
+                            <span>{f.expiringThisMonthCount} Por vencer</span>
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    <div>
-                      <h4 className="font-bold text-[15px] text-gray-900 leading-tight mb-1 truncate whitespace-normal">{f.name}</h4>
-                      <p className="text-[10px] text-gray-500 font-medium mt-0.5 uppercase flex items-center gap-1">
-                        <Box className="h-3 w-3 text-gray-400" />
-                        {f.district || f.province || 'Jurisdicción General'}
-                      </p>
+ 
+                    <div className="mb-5 flex-1">
+                      <h4 className={`font-black text-lg leading-tight line-clamp-2 ${f.expiredCount > 0 ? 'text-rose-950' : 'text-slate-800'}`}>
+                        {f.name}
+                      </h4>
                     </div>
-
+ 
                     {/* Stats */}
                     {f.hasStock ? (
-                      <div className="space-y-2 bg-slate-50 p-4 rounded-lg border border-slate-100 text-xs text-left">
-                        <div className="grid grid-cols-2 gap-2">
+                      <div className="mt-auto flex flex-col gap-4">
+                        <div className="grid grid-cols-2 gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100/60">
                           <div>
-                            <span className="text-gray-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">MEDICAMENTOS</span>
-                            <span className="font-black text-slate-800">{f.uniqueMedicinesCount} ítems</span>
+                            <span className="text-slate-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">Medicamentos</span>
+                            <span className="font-black text-slate-700 text-xs">{f.uniqueMedicinesCount} ítems</span>
                           </div>
                           <div>
-                            <span className="text-gray-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">LOTES ÚNICOS</span>
-                            <span className="font-black text-slate-700">{f.totalItemsCount} lotes</span>
+                            <span className="text-slate-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">Lotes Únicos</span>
+                            <span className="font-black text-slate-700 text-xs">{f.totalItemsCount} lotes</span>
+                          </div>
+                          <div className="pt-2 border-t border-slate-200/60">
+                            <span className="text-slate-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">Unidades Stock</span>
+                            <span className="font-black text-teal-600 text-xs">{(f.totalUnitsSum || 0).toLocaleString()} u.</span>
+                          </div>
+                          <div className="pt-2 border-t border-slate-200/60">
+                            <span className="text-slate-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">Farm / Alm.</span>
+                            <span className="font-black text-slate-700 font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm">{f.uniqueWarehousesCount}</span>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 pt-3 border-t border-dashed border-gray-200 mt-2">
-                          <div>
-                            <span className="text-gray-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">UNIDADES STOCK</span>
-                            <span className="font-black text-teal-600">{(f.totalUnitsSum || 0).toLocaleString()} u.</span>
+
+                        <div 
+                          className="w-full flex items-center justify-between gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200/60 hover:border-slate-300 rounded-xl p-2.5 transition-all duration-200 cursor-pointer"
+                          onClick={(e) => {
+                             e.stopPropagation();
+                             handleShowSyncHistory(f.code, f.name);
+                          }}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileClock className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors shrink-0" />
+                            <span className="text-xs font-bold text-slate-600 group-hover:text-slate-900 transition-colors truncate">
+                              Últimos movimientos
+                            </span>
                           </div>
-                          <div>
-                            <span className="text-gray-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">FARM / ALM.</span>
-                            <span className="font-black text-slate-700 font-mono bg-white px-1 py-0.5 rounded border border-slate-200 shadow-sm">{f.uniqueWarehousesCount}</span>
+                          <div className="flex items-center shrink-0">
+                            {renderSyncStatusPill(f.fechaEquipoDateTime)}
                           </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="bg-amber-50/55 p-3 rounded-lg border border-dashed border-amber-200 text-amber-800 text-[11px] flex gap-2 items-start leading-normal">
-                        <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                        <p>No se ha recibido stock de Sync SISMED 2.0. Autorice un dispositivo para este establecimiento.</p>
+                      <div className="bg-slate-50 p-3 rounded-xl border border-dashed border-slate-200 text-slate-500 text-[11px] flex gap-2 items-start mt-auto">
+                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 opacity-60" />
+                        <p className="font-medium leading-relaxed">No se ha recibido stock de Sync. Autorice un dispositivo.</p>
                       </div>
                     )}
                   </div>
 
                   {/* Footer actions */}
-                  <div className="bg-gray-50/80 px-5 py-3 border-t border-slate-100 flex items-center justify-between mt-auto">
+                  <div className="bg-white px-6 py-4 border-t border-slate-100 flex items-center justify-between mt-auto">
                     {f.hasStock ? (
                       <>
-                        <div className="flex items-center gap-1.5 text-[10.5px] font-medium text-gray-400">
-                           <RefreshCw className="h-3 w-3 text-slate-400 shrink-0" />
-                           <span>Act: <span className="font-extrabold text-slate-600">{f.lastUpdateTime ? new Date(f.lastUpdateTime).toLocaleDateString() : 'Recientemente'}</span></span>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                             <RefreshCw className="h-3 w-3 shrink-0 opacity-70" />
+                             <span className="font-medium uppercase tracking-wider">Act: <span className="font-bold text-slate-700">
+                               {f.lastUpdateTime ? (() => {
+                                 const d = new Date(f.lastUpdateTime);
+                                 const day = d.getDate().toString().padStart(2, '0');
+                                 const month = (d.getMonth() + 1).toString().padStart(2, '0');
+                                 const year = d.getFullYear();
+                                 const hrs = d.getHours().toString().padStart(2, '0');
+                                 const mins = d.getMinutes().toString().padStart(2, '0');
+                                 return `${day}/${month}/${year} ${hrs}:${mins}`;
+                                })() : 'Reciente'}
+                             </span></span>
+                          </div>
+                          {f.fechaEquipo && (
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                               <Monitor className="h-3 w-3 shrink-0 opacity-70" />
+                               <span className="font-medium uppercase tracking-wider">Equip: <span className={`font-bold ${!datesMatch(f.lastUpdateTime, f.fechaEquipoDateTime) ? "text-rose-600" : "text-slate-700"}`}>{f.fechaEquipo.slice(0, 16)}</span></span>
+                            </div>
+                          )}
                         </div>
                         <button
                           onClick={() => {
                             setSelectedFacilityCode(f.code);
                             setActiveAlmTab("ALL");
                           }}
-                          className="text-[11px] font-black text-teal-600 hover:text-teal-700 flex items-center gap-1 transition-colors uppercase tracking-wide"
+                          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shadow-md shadow-slate-900/10 hover:shadow-lg hover:shadow-slate-900/20 active:scale-95 uppercase tracking-wide"
                         >
                           Ver Inventario
                           <ChevronRight className="h-3.5 w-3.5" />
                         </button>
                       </>
                     ) : (
-                      <span className="text-[10.5px] text-red-500 font-black tracking-wide uppercase px-1.5 py-0.5">Sin datos transmitidos</span>
+                      <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">Sin datos</span>
                     )}
                   </div>
                 </div>
@@ -568,52 +1090,69 @@ export const IpressStockModule: React.FC = () => {
       {/* Detailed Stock View for Selected Establishment */}
       {selectedFacilityCode && (
         <div className="space-y-4 animate-in fade-in duration-200">
-          
-          {/* Header Action bar */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              {/* Only show back button if user can see more than one facility (admin role) */}
-              {activeJurisdictionFacilities.length > 1 && (
-                <button
-                  onClick={() => {
-                    setSelectedFacilityCode(null);
-                    setActiveAlmTab("ALL");
-                  }}
-                  className="p-2 border rounded-lg hover:bg-slate-50 transition-colors"
-                  title="Volver al Directorio"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
-              )}
-              <div>
-                <span className="text-[10px] text-teal-600 font-bold uppercase tracking-wide">Visor de Stock Directo</span>
-                <h2 className="text-base font-bold text-gray-800 leading-none mt-0.5">{activeFacilityObj?.name || 'Establecimiento Seleccionado'}</h2>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className="text-[11px] text-gray-500 font-mono">IPRESS: <strong className="font-bold">{selectedFacilityCode}</strong></span>
-                  <span className="text-gray-300">|</span>
-                  <span className="text-[11px] text-gray-500 font-mono">Jurisdicción: {activeFacilityObj?.district || activeFacilityObj?.department || 'Regional'}</span>
+            
+            {/* Header Action bar */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                {/* Only show back button if user can see more than one facility (admin role) */}
+                {activeJurisdictionFacilities.length > 1 && (
+                  <button
+                    onClick={() => {
+                      setSelectedFacilityCode(null);
+                      setActiveAlmTab("ALL");
+                    }}
+                    className="p-2 border rounded-lg hover:bg-slate-50 transition-colors"
+                    title="Volver al Directorio"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                )}
+                <div>
+                  <span className="text-[10px] text-teal-600 font-bold uppercase tracking-wide">Visor de Stock Directo</span>
+                  <h2 className="text-base font-bold text-gray-800 leading-none mt-0.5">{activeFacilityObj?.name || 'Establecimiento Seleccionado'}</h2>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-[11px] text-gray-500 font-mono">IPRESS: <strong className="font-bold">{selectedFacilityCode}</strong></span>
+                    <span className="text-gray-300">|</span>
+                    <span className="text-[11px] text-gray-500 font-mono">Jurisdicción: {activeFacilityObj?.district || activeFacilityObj?.department || 'Regional'}</span>
+                  </div>
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportCSV}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1.5"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Exportar Excel (CSV)
+                </button>
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing || loading}
+                  className="p-2 bg-slate-50 hover:bg-slate-100 border rounded-lg text-slate-600 hover:text-slate-900 transition-colors"
+                  title="Sincronizar"
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleExportCSV}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm hover:shadow transition-all flex items-center gap-1.5"
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-                Exportar Excel (CSV)
-              </button>
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing || loading}
-                className="p-2 bg-slate-50 hover:bg-slate-100 border rounded-lg text-slate-600 hover:text-slate-900 transition-colors"
-                title="Sincronizar"
-              >
-                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-          </div>
+            {/* Expired Products Critical Alert Banner */}
+            {activeStockFacilityObj && activeStockFacilityObj.expiredCount > 0 && (
+              <div className="bg-rose-50 border border-rose-200/65 rounded-xl p-4.5 shadow-[0_2px_15px_-3px_rgba(244,63,94,0.12)] flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 border border-rose-200/50 shrink-0">
+                  <AlertTriangle className="h-5 w-5 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-xs font-black text-rose-800 uppercase tracking-wider flex items-center gap-2">
+                    ¡Control Sanitario Crítico! - Lotes Vencidos en Stock
+                  </h4>
+                  <p className="text-[11px] text-rose-700 leading-relaxed font-semibold">
+                    Se han detectado <strong className="font-black text-rose-900 underline">{activeStockFacilityObj.expiredCount} lote(s)</strong> de medicamentos cuyas fechas de vencimiento han caducado. De conformidad con las directrices vigentes de la Ficha Técnica FT-EAM-001 y del Ministerio de Salud, estos medicamentos deben ser segregados físicamente e inutilizados de inmediato para prevenir incidentes de seguridad para el paciente.
+                  </p>
+                </div>
+              </div>
+            )}
 
           {/* Resumen General de Stock y Farmacias de la IPRESS */}
           {facilitySummaryMetrics && (
@@ -841,7 +1380,7 @@ export const IpressStockModule: React.FC = () => {
                     <table className="min-w-full divide-y divide-gray-200 text-left">
                       <thead className="bg-gray-50/70 text-gray-500 font-bold text-xs">
                         <tr>
-                          <th className="px-5 py-3 text-[11px] uppercase tracking-wider">Código SIG</th>
+                          <th className="px-5 py-3 text-[11px] uppercase tracking-wider">CÓDIGO SISMED</th>
                           <th className="px-5 py-3 text-[11px] uppercase tracking-wider">Descripción Medicamento</th>
                           <th className="px-5 py-3 text-[11px] uppercase tracking-wider">Lote / Venc.</th>
                           <th className="px-5 py-3 text-[11px] uppercase tracking-wider">Stock</th>
@@ -849,18 +1388,29 @@ export const IpressStockModule: React.FC = () => {
                       </thead>
                       <tbody className="divide-y divide-gray-200 text-xs">
                         {finalFilteredItems.map((item, idx) => {
+                          const expStatus = getItemExpirationStatus(item.fecha, Number(item.saldo));
+                          const trClass = (() => {
+                            if (expStatus === "EXPIRED") {
+                              return "bg-rose-50/40 hover:bg-rose-100/40 transition-colors border-l-4 border-l-rose-500 font-medium";
+                            }
+                            if (expStatus === "EXPIRING") {
+                              return "bg-amber-50/20 hover:bg-amber-100/20 transition-colors border-l-4 border-l-amber-500 font-medium";
+                            }
+                            return "hover:bg-slate-50/50 transition-colors";
+                          })();
+                          
                           return (
-                            <tr key={`${item.id}_${idx}`} className="hover:bg-slate-50/50 transition-colors">
+                            <tr key={`${item.id}_${idx}`} className={trClass}>
                               
                               {/* Codigo SISMED */}
                               <td className="px-5 py-3 font-mono font-bold text-gray-500 whitespace-nowrap">
-                                {item.codigo_sig}
+                                {item.medcod}
                               </td>
 
                               {/* Description name */}
                               <td className="px-5 py-3">
                                 <div>
-                                  <span className="font-bold text-gray-800 block line-clamp-1 max-w-[280px]" title={item.xnom}>{item.xnom}</span>
+                                  <span className={`font-bold block line-clamp-1 max-w-[280px] ${expStatus === "EXPIRED" ? "text-rose-950 font-black" : "text-gray-800"}`} title={item.xnom}>{item.xnom}</span>
                                   <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400 font-semibold font-mono">
                                     <span>FF: {item.ffinan_des}</span>
                                     <span>•</span>
@@ -871,9 +1421,23 @@ export const IpressStockModule: React.FC = () => {
 
                               {/* Lote / Expiration date */}
                               <td className="px-5 py-3 whitespace-nowrap">
-                                <div className="space-y-0.5">
-                                  <span className="font-bold text-gray-700 bg-slate-100 px-1 py-0.2 rounded border text-[10px] font-mono select-all">L:{item.lote}</span>
-                                  <span className="text-[10px] text-gray-400 block font-mono">Venc: {item.fecha}</span>
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-bold text-gray-700 bg-slate-100 px-1.5 py-0.2 rounded border text-[10px] font-mono select-all">L:{item.lote}</span>
+                                  </div>
+                                  <div className="flex flex-col gap-0.5 font-mono">
+                                    <span className={`text-[10px] block font-mono ${expStatus === "EXPIRED" ? "text-rose-700 font-black" : "text-gray-400"}`}>Venc: {item.fecha}</span>
+                                    {expStatus === "EXPIRED" && (
+                                      <span className="inline-flex items-center w-fit bg-rose-100 text-rose-800 font-extrabold text-[8.5px] px-1.5 py-0.2 rounded border border-rose-200 mt-0.5 tracking-wide uppercase shadow-3xs">
+                                        ¡Vencido!
+                                      </span>
+                                    )}
+                                    {expStatus === "EXPIRING" && (
+                                      <span className="inline-flex items-center w-fit bg-amber-150 text-amber-850 font-extrabold text-[8.5px] px-1.5 py-0.2 rounded border border-amber-250 mt-0.5 tracking-wide uppercase shadow-3xs">
+                                        Por Vence
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </td>
 
@@ -934,6 +1498,419 @@ export const IpressStockModule: React.FC = () => {
           </div>
         </div>
       )}
+
+      {isSyncHistoryModalOpen && activeHistoryFacility && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/45 backdrop-blur-xs animate-in fade-in duration-250 p-4">
+          <div
+            className="absolute inset-0"
+            onClick={() => setIsSyncHistoryModalOpen(false)}
+          />
+          <div className="bg-slate-50 w-full max-w-xl max-h-[85vh] rounded-3xl shadow-[0_20px_60px_-10px_rgba(0,0,0,0.35)] relative flex flex-col border border-white overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white text-slate-900 sticky top-0 z-10">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-black uppercase tracking-wider flex items-center gap-2 text-teal-900">
+                  <Database className="h-4 w-4 text-teal-600 shrink-0" />
+                  Historial de Cambios de Stock
+                </h2>
+                <p className="text-[11px] font-bold text-slate-400 truncate max-w-xs sm:max-w-md">
+                  {activeHistoryFacility.name}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsSyncHistoryModalOpen(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors group cursor-pointer"
+              >
+                <X className="h-5 w-5 text-slate-400 group-hover:text-slate-600" />
+              </button>
+            </div>
+
+            {/* History list */}
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/55 scrollbar-thin">
+              {isLoadingHistory ? (
+                <div className="py-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
+                  <RefreshCw className="w-10 h-10 text-teal-500 animate-spin" />
+                  <span className="text-xs font-black uppercase tracking-wide">
+                    Cargando historial de cambios...
+                  </span>
+                </div>
+              ) : selectedFacilitySyncHistory.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
+                  <Database className="w-10 h-10 text-slate-300" />
+                  <span className="text-xs font-black uppercase tracking-wide">
+                    No hay movimientos registrados
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {selectedFacilitySyncHistory.map((item, index) => {
+                    const syncDate = new Date(item.sync_date);
+                    const formattedDate = syncDate.toLocaleDateString("es-PE", {
+                      day: "2-digit", month: "2-digit", year: "numeric",
+                    });
+                    const formattedTime = syncDate.toLocaleTimeString("es-PE", {
+                      hour: "2-digit", minute: "2-digit", second: "2-digit",
+                    });
+
+                    return (
+                      <div
+                        key={item.id || index}
+                        className={`bg-white rounded-2xl border border-slate-200/60 shadow-3xs flex flex-col relative overflow-hidden transition-all hover:border-slate-350 group/item ${
+                          index === 0 ? "ring-2 ring-teal-500/20 border-teal-500/50" : ""
+                        }`}
+                      >
+                        {index === 0 && (
+                          <div className="absolute top-0 left-0 right-0 h-[3px] bg-teal-500" />
+                        )}
+
+                        <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`p-2.5 rounded-xl shrink-0 ${
+                                item.has_changes
+                                  ? "bg-emerald-50 text-emerald-600 border border-emerald-150"
+                                  : "bg-amber-50 text-amber-600 border border-amber-150"
+                              }`}
+                            >
+                              {item.has_changes ? (
+                                <CheckCircle2 className="h-4 w-4" />
+                              ) : (
+                                <AlertTriangle className="h-4 w-4" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10.5px] font-black text-slate-800">
+                                  {formattedDate} a las {formattedTime}
+                                </span>
+                                {index === 0 && (
+                                  <span className="bg-teal-50 text-teal-850 px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wide border border-teal-100">
+                                    Actual
+                                  </span>
+                                )}
+                              </div>
+                              {(() => {
+                                const parsedMeta = (() => {
+                                  if (!item.changes_metadata) return null;
+                                  try {
+                                    return typeof item.changes_metadata === "string"
+                                      ? JSON.parse(item.changes_metadata)
+                                      : item.changes_metadata;
+                                  } catch (e) {
+                                    return null;
+                                  }
+                                })();
+
+                                // Calculate total stock fallback
+                                let totalStock = parsedMeta?.total_stock;
+                                if (totalStock === undefined && parsedMeta?.items_snapshot) {
+                                  totalStock = Object.values(parsedMeta.items_snapshot).reduce(
+                                    (acc: number, curr: any) => acc + (Number(curr.qty) || 0),
+                                    0
+                                  );
+                                }
+
+                                // Calculate total value fallback
+                                let totalValue = parsedMeta?.total_value;
+                                if (totalValue === undefined && parsedMeta?.items_snapshot) {
+                                  totalValue = Object.values(parsedMeta.items_snapshot).reduce(
+                                    (acc: number, curr: any) => {
+                                      const qty = Number(curr.qty) || 0;
+                                      if (qty <= 0) return acc;
+                                      const codSismed = curr.codigo;
+                                      const match = stockRecords.find(r => r.medcod === codSismed || r.codigo_sig === codSismed);
+                                      const price = match ? (match.precio_det || match.preciocab || 0) : 0;
+                                      return acc + (qty * price);
+                                    },
+                                    0
+                                  );
+                                }
+
+                                return (
+                                  <div className="mt-1 space-y-0.5">
+                                    <p className="text-[10px] font-bold text-slate-400 flex flex-wrap items-center gap-1.5 leading-relaxed">
+                                      <span>
+                                        Artículos: <span className="font-extrabold text-slate-600">{item.record_count}</span>
+                                      </span>
+                                      {totalStock !== undefined && totalStock > 0 && (
+                                        <>
+                                          <span className="text-slate-300">•</span>
+                                          <span>
+                                            Stock Total: <span className="font-extrabold text-slate-600">{Number(totalStock).toLocaleString("es-PE")}</span>
+                                          </span>
+                                        </>
+                                      )}
+                                    </p>
+                                    {totalValue !== undefined && totalValue > 0 && (
+                                      <p className="text-[10px] font-bold text-slate-400">
+                                        Valorización: <span className="font-extrabold text-slate-600">S/ {Number(totalValue).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+
+                          <div className="flex sm:flex-col items-start sm:items-end gap-1.5 shrink-0">
+                            {item.has_changes ? (
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-4xs">
+                                  Stock Modificado ({item.changed_items_count || "?"} items)
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-4xs">
+                                Stock sin cambios
+                              </span>
+                            )}
+                            <span className="text-[9px] text-slate-400 font-mono">
+                              Hash: {item.stock_hash}
+                            </span>
+                          </div>
+                        </div>
+                        {item.has_changes &&
+                          (() => {
+                            try {
+                              let changes: any[] = [];
+                              if (item.changes_metadata) {
+                                const parsed = typeof item.changes_metadata === "string" ? JSON.parse(item.changes_metadata) : item.changes_metadata;
+                                changes = Array.isArray(parsed) ? parsed : parsed?.changes || [];
+                                changes = changes.filter((c: any) => c.change !== 0);
+                              }
+
+                              if (!Array.isArray(changes) || changes.length === 0) return null;
+
+                              return (
+                                <details className="text-[10px] text-slate-600 border-t border-slate-100 group config-accordion bg-slate-50/50">
+                                  <summary className="font-bold text-slate-500 hover:text-slate-800 p-2.5 cursor-pointer select-none list-none flex items-center justify-center gap-1.5 hover:bg-slate-100/50 transition-colors text-[10px] uppercase tracking-wider">
+                                    <span>Ver detalle de items modificados ({changes.length})</span>
+                                    <ChevronDown className="h-3 w-3 group-open:rotate-180 transition-transform text-slate-400" />
+                                  </summary>
+                                  <div className="bg-slate-50/80 p-0 max-h-72 overflow-y-auto w-full border-t border-slate-100/50">
+                                    {changes.map((change: any, i: number) => {
+                                      const isPositive = change.change > 0;
+                                      return (
+                                        <div key={i} className="flex justify-between items-center py-2 px-4 border-b border-slate-100/60 last:border-0 hover:bg-white transition-colors relative group/row">
+                                          <div className={`absolute left-0 top-0 bottom-0 w-[2px] ${isPositive ? "bg-emerald-400" : "bg-rose-400"} opacity-0 group-hover/row:opacity-100 transition-opacity`} />
+                                          <div className="flex flex-col flex-1 min-w-0 pr-4">
+                                            <span className="truncate font-bold text-slate-700 text-[11px] uppercase" title={change.name || change.id}>
+                                              {change.name || change.id}
+                                            </span>
+                                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                                              {(() => {
+                                                if (!change.codigo || change.codigo === "UNKNOWN") return null;
+                                                // If it is already a short 5-6 char code, it's already a medcod
+                                                const displayCode = (() => {
+                                                  if (change.codigo.length <= 6) return change.codigo;
+                                                  // Otherwise attempt lookup in stockRecords
+                                                  const match = stockRecords.find(
+                                                    (r) => r.codigo_sig === change.codigo || r.medcod === change.codigo
+                                                  );
+                                                  if (match && match.medcod && match.medcod.length <= 6) {
+                                                    return match.medcod;
+                                                  }
+                                                  // Substring matching by name as secondary backup
+                                                  if (change.name) {
+                                                    const nameMatch = stockRecords.find(
+                                                      (r) => r.xnom && r.xnom.toLowerCase() === change.name.toLowerCase()
+                                                    );
+                                                    if (nameMatch && nameMatch.medcod && nameMatch.medcod.length <= 6) {
+                                                      return nameMatch.medcod;
+                                                    }
+                                                  }
+                                                  return change.codigo;
+                                                })();
+                                                
+                                                return (
+                                                  <span className="text-slate-400 font-mono text-[9px] uppercase tracking-wider">
+                                                    C: {displayCode}
+                                                  </span>
+                                                );
+                                              })()}
+                                              {change.lote && change.lote !== "N/A" && (
+                                                <span className="text-slate-400 font-mono text-[9px] uppercase tracking-wider">L: {change.lote}</span>
+                                              )}
+                                              {change.vto && change.vto !== "N/A" && (
+                                                <span className="text-slate-400 font-mono text-[9px] uppercase tracking-wider">V: {change.vto}</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-3 shrink-0">
+                                            <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                                              <span className="text-slate-400 line-through decoration-slate-300">{change.previousQty}</span>
+                                              <span className="text-slate-300">→</span>
+                                              <span className="font-extrabold text-slate-700">{change.currentQty}</span>
+                                            </div>
+                                            <div className={`w-14 text-center px-1.5 py-1 rounded-md font-black text-[10px] uppercase tracking-wider shadow-4xs ${isPositive ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-rose-100 text-rose-700 border border-rose-200"}`}>
+                                              {isPositive ? "+" : ""}{change.change}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </details>
+                              );
+                            } catch (e) {
+                              return null;
+                            }
+                          })()}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de Expiración */}
+      {isExpirationModalOpen && expirationModalType && activeExpirationFacility && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsExpirationModalOpen(false)}
+          />
+          
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col relative z-10 overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div
+              className={`p-4 sm:p-6 border-b border-gray-100 flex items-start justify-between ${expirationModalType === "expired" ? "bg-rose-50" : "bg-amber-50"}`}
+            >
+              <div className="flex items-center gap-4">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center ${expirationModalType === "expired" ? "bg-rose-100 text-rose-600" : "bg-amber-100 text-amber-600"}`}
+                >
+                  {expirationModalType === "expired" ? (
+                    <AlertTriangle className="h-5 w-5" />
+                  ) : (
+                    <Clock className="h-5 w-5" />
+                  )}
+                </div>
+                <div>
+                  <h3
+                    className={`text-lg font-black uppercase tracking-wide leading-none ${expirationModalType === "expired" ? "text-rose-900" : "text-amber-900"}`}
+                  >
+                    {expirationModalType === "expired"
+                      ? "Productos Vencidos"
+                      : "Productos por Vencer (Este mes)"}
+                  </h3>
+                  <p
+                    className={`text-xs font-bold leading-tight mt-1 ${expirationModalType === "expired" ? "text-rose-600/80" : "text-amber-700/80"}`}
+                  >
+                    {activeExpirationFacility.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsExpirationModalOpen(false)}
+                className="p-2 hover:bg-black/5 rounded-full transition-colors group"
+              >
+                <X className="h-5 w-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
+              </button>
+            </div>
+
+            {/* List - Upgraded to elegant Table style requested by user */}
+            <div className="flex-1 overflow-auto bg-gray-50/50 p-0">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50/80 sticky top-0 z-10 backdrop-blur-sm">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-black text-gray-550 uppercase tracking-wider whitespace-nowrap"
+                    >
+                      Cód. SISMED
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-black text-gray-550 uppercase tracking-wider"
+                    >
+                      Descripción del Producto
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-right text-xs font-black text-gray-550 uppercase tracking-wider"
+                    >
+                      Saldo
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-black text-gray-550 uppercase tracking-wider"
+                    >
+                      Lote / Venc.
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {expirationRecords.map((item, idx) => (
+                    <tr
+                      key={idx}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <span className="text-[11px] font-black text-teal-750 bg-teal-50 px-1.5 py-0.5 rounded w-fit mb-1 border border-teal-100">
+                            {item.codigo || "-"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div
+                          className="text-xs sm:text-sm font-bold text-gray-900 break-words line-clamp-2"
+                          title={item.name}
+                        >
+                          {item.name || "-"}
+                        </div>
+                        {/* Warehouse badge */}
+                        <div className="text-[9.5px] mt-1 text-slate-400 flex flex-wrap gap-x-2 gap-y-0.5 font-bold uppercase">
+                          <span>ALM: {item.desc_alm}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                        <span
+                          className={`text-[15px] font-black ${item.saldo?.toString() === "0" ? "text-red-500 bg-red-50/50" : "text-gray-900 bg-gray-50/80"} px-2.5 py-1 rounded-lg border border-slate-150 inline-block`}
+                        >
+                          {item.saldo.toLocaleString() || "0"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-xs font-black text-gray-900 uppercase">
+                           {item.lote || "-"}
+                        </div>
+                        <div
+                          className={`text-[10px] font-bold mt-1 ${expirationModalType === "expired" ? "text-red-600" : "text-amber-600"}`}
+                        >
+                          Vence: {item.fecha || "-"}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {expirationRecords.length === 0 && (
+                <div className="text-center py-12 text-slate-400">
+                  <p className="text-sm font-medium">No hay productos en esta categoría.</p>
+                </div>
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 bg-white flex justify-between items-center rounded-b-2xl">
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                Total ítems: {expirationRecords.length}
+              </span>
+              <button
+                onClick={() => setIsExpirationModalOpen(false)}
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm focus:ring-4 focus:ring-slate-100"
+              >
+                Cerrar vista
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

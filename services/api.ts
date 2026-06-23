@@ -10,7 +10,7 @@ const MOCK_DB = {
     ],
     personnel: [
         { id: 'P001', firstName: 'Aura', lastName: 'Admin', dni: '00000001', facilityCode: '00001', email: 'admin@aura.pe', phone: '987654321', laborRegime: 'D.L. 276', laborRegimeId: 'LR-276', professionId: 'PROF-QFAR' },
-        { id: 'P002', firstName: 'Juan', lastName: 'Perez', dni: '12345678', facilityCode: '00002', email: 'juan@redsalud.pe', phone: '912345678', laborRegime: 'D.L. 1057 (CAS)', laborRegimeId: 'LR-1057', professionId: 'PROF-TECF' },
+        { id: 'P002', firstName: 'Jordan', lastName: 'Perez', dni: '12345678', facilityCode: '00002', email: 'jordan@redsalud.pe', phone: '912345678', laborRegime: 'D.L. 1057 (CAS)', laborRegimeId: 'LR-1057', professionId: 'PROF-TECF' },
     ],
     facilities: [
         { code: '00001', name: 'DIRESA SEDE CENTRAL', category: 'ADM' },

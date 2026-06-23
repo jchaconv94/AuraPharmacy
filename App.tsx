@@ -241,7 +241,15 @@ const AnalysisModule: React.FC = () => {
   }, [result]);
 
   // --- NEW: LIFTED STATE FOR INPUT DATA ---
-  const [inputData, setInputData] = useState<MedicationInput[]>([]);
+  const [inputData, setInputData] = useState<MedicationInput[]>(() => {
+    try {
+      const savedInput = localStorage.getItem('aura_input_data_v1');
+      return savedInput ? JSON.parse(savedInput) : [];
+    } catch (e) {
+      console.error("Error loading input data", e);
+      return [];
+    }
+  });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -340,6 +348,19 @@ const AnalysisModule: React.FC = () => {
       localStorage.removeItem(STORAGE_KEY);
     }
   }, [result]);
+
+  // PERSIST INPUT DATA
+  useEffect(() => {
+    try {
+      if (inputData && inputData.length > 0) {
+        localStorage.setItem('aura_input_data_v1', JSON.stringify(inputData));
+      } else {
+        localStorage.removeItem('aura_input_data_v1');
+      }
+    } catch (e) {
+      console.warn('Storage quota exceeded on input data.', e);
+    }
+  }, [inputData]);
 
   // PERSIST REVIEWED IDS
   useEffect(() => {
@@ -609,6 +630,7 @@ const AnalysisModule: React.FC = () => {
                 isAnalyzing={loading} 
                 onReset={handleReset} 
                 hasAnalyzedData={!!result}
+                analysisResult={result}
                 currentItems={inputData}
                 onItemsChange={setInputData}
                 onResultChange={setResult}
