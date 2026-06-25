@@ -159,13 +159,7 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
         if (isAdjustedEqualSimple) {
             setCpaMode('SIMPLE');
         } else {
-            // Migration/Correction: If saved as SIMPLE but it HAS spikes and no manual exclusions, 
-            // it's likely a bug-induced state from a previous version. Reset to ADJUSTED.
-            if (medication.selectedCpaMode === 'SIMPLE' && (medication.excludedIndices || []).length === 0) {
-                setCpaMode('ADJUSTED');
-            } else {
-                setCpaMode(medication.selectedCpaMode || 'ADJUSTED');
-            }
+            setCpaMode(medication.selectedCpaMode || 'ADJUSTED');
         }
         
         setReqQuantity(medication.quantityToOrder || 0);
@@ -203,13 +197,6 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
           setLockTimer(0);
       }
   }, [medication?.id, needsReview, isReviewed, systemConfig.verificationDelaySeconds]);
-
-  // EFFECT 3: AUTO-UPDATE (Only when CPA Mode changes AND NOT Reviewed)
-  useEffect(() => {
-      if (dynamicData && !isReviewed) {
-          setReqQuantity(dynamicData.suggestedReq);
-      }
-  }, [cpaMode, isReviewed, dynamicData?.suggestedReq]);
 
   // EFFECT 4: CLICK OUTSIDE LISTENER FOR MENU
   useEffect(() => {
@@ -259,7 +246,29 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       
       setExcludedIndices(newIndices);
       
-      onUpdate(medication.id, Number(reqQuantity), cpaMode, newIndices);
+      // Calculate new requirement dynamically based on new indices
+      let activeCpm = 0;
+      const history = medication.originalHistory || [];
+      let validSum = 0;
+      let validCount = 0;
+      history.forEach((hVal, i) => {
+          if (hVal > 0 && !newIndices.includes(i)) {
+              validSum += hVal;
+              validCount++;
+          }
+      });
+      activeCpm = validCount > 0 ? validSum / validCount : 0;
+      
+      let newSuggestedReq = 0;
+      if (activeCpm > 0) {
+          const targetStock = Math.max(activeCpm * (medication.isSporadic ? 3 : 6), 2);
+          if (medication.currentStock < targetStock) {
+              newSuggestedReq = Math.ceil(targetStock - medication.currentStock);
+          }
+      }
+      
+      setReqQuantity(newSuggestedReq);
+      onUpdate(medication.id, newSuggestedReq, cpaMode, newIndices);
   };
 
   const handleQuantityChange = (val: number | '') => {
@@ -462,6 +471,11 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                         <Timer className="h-3 w-3" /> BAJA ROTACIÓN
                     </span>
                 )}
+                {medication.medtip === 'M' && medication.medpet === 'P' && (medication.medest === 'S' || medication.medest === '_') && (
+                    <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded font-black whitespace-nowrap shadow-sm flex items-center gap-1">
+                        MEDICAMENTO ESENCIAL
+                    </span>
+                )}
                 {isReviewed && (
                     <span className="bg-teal-100 text-teal-900 text-[10px] px-2 py-0.5 rounded font-black whitespace-nowrap flex items-center gap-1 shadow-sm">
                         <CheckCircle className="h-3 w-3" /> VALIDADO Y BLOQUEADO
@@ -539,6 +553,16 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                         if (!isReviewed && !isAdjustedEqualSimple) {
                             setCpaMode('ADJUSTED');
                             setExcludedIndices([]);
+                            
+                            let activeCpm = medication.cpm;
+                            let newSuggestedReq = 0;
+                            if (activeCpm > 0) {
+                                const targetStock = Math.max(activeCpm * (medication.isSporadic ? 3 : 6), 2);
+                                if (medication.currentStock < targetStock) {
+                                    newSuggestedReq = Math.ceil(targetStock - medication.currentStock);
+                                }
+                            }
+                            onUpdate(medication.id, newSuggestedReq, 'ADJUSTED', []);
                         }
                     }}
                     disabled={isReviewed || isAdjustedEqualSimple}
@@ -566,7 +590,20 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
 
                 {/* CPA SIMPLE CARD */}
                 <button 
-                     onClick={() => !isReviewed && setCpaMode('SIMPLE')}
+                     onClick={() => {
+                         if (!isReviewed) {
+                             setCpaMode('SIMPLE');
+                             let activeCpm = medication.rawCpm;
+                             let newSuggestedReq = 0;
+                             if (activeCpm > 0) {
+                                 const targetStock = Math.max(activeCpm * (medication.isSporadic ? 3 : 6), 2);
+                                 if (medication.currentStock < targetStock) {
+                                     newSuggestedReq = Math.ceil(targetStock - medication.currentStock);
+                                 }
+                             }
+                             onUpdate(medication.id, newSuggestedReq, 'SIMPLE', excludedIndices);
+                         }
+                     }}
                      disabled={isReviewed}
                      className={`px-3 py-2 rounded-lg border flex flex-col items-center justify-center text-center transition-all relative overflow-hidden group ${
                         cpaMode === 'SIMPLE' 

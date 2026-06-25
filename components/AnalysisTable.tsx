@@ -866,6 +866,11 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
                                 Baja Rotación
                             </span>
                         )}
+                        {item.medtip === 'M' && item.medpet === 'P' && (item.medest === 'S' || item.medest === '_') && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 whitespace-nowrap gap-1">
+                                Esencial
+                            </span>
+                        )}
                         {/* CPA Selection Indicator */}
                         {item.selectedCpaMode === 'SIMPLE' && (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200 whitespace-nowrap">

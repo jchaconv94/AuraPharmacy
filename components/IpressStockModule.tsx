@@ -994,25 +994,6 @@ export const IpressStockModule: React.FC = () => {
                     {/* Stats */}
                     {f.hasStock ? (
                       <div className="mt-auto flex flex-col gap-4">
-                        <div className="grid grid-cols-2 gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100/60">
-                          <div>
-                            <span className="text-slate-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">Medicamentos</span>
-                            <span className="font-black text-slate-700 text-xs">{f.uniqueMedicinesCount} ítems</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">Lotes Únicos</span>
-                            <span className="font-black text-slate-700 text-xs">{f.totalItemsCount} lotes</span>
-                          </div>
-                          <div className="pt-2 border-t border-slate-200/60">
-                            <span className="text-slate-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">Unidades Stock</span>
-                            <span className="font-black text-teal-600 text-xs">{(f.totalUnitsSum || 0).toLocaleString()} u.</span>
-                          </div>
-                          <div className="pt-2 border-t border-slate-200/60">
-                            <span className="text-slate-400 block text-[9px] font-bold uppercase tracking-wider mb-0.5">Farm / Alm.</span>
-                            <span className="font-black text-slate-700 font-mono text-xs bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm">{f.uniqueWarehousesCount}</span>
-                          </div>
-                        </div>
-
                         <div 
                           className="w-full flex items-center justify-between gap-3 bg-slate-50 hover:bg-slate-100 border border-slate-200/60 hover:border-slate-300 rounded-xl p-2.5 transition-all duration-200 cursor-pointer"
                           onClick={(e) => {
