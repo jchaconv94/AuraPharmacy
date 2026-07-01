@@ -634,6 +634,7 @@ export const generateFullReportPDF = (
         body: tableData,
         startY: tableStartY,
         theme: 'grid',
+        margin: { top: 15 },
         styles: { 
             fontSize: 6, 
             cellPadding: 1, 
@@ -656,40 +657,42 @@ export const generateFullReportPDF = (
             req: { cellWidth: 10, fontStyle: 'bold', textColor: COLORS.PIE_BLUE }
         },
         didDrawPage: function(data: any) {
-            // Header on every page of the table
-            doc.setFillColor(COLORS.BLACK[0], COLORS.BLACK[1], COLORS.BLACK[2]);
-            doc.rect(0, 0, pageWidth, 24, "F");
+            // Header on every page of the table -> now only on first page of the table
+            if (data.pageNumber === 1) {
+                doc.setFillColor(COLORS.BLACK[0], COLORS.BLACK[1], COLORS.BLACK[2]);
+                doc.rect(0, 0, pageWidth, 24, "F");
 
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(14);
-            doc.setFont("helvetica", "bold");
-            doc.text("MATRIZ DE REQUERIMIENTO DETALLADA", 15, 12);
-            
-            // Subtitle
-            const formattedDate = formatDateToMonthYear(result.referenceDate);
-            doc.setFontSize(10);
-            doc.setFont("helvetica", "normal");
-            doc.setTextColor(240, 240, 240);
-            doc.text(`CORTE: ${formattedDate}`, 15, 18);
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(14);
+                doc.setFont("helvetica", "bold");
+                doc.text("MATRIZ DE REQUERIMIENTO DETALLADA", 15, 12);
+                
+                // Subtitle
+                const formattedDate = formatDateToMonthYear(result.referenceDate);
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(240, 240, 240);
+                doc.text(`CORTE: ${formattedDate}`, 15, 18);
 
-            // Establishment Info
-            const facilityName = result.establishmentName ? result.establishmentName.toUpperCase() : establishmentName.toUpperCase();
-            const facilityText = result.codEess 
-              ? `${result.codEess.toUpperCase()} - ${facilityName}`
-              : facilityName;
+                // Establishment Info
+                const facilityName = result.establishmentName ? result.establishmentName.toUpperCase() : establishmentName.toUpperCase();
+                const facilityText = result.codEess 
+                  ? `${result.codEess.toUpperCase()} - ${facilityName}`
+                  : facilityName;
 
-            const hasMicrored = !!result.microred;
-            doc.setFontSize(12);
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
-            doc.text(facilityText, pageWidth - 15, hasMicrored ? 12 : 15, { align: "right" });
+                const hasMicrored = !!result.microred;
+                doc.setFontSize(12);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
+                doc.text(facilityText, pageWidth - 15, hasMicrored ? 12 : 15, { align: "right" });
 
-            // Microred Info
-            if (hasMicrored) {
-              doc.setFontSize(10);
-              doc.setFont("helvetica", "bold");
-              doc.setTextColor(220, 245, 235); // Slight minty highlight
-              doc.text(`MICRORED: ${result.microred!.toUpperCase()}`, pageWidth - 15, 18, { align: "right" });
+                // Microred Info
+                if (hasMicrored) {
+                  doc.setFontSize(10);
+                  doc.setFont("helvetica", "bold");
+                  doc.setTextColor(220, 245, 235); // Slight minty highlight
+                  doc.text(`MICRORED: ${result.microred!.toUpperCase()}`, pageWidth - 15, 18, { align: "right" });
+                }
             }
 
             // Footer Page 3+
