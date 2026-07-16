@@ -518,7 +518,9 @@ const AnalysisModule: React.FC = () => {
             });
         });
     }
-    return items;
+    
+    // Sort items alphabetically by name
+    return [...items].sort((a, b) => (a.name || '').trim().localeCompare((b.name || '').trim(), 'es', { sensitivity: 'base' }));
   }, [result, searchTerm, activeFilters, quickFilter, reviewedIds]);
 
   // UPDATE: Now depends on filteredMedications to update charts dynamically
@@ -527,15 +529,24 @@ const AnalysisModule: React.FC = () => {
 
     // Use filtered data for dashboard statistics
     const currentItems = filteredMedications;
-    const totalItems = currentItems.length;
     
-    const availableItems = currentItems.filter(m => 
+    // Filter essential medications for DME indicator in UI
+    const essentialMedications = currentItems.filter(m => {
+        const isMed = (m.medtip || '').toUpperCase().trim() === 'M';
+        const isPet = (m.medpet || '').toUpperCase().trim() === 'P';
+        const est = (m.medest || '').toUpperCase().trim();
+        const isEst = est === '_' || est === 'S';
+        return isMed && isPet && isEst;
+    });
+
+    const totalEssentialItems = essentialMedications.length;
+    
+    const availableEssentialItems = essentialMedications.filter(m => 
         m.status === StockStatus.NORMOSTOCK || 
-        m.status === StockStatus.SOBRESTOCK || 
-        m.status === StockStatus.SIN_ROTACION
+        m.status === StockStatus.SOBRESTOCK
     ).length;
     
-    const dmeScore = totalItems > 0 ? (availableItems / totalItems) * 100 : 0;
+    const dmeScore = totalEssentialItems > 0 ? (availableEssentialItems / totalEssentialItems) * 100 : 0;
     
     let indicatorStatus: 'OPTIMO' | 'ALTO' | 'REGULAR' | 'BAJO' = 'BAJO';
     if (dmeScore >= 90) indicatorStatus = 'OPTIMO';
@@ -548,8 +559,8 @@ const AnalysisModule: React.FC = () => {
         indicators: {
             dmeScore,
             status: indicatorStatus,
-            totalItems,
-            availableItems
+            totalItems: totalEssentialItems, // Use essential items for DME fraction
+            availableItems: availableEssentialItems // Use essential items for DME fraction
         }
     };
   }, [result, filteredMedications]);

@@ -217,17 +217,29 @@ export const analyzeInventoryWithAura = async (
   try {
     const analyzedMedications = inventory.map(analyzeItemLocally);
 
-    // Indicator 39 Classification
-    const normoCount = analyzedMedications.filter(m => m.status === StockStatus.NORMOSTOCK).length;
-    const sobreCount = analyzedMedications.filter(m => m.status === StockStatus.SOBRESTOCK).length;
-    const desabastecidoCount = analyzedMedications.filter(m => m.status === StockStatus.DESABASTECIDO).length;
-    const subCount = analyzedMedications.filter(m => m.status === StockStatus.SUBSTOCK).length;
-    const sinRotacionCount = analyzedMedications.filter(m => m.status === StockStatus.SIN_ROTACION).length;
+    // Filter essential medications for DME indicator
+    const essentialMedications = analyzedMedications.filter(m => {
+        const isMed = (m.medtip || '').toUpperCase().trim() === 'M';
+        const isPet = (m.medpet || '').toUpperCase().trim() === 'P';
+        const est = (m.medest || '').toUpperCase().trim();
+        const isEst = est === '_' || est === 'S';
+        return isMed && isPet && isEst;
+    });
 
-    // Evaluated items for indicator (excluding Sin Rotación / Sin Consumo)
-    const evaluatedItemsCount = normoCount + sobreCount + desabastecidoCount + subCount;
+    // Indicator 39 Classification (Using ONLY Essential Medications)
+    const normoCount = essentialMedications.filter(m => m.status === StockStatus.NORMOSTOCK).length;
+    const sobreCount = essentialMedications.filter(m => m.status === StockStatus.SOBRESTOCK).length;
+    const desabastecidoCount = essentialMedications.filter(m => m.status === StockStatus.DESABASTECIDO).length;
+    const subCount = essentialMedications.filter(m => m.status === StockStatus.SUBSTOCK).length;
+    const sinRotacionCount = essentialMedications.filter(m => m.status === StockStatus.SIN_ROTACION).length;
+
+    // Evaluated items for indicator (Using ALL essential items, including Sin Rotacion, following PDF logic)
+    const evaluatedItemsCount = essentialMedications.length;
     // Adequate availability (Numerator)
-    const availableItems = normoCount + sobreCount;
+    const availableItems = essentialMedications.filter(m => 
+        m.status === StockStatus.NORMOSTOCK || 
+        m.status === StockStatus.SOBRESTOCK
+    ).length;
 
     const dmeScore = evaluatedItemsCount > 0 ? (availableItems / evaluatedItemsCount) * 100 : 0;
     
@@ -243,9 +255,9 @@ export const analyzeInventoryWithAura = async (
     const spikesFound = analyzedMedications.filter(m => m.hasSpikes).length;
     const investment = analyzedMedications.reduce((sum, m) => sum + m.estimatedInvestment, 0);
 
-    let summary = `ANÁLISIS DE DISPONIBILIDAD (Ficha Técnica Indicador 39)\n\n`;
-    summary += `Se han procesado ${analyzedMedications.length} ítems en total. Para el cálculo del indicador se evaluaron ${evaluatedItemsCount} medicamentos esenciales (excluyendo aquellos sin rotación o sin consumo reciente según normativa).\n\n`;
-    summary += `Disponibilidad de Medicamentos Esenciales (DME): ${dmeScore.toFixed(1)}% — Disponibilidad ${indicatorStatus.toUpperCase()}.\n\n`;
+    let summary = `ANÁLISIS DE DISPONIBILIDAD (Ficha Técnica FT-EAM-001)\n\n`;
+    summary += `Se han procesado ${analyzedMedications.length} ítems en total. Para el cálculo del indicador se evaluaron ${evaluatedItemsCount} medicamentos esenciales.\n\n`;
+    summary += `Disponibilidad de Medicamentos Esenciales (DME): ${dmeScore.toFixed(1)}% — Nivel ${indicatorStatus.toUpperCase()}.\n\n`;
     
     summary += `Distribución de Stock:\n`;
     summary += ` • Normostock: ${normoCount} ítems\n`;

@@ -165,8 +165,8 @@ export const generateFullReportPDF = (
       
       doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(22);
-      doc.text("DISPONIBILIDAD DE MEDICAMENTOS", 15, 14);
+      doc.setFontSize(20);
+      doc.text("DISPONIBILIDAD DE MEDICAMENTOS ESENCIALES", 15, 14);
 
       // Date subtitle on left
       const formattedDate = formatDateToMonthYear(result.referenceDate);
@@ -198,44 +198,49 @@ export const generateFullReportPDF = (
 
       // --- LAYOUT CALCULATIONS (SYMMETRY) ---
       const margin = 15;
-      const startY = 35;
+      const startY = 32;
       const totalWidth = pageWidth - (margin * 2); // 297 - 30 = 267mm
       const gap = 10;
       
       // Right Column Width (Fixed for Indicators) approx 1/3
-      const rightColW = 95;
+      const rightColW = 92;
       // Left Column Width (Fluid for Chart) approx 2/3
       const leftColW = totalWidth - rightColW - gap;
 
-      // Heights Calculation for Symmetry
+      // Heights Calculation
       const cardGap = 8;
-      const rightCardH = 72; // Height of each small card on right
-      const totalH = (rightCardH * 2) + cardGap; // ~152mm Total Height
+      const leftCardH = 95; // Taller left panel (Non-flattened)
+      const topRightH = 80; // Taller top-right (DME Indicator)
+      const bottomRightH = 68; // Taller bottom-right (Distribution)
 
       // Coordinates
       const leftX = margin;
       const rightX = margin + leftColW + gap;
       
       const dmeY = startY;
-      const distY = startY + rightCardH + cardGap;
+      const distY = startY + topRightH + cardGap;
 
 
       // 1. LEFT PANEL: AVAILABILITY CHART
       doc.setDrawColor(220, 220, 220); // Light Gray Border
       doc.setLineWidth(0.3);
       doc.setFillColor(255, 255, 255);
-      doc.roundedRect(leftX, startY, leftColW, totalH, 4, 4, "S"); // Stroke only for clean look
-
-      doc.setFontSize(11);
-      doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-      doc.setFont("helvetica", "bold");
-      doc.text("DISTRIBUCIÓN DE DISPONIBILIDAD", leftX + 10, startY + 12);
+      doc.roundedRect(leftX, startY, leftColW, leftCardH, 4, 4, "S"); // Stroke only for clean look
+  
 
       // --- RECALCULATE STATUSES FOR CHARTS ---
-      const recalculatedMedications = result.medications.map(m => {
-          const { activeStatus } = calculateDynamicMetricsPDF(m);
-          return { ...m, status: activeStatus };
-      });
+      const recalculatedMedications = result.medications
+          .filter(m => {
+              const isMed = (m.medtip || '').toUpperCase().trim() === 'M';
+              const isPet = (m.medpet || '').toUpperCase().trim() === 'P';
+              const est = (m.medest || '').toUpperCase().trim();
+              const isEst = est === '_' || est === 'S';
+              return isMed && isPet && isEst;
+          })
+          .map(m => {
+              const { activeStatus } = calculateDynamicMetricsPDF(m);
+              return { ...m, status: activeStatus };
+          });
 
       const stats = [
         { label: "Desabastecido", val: recalculatedMedications.filter(m => m.status === StockStatus.DESABASTECIDO).length, color: COLORS.RED },
@@ -249,20 +254,20 @@ export const generateFullReportPDF = (
       const recalculatedTotal = recalculatedMedications.length || 1;
 
       // Chart Dimensions
-      const chartBottomMargin = 20;
-      const chartTopMargin = 30;
-      const chartAreaH = totalH - chartBottomMargin - chartTopMargin;
-      const chartBaseY = startY + totalH - chartBottomMargin;
+      const chartBottomMargin = 15;
+      const chartTopMargin = 22;
+      const chartAreaH = leftCardH - chartBottomMargin - chartTopMargin;
+      const chartBaseY = startY + leftCardH - chartBottomMargin;
       
       const barWidth = 22;
       const totalBarsWidth = (barWidth * stats.length);
-      const availableSpaceForSpacing = leftColW - 40 - totalBarsWidth; // 20mm padding each side
+      const availableSpaceForSpacing = leftColW - 30 - totalBarsWidth; // 15mm padding each side
       const barGap = availableSpaceForSpacing / (stats.length - 1);
 
       doc.setDrawColor(245, 245, 245);
       doc.line(leftX + 10, chartBaseY, leftX + leftColW - 10, chartBaseY); // X-Axis
 
-      let currentBarX = leftX + 20;
+      let currentBarX = leftX + 15;
 
       stats.forEach(stat => {
           const barHeight = (stat.val / maxVal) * chartAreaH;
@@ -271,20 +276,20 @@ export const generateFullReportPDF = (
           doc.setFillColor(stat.color[0], stat.color[1], stat.color[2]);
           doc.rect(currentBarX, chartBaseY - barHeight, barWidth, barHeight, "F");
 
-          doc.setFontSize(14);
+          doc.setFontSize(11);
           doc.setFont("helvetica", "bold");
           doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
-          doc.text(stat.val.toString(), currentBarX + (barWidth / 2), chartBaseY - barHeight - 8, { align: "center" });
+          doc.text(stat.val.toString(), currentBarX + (barWidth / 2), chartBaseY - barHeight - 7, { align: "center" });
 
-          doc.setFontSize(9);
+          doc.setFontSize(7.5);
           doc.setFont("helvetica", "normal");
           doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
           doc.text(percentage, currentBarX + (barWidth / 2), chartBaseY - barHeight - 2, { align: "center" });
 
-          doc.setFontSize(8); 
+          doc.setFontSize(7.5); 
           doc.setFont("helvetica", "bold"); 
           doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-          doc.text(stat.label, currentBarX + (barWidth / 2), chartBaseY + 6, { align: "center" });
+          doc.text(stat.label, currentBarX + (barWidth / 2), chartBaseY + 5, { align: "center" });
 
           currentBarX += barWidth + barGap;
       });
@@ -293,8 +298,7 @@ export const generateFullReportPDF = (
       // Recalculate DME Score
       const availableItemsCount = recalculatedMedications.filter(m => 
           m.status === StockStatus.NORMOSTOCK || 
-          m.status === StockStatus.SOBRESTOCK || 
-          m.status === StockStatus.SIN_ROTACION
+          m.status === StockStatus.SOBRESTOCK
       ).length;
       
       const dmeScore = recalculatedTotal > 0 ? (availableItemsCount / recalculatedTotal) * 100 : 0;
@@ -304,50 +308,64 @@ export const generateFullReportPDF = (
       else if (dmeScore >= 80) indicatorStatus = 'ALTO';
       else if (dmeScore >= 70) indicatorStatus = 'REGULAR';
 
-      const isLow = dmeScore < 70;
-      const cardBg = isLow ? COLORS.BG_RED_LIGHT : COLORS.BG_GREEN_LIGHT;
-      const cardText = isLow ? COLORS.RED : ([6, 78, 59] as [number, number, number]);
-      const badgeBg = isLow ? ([252, 165, 165] as [number, number, number]) : ([110, 231, 183] as [number, number, number]);
+      let cardBg: [number, number, number] = [254, 242, 242]; // pale red
+      let cardText: [number, number, number] = [185, 28, 28]; // dark red
+      let badgeBg: [number, number, number] = [254, 202, 202]; // soft red badge
+
+      if (indicatorStatus === 'OPTIMO') {
+        cardBg = [239, 246, 255]; // pale blue
+        cardText = [30, 64, 175]; // dark blue
+        badgeBg = [191, 219, 254]; // soft blue
+      } else if (indicatorStatus === 'ALTO') {
+        cardBg = [240, 253, 244]; // pale green
+        cardText = [21, 128, 61]; // dark green
+        badgeBg = [187, 247, 208]; // soft green
+      } else if (indicatorStatus === 'REGULAR') {
+        cardBg = [255, 251, 235]; // pale amber
+        cardText = [180, 83, 9]; // dark amber/brown
+        badgeBg = [253, 230, 138]; // soft amber
+      }
 
       doc.setDrawColor(220, 220, 220);
       doc.setFillColor(cardBg[0], cardBg[1], cardBg[2]);
-      doc.roundedRect(rightX, dmeY, rightColW, rightCardH, 4, 4, "FD");
+      doc.roundedRect(rightX, dmeY, rightColW, topRightH, 4, 4, "FD");
 
       doc.setFontSize(9);
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
       doc.setFont("helvetica", "bold");
-      doc.text("INDICADOR DME", rightX + (rightColW/2), dmeY + 12, { align: "center" });
+      doc.text("INDICADOR DME", rightX + (rightColW/2), dmeY + 13, { align: "center" });
 
-      doc.setFontSize(40);
+      doc.setFontSize(32);
       doc.setTextColor(cardText[0], cardText[1], cardText[2]);
       doc.setFont("helvetica", "bold");
-      doc.text(`${dmeScore.toFixed(1)}%`, rightX + (rightColW/2), dmeY + 30, { align: "center" });
+      doc.text(`${dmeScore.toFixed(1)}%`, rightX + (rightColW/2), dmeY + 33, { align: "center" });
 
       doc.setFillColor(badgeBg[0], badgeBg[1], badgeBg[2]);
-      const badgeW = 35;
-      doc.roundedRect(rightX + (rightColW/2) - (badgeW/2), dmeY + 36, badgeW, 7, 3, 3, "F");
-      doc.setFontSize(8);
-      doc.setTextColor(255, 255, 255);
-      doc.text(indicatorStatus, rightX + (rightColW/2), dmeY + 40.5, { align: "center" });
+      const badgeW = 34;
+      doc.roundedRect(rightX + (rightColW/2) - (badgeW/2), dmeY + 39, badgeW, 6, 3, 3, "F");
+      doc.setFontSize(7.5);
+      doc.setTextColor(cardText[0], cardText[1], cardText[2]);
+      doc.setFont("helvetica", "bold");
+      doc.text(indicatorStatus, rightX + (rightColW/2), dmeY + 43.2, { align: "center" });
 
-      doc.setFontSize(7);
+      doc.setFontSize(7.5);
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
       doc.setFont("helvetica", "normal");
-      doc.text("Porcentaje de medicamentos esenciales", rightX + (rightColW/2), dmeY + 49, { align: "center" });
-      doc.text("con stock disponible (Normo + Sobre).", rightX + (rightColW/2), dmeY + 53, { align: "center" });
+      doc.text("Porcentaje de medicamentos esenciales", rightX + (rightColW/2), dmeY + 53, { align: "center" });
+      doc.text("con stock disponible (Normo + Sobre).", rightX + (rightColW/2), dmeY + 57, { align: "center" });
 
       doc.setDrawColor(200, 200, 200);
-      doc.line(rightX + 8, dmeY + 60, rightX + rightColW - 8, dmeY + 60);
-      doc.setFontSize(7);
+      doc.line(rightX + 8, dmeY + 65, rightX + rightColW - 8, dmeY + 65);
+      doc.setFontSize(7.5);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-      doc.text("META: >90%", rightX + 10, dmeY + 65);
-      doc.text(`ACTUAL: ${availableItemsCount}/${recalculatedTotal}`, rightX + rightColW - 10, dmeY + 65, { align: "right" });
+      doc.text("META: >90%", rightX + 10, dmeY + 73);
+      doc.text(`Solo medicamentos esenciales: ${availableItemsCount}/${recalculatedTotal}`, rightX + rightColW - 10, dmeY + 73, { align: "right" });
 
       // 3. RIGHT BOTTOM: DISTRIBUTION
       doc.setDrawColor(220, 220, 220);
       doc.setFillColor(255, 255, 255);
-      doc.roundedRect(rightX, distY, rightColW, rightCardH, 4, 4, "S");
+      doc.roundedRect(rightX, distY, rightColW, bottomRightH, 4, 4, "S");
 
       doc.setFontSize(9);
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
@@ -369,44 +387,93 @@ export const generateFullReportPDF = (
       ];
       const total = itemsData.reduce((a,b) => a + b.val, 0);
 
-      let barY = distY + 24;
+      let barY = distY + 22;
       itemsData.forEach(item => {
-          doc.setFontSize(8);
+          doc.setFontSize(7.5);
           doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
           doc.setFont("helvetica", "bold");
-          doc.text(item.label, rightX + 10, barY - 2);
+          doc.text(item.label, rightX + 10, barY - 1.5);
 
           const maxBarW = rightColW - 55;
           const pct = total > 0 ? item.val / total : 0;
           const barW = pct * maxBarW;
 
           doc.setFillColor(243, 244, 246);
-          doc.roundedRect(rightX + 10, barY, maxBarW, 6, 2, 2, "F");
+          doc.roundedRect(rightX + 10, barY, maxBarW, 4, 1.5, 1.5, "F");
           doc.setFillColor(item.color[0], item.color[1], item.color[2]);
           if (barW > 0) {
-              doc.roundedRect(rightX + 10, barY, barW, 6, 2, 2, "F");
+              doc.roundedRect(rightX + 10, barY, barW, 4, 1.5, 1.5, "F");
           }
 
-          doc.setFontSize(9);
-          doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
-          doc.text(`${item.val} (${(pct*100).toFixed(0)}%)`, rightX + rightColW - 10, barY + 4.5, { align: "right" });
-
           doc.setFontSize(8);
+          doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+          doc.text(`${item.val} (${(pct*100).toFixed(0)}%)`, rightX + rightColW - 10, barY + 3, { align: "right" });
+
+          doc.setFontSize(7.5);
           doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
           doc.setFont("helvetica", "normal");
-          doc.text(formatCurrency(item.money), rightX + 10, barY + 11);
-          barY += 20; 
+          doc.text(formatCurrency(item.money), rightX + 10, barY + 7.5);
+          barY += 16; 
       });
 
       doc.setDrawColor(240, 240, 240);
-      doc.line(rightX + 10, distY + 60, rightX + rightColW - 10, distY + 60);
-      doc.setFontSize(8);
+      doc.line(rightX + 10, distY + 52, rightX + rightColW - 10, distY + 52);
+      doc.setFontSize(7.5);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-      doc.text("TOTAL ÍTEMS", rightX + 10, distY + 66);
-      doc.setFontSize(10);
+      doc.text("TOTAL ÍTEMS", rightX + 10, distY + 59);
+      doc.setFontSize(9);
       doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
-      doc.text(total.toString(), rightX + rightColW - 10, distY + 66, { align: "right" });
+      doc.text(total.toString(), rightX + rightColW - 10, distY + 59, { align: "right" });
+
+      // Calculate stats for the legend
+      const essentialMedications = result.medications.filter(m => {
+          const isMed = (m.medtip || '').toUpperCase().trim() === 'M';
+          const isPet = (m.medpet || '').toUpperCase().trim() === 'P';
+          const est = (m.medest || '').toUpperCase().trim();
+          const isEst = est === '_' || est === 'S';
+          return isMed && isPet && isEst;
+      });
+
+      const normoCount = essentialMedications.filter((m: any) => m.status === 'NORMOSTOCK').length;
+      const sobreCount = essentialMedications.filter((m: any) => m.status === 'SOBRESTOCK').length;
+      const desabastecidoCount = essentialMedications.filter((m: any) => m.status === 'DESABASTECIDO').length;
+      const subCount = essentialMedications.filter((m: any) => m.status === 'SUBSTOCK').length;
+      const sinRotacionCount = essentialMedications.filter((m: any) => m.status === 'SIN_ROTACION').length;
+
+      // We skip adding a new page and just append the legend at the bottom of Page 1.
+      let currentY = startY + leftCardH + cardGap;
+
+      // COLUMN 1: SITUACIÓN DE STOCK (Left Column, below bar chart)
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+      doc.text("SITUACIÓN DE STOCK", 15, currentY + 5);
+
+      let legendY = currentY + 14;
+
+      const drawStatRowLeft = (y: number, label: string, count: number, color: number[], description: string) => {
+         doc.setFillColor(color[0], color[1], color[2]);
+         doc.circle(18, y - 1, 2, "F");
+         
+         doc.setFontSize(10);
+         doc.setFont("helvetica", "bold");
+         doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+         doc.text(`${count.toString()}`, 30, y, { align: 'right' });
+         
+         doc.text(label, 38, y);
+
+         doc.setFontSize(9);
+         doc.setFont("helvetica", "normal");
+         doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
+         doc.text(`- ${description}`, 68, y);
+      };
+
+      drawStatRowLeft(legendY, "Normostock", normoCount, COLORS.GREEN, "Cubre de 2 a 6 meses de demanda"); legendY += 9;
+      drawStatRowLeft(legendY, "Sobrestock", sobreCount, COLORS.INDIGO, "Mayor a 6 meses (Riesgo de vencimiento u obsolescencia)"); legendY += 9;
+      drawStatRowLeft(legendY, "Substock", subCount, COLORS.ORANGE, "Menor a 2 meses (Riesgo de desabastecimiento)"); legendY += 9;
+      drawStatRowLeft(legendY, "Desabastecido", desabastecidoCount, COLORS.RED, "Stock agotado (0) con historial de consumo"); legendY += 9;
+      drawStatRowLeft(legendY, "Sin Rotación", sinRotacionCount, COLORS.GRAY, "Sin rotación reciente (No suma a la disponibilidad)");
 
       // Footer Page 1
       const pageHeight = doc.internal.pageSize.height;
@@ -415,165 +482,8 @@ export const generateFullReportPDF = (
       doc.setTextColor(150, 150, 150);
       doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, pageHeight - 10, { align: "right" });
 
-
       // ==========================================
-      // PAGE 2: EXECUTIVE SUMMARY (DEDICATED)
-      // ==========================================
-      doc.addPage();
-      
-      // Header Page 2 - BLACK
-      doc.setFillColor(COLORS.BLACK[0], COLORS.BLACK[1], COLORS.BLACK[2]);
-      doc.rect(0, 0, pageWidth, 24, "F"); 
-      
-      // Title
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "bold");
-      doc.text("RESUMEN EJECUTIVO", 15, 12);
-
-      // Subtitle
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(240, 240, 240);
-      doc.text(`CORTE: ${formattedDate}`, 15, 18);
-
-      // Establishment Info (Right side page 2)
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
-      doc.text(facilityText, pageWidth - 15, hasMicrored ? 12 : 15, { align: "right" });
-
-      if (hasMicrored) {
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(220, 245, 235);
-        doc.text(`MICRORED: ${result.microred!.toUpperCase()}`, pageWidth - 15, 18, { align: "right" });
-      }
-
-      // Compute Indicator Metrics
-      const normoCount = result.medications.filter((m: any) => m.status === 'NORMOSTOCK').length;
-      const sobreCount = result.medications.filter((m: any) => m.status === 'SOBRESTOCK').length;
-      const desabastecidoCount = result.medications.filter((m: any) => m.status === 'DESABASTECIDO').length;
-      const subCount = result.medications.filter((m: any) => m.status === 'SUBSTOCK').length;
-      const sinRotacionCount = result.medications.filter((m: any) => m.status === 'SIN_ROTACION').length;
-      const execEvaluatedItemsCount = normoCount + sobreCount + desabastecidoCount + subCount;
-      const execAvailableItems = normoCount + sobreCount;
-      const execDmeScore = execEvaluatedItemsCount > 0 ? (execAvailableItems / execEvaluatedItemsCount) * 100 : 0;
-      
-      let execIndicatorStatus = 'CRÍTICA';
-      let execIndicatorColor = COLORS.RED;
-      if (execDmeScore >= 90) { execIndicatorStatus = 'ÓPTIMA'; execIndicatorColor = COLORS.GREEN; }
-      else if (execDmeScore >= 80) { execIndicatorStatus = 'ACEPTABLE'; execIndicatorColor = COLORS.INDIGO; }
-      else if (execDmeScore >= 70) { execIndicatorStatus = 'EN ALERTA'; execIndicatorColor = COLORS.ORANGE; }
-
-      let currentY = 40;
-
-      // BOX 1: MAIN INDICATOR
-      doc.setDrawColor(220, 220, 220);
-      doc.setFillColor(250, 250, 250);
-      doc.roundedRect(15, currentY, pageWidth - 30, 45, 3, 3, "FD");
-
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
-      doc.text("DISPONIBILIDAD DE MEDICAMENTOS ESENCIALES (DME)", 25, currentY + 15);
-      
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-      doc.text("Ficha Técnica del Indicador 39 (Meta: 100%)", 25, currentY + 22);
-
-      // Score Value
-      doc.setFontSize(28);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(execIndicatorColor[0], execIndicatorColor[1], execIndicatorColor[2]);
-      doc.text(`${execDmeScore.toFixed(1)}%`, pageWidth - 25, currentY + 22, { align: "right" });
-      
-      // Score Label
-      doc.setFontSize(14);
-      doc.text(execIndicatorStatus, pageWidth - 25, currentY + 30, { align: "right" });
-
-      // Evaluated Subtext
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-      doc.text(`Cálculo basado en ${execEvaluatedItemsCount} ítems con rotación activa`, 25, currentY + 35);
-      
-      currentY += 55;
-
-      // BOX 2: BREAKDOWN
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
-      doc.text("SITUACIÓN DE STOCK", 15, currentY);
-      currentY += 8;
-
-      const drawStatRow = (y: number, label: string, count: number, color: number[], description: string) => {
-         doc.setFillColor(color[0], color[1], color[2]);
-         doc.circle(20, y - 1, 3, "F");
-         
-         doc.setFontSize(10);
-         doc.setFont("helvetica", "bold");
-         doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
-         doc.text(`${count.toString()}`, 35, y, { align: 'right' });
-         
-         doc.setFontSize(10);
-         doc.setFont("helvetica", "bold");
-         doc.text(label, 45, y);
-
-         doc.setFontSize(9);
-         doc.setFont("helvetica", "normal");
-         doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-         doc.text(`- ${description}`, 90, y);
-      };
-
-      drawStatRow(currentY, "Normostock", normoCount, COLORS.GREEN, "Cubre de 2 a 6 meses de demanda"); currentY += 10;
-      drawStatRow(currentY, "Sobrestock", sobreCount, COLORS.INDIGO, "Mayor a 6 meses (Riesgo de vencimiento u obsolescencia)"); currentY += 10;
-      drawStatRow(currentY, "Substock", subCount, COLORS.ORANGE, "Menor a 2 meses (Riesgo de desabastecimiento)"); currentY += 10;
-      drawStatRow(currentY, "Desabastecido", desabastecidoCount, COLORS.RED, "Stock agotado (0) con historial de consumo"); currentY += 10;
-      
-      doc.setDrawColor(230, 230, 230);
-      doc.line(15, currentY, pageWidth - 15, currentY);
-      currentY += 10;
-
-      drawStatRow(currentY, "Sin Rotación", sinRotacionCount, COLORS.GRAY, "Sin rotación reciente (Excluidos del cálculo DME)"); currentY += 15;
-
-
-      // BOX 3: INTERVENTIONS & RECOMMENDATIONS
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
-      doc.text("INTERVENCIONES Y REQUERIMIENTO", 15, currentY);
-      currentY += 8;
-
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      
-      const spikesFound = result.medications.filter((m: any) => m.hasSpikes).length;
-
-      const investment = result.medications.reduce((sum: number, m: any) => sum + (m.estimatedInvestment || 0), 0);
-
-      const bullets = [
-         `• Control de Sobrestock: El sistema identificó y ajustó el Consumo Promedio de ${spikesFound} ítems que presentaban picos atípicos.`,
-         `• Estrategia de Baja Rotación: Los ítems con movimiento esporádico (< 6 meses activos al año) aseguran una cobertura preventiva de 3 meses.`,
-         `• Presupuesto Estimado: Se sugiere una inversión proyectada de S/ ${investment.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} para cubrir los requerimientos priorizados y restablecer la disponibilidad al nivel de Normostock.`
-      ];
-
-      bullets.forEach(b => {
-         const lines = doc.splitTextToSize(b, pageWidth - 30);
-         doc.text(lines, 15, currentY);
-         currentY += lines.length * 5;
-      });
-
-      // Footer Page 2
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(150, 150, 150);
-      doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, pageHeight - 10, { align: "right" });
-
-
-      // ==========================================
-      // PAGE 3+: DATA MATRIX (DEDICATED START)
+      // PAGE 2+: DATA MATRIX (DEDICATED START)
       // ==========================================
       // PAGE 2+: DETAILED TABLE
       // ==========================================
@@ -590,12 +500,15 @@ export const generateFullReportPDF = (
         { header: 'COD', dataKey: 'id' },
         { header: 'DESCRIPCIÓN', dataKey: 'name' },
         { header: 'F.F.', dataKey: 'ff' }, 
-        { header: 'TIPO', dataKey: 'type' },
+        { header: 'TIP', dataKey: 'type' },
+        { header: 'PET', dataKey: 'pet' },
+        { header: 'EST', dataKey: 'est' },
         ...monthHeaders.map((m, i) => ({ header: m, dataKey: `m${i}` })),
         { header: 'STOCK', dataKey: 'stock' }, 
         { header: 'CPA(S)', dataKey: 'rawCpm' },
         { header: 'CPA(A)', dataKey: 'cpm' },
-        { header: 'MESES', dataKey: 'monthsProvision' }, 
+        { header: 'M. ACT', dataKey: 'currentMonths' },
+        { header: 'M. EST', dataKey: 'monthsProvision' }, 
         { header: 'ESTADO', dataKey: 'status' },
         { header: 'REQ', dataKey: 'req' },
       ];
@@ -603,26 +516,50 @@ export const generateFullReportPDF = (
       const itemsToRender = filteredTableItems || result.medications;
 
       const tableData = itemsToRender.map(item => {
-        // --- KEY CHANGE: Use Dynamic Metrics for PDF Report ---
-        const { activeMonths, activeStatus } = calculateDynamicMetricsPDF(item);
+        // --- KEY CHANGE: Use Dynamic Metrics + Projected Requisition for PDF Report ---
+        const { activeCpm, activeMonths } = calculateDynamicMetricsPDF(item);
         
+        const reqQty = item.quantityToOrder > 0 ? item.quantityToOrder : 0;
+        const projectedStock = item.currentStock + reqQty;
+
+        const projectedMonths = activeCpm > 0 
+            ? projectedStock / activeCpm 
+            : (projectedStock > 0 ? Infinity : 0);
+
+        let projectedStatus = StockStatus.NORMOSTOCK;
+        if (projectedStock === 0) {
+            projectedStatus = StockStatus.DESABASTECIDO;
+        } else if (activeCpm === 0 && projectedStock > 0) {
+            projectedStatus = StockStatus.SIN_ROTACION;
+        } else if (projectedMonths > 6) {
+            projectedStatus = StockStatus.SOBRESTOCK;
+        } else if (projectedMonths >= 2 && projectedMonths <= 6) {
+            projectedStatus = StockStatus.NORMOSTOCK;
+        } else {
+            projectedStatus = StockStatus.SUBSTOCK;
+        }
+
         const row: any = {
             id: item.id,
             name: item.name,
             ff: item.ff || '-',
             type: item.medtip || 'MED',
+            pet: item.medpet || '-',
+            est: item.medest || '-',
             stock: item.currentStock.toLocaleString(),
             rawCpm: item.rawCpm.toFixed(1),
             cpm: item.cpm.toFixed(1),
-            // Use active calculated values
-            monthsProvision: isFinite(activeMonths) ? activeMonths.toFixed(1) : '∞',
-            status: activeStatus,
+            // Current actual months
+            currentMonths: isFinite(activeMonths) ? activeMonths.toFixed(1) : '∞',
+            // Use projected calculated values
+            monthsProvision: isFinite(projectedMonths) ? projectedMonths.toFixed(1) : '∞',
+            status: projectedStatus,
             req: item.quantityToOrder > 0 ? item.quantityToOrder : '-',
             _spikeThreshold: item.spikeThreshold,
             _lowThreshold: item.lowThreshold || 0,
             _excludedIndices: item.excludedIndices || [],
             _history: item.originalHistory,
-            _statusEnum: activeStatus, // Use active status for coloring
+            _statusEnum: projectedStatus, // Use projected status for coloring
             _selectedMode: item.selectedCpaMode || 'ADJUSTED' // Pass mode to parse cell
         };
         item.originalHistory.forEach((val, idx) => { row[`m${idx}`] = val; });
@@ -634,7 +571,7 @@ export const generateFullReportPDF = (
         body: tableData,
         startY: tableStartY,
         theme: 'grid',
-        margin: { top: 15 },
+        margin: { top: 15, left: 4, right: 4 },
         styles: { 
             fontSize: 6, 
             cellPadding: 1, 
@@ -645,16 +582,19 @@ export const generateFullReportPDF = (
         },
         headStyles: { fillColor: COLORS.BLACK, textColor: 255, fontSize: 6, fontStyle: 'bold', halign: 'center' },
         columnStyles: {
-            id: { cellWidth: 10 },
-            name: { cellWidth: 45, halign: 'left' },
+            id: { cellWidth: 9 },
+            name: { cellWidth: 'auto', halign: 'left' },
             ff: { cellWidth: 12 },
-            type: { cellWidth: 8 },
-            stock: { cellWidth: 10, fontStyle: 'bold' },
-            rawCpm: { cellWidth: 10 },
-            cpm: { cellWidth: 10 },
-            monthsProvision: { cellWidth: 10, fontStyle: 'bold' },
+            type: { cellWidth: 6 },
+            pet: { cellWidth: 6 },
+            est: { cellWidth: 6 },
+            stock: { cellWidth: 11, fontStyle: 'bold' },
+            rawCpm: { cellWidth: 9 },
+            cpm: { cellWidth: 9 },
+            currentMonths: { cellWidth: 9 },
+            monthsProvision: { cellWidth: 9, fontStyle: 'bold' },
             status: { cellWidth: 18, fontSize: 5 },
-            req: { cellWidth: 10, fontStyle: 'bold', textColor: COLORS.PIE_BLUE }
+            req: { cellWidth: 9, fontStyle: 'bold', textColor: COLORS.PIE_BLUE }
         },
         didDrawPage: function(data: any) {
             // Header on every page of the table -> now only on first page of the table
@@ -752,6 +692,21 @@ export const generateFullReportPDF = (
                     data.cell.styles.fillColor = [219, 234, 254]; // Blue-100 (Same as Simple)
                 } else {
                     data.cell.styles.textColor = COLORS.TEXT_INACTIVE;
+                }
+            }
+
+            // Style Stock Column
+            if (data.column.dataKey === 'stock') {
+                data.cell.styles.fillColor = [220, 252, 231]; // light green (emerald-50)
+                data.cell.styles.fontStyle = 'bold';
+            }
+
+            // Style Req Column
+            if (data.column.dataKey === 'req') {
+                if (row.req !== '-') {
+                    data.cell.styles.fillColor = [219, 234, 254]; // blue-100 highlight
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.textColor = COLORS.PIE_BLUE; // Keep the blue text
                 }
             }
 

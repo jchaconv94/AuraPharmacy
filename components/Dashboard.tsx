@@ -39,17 +39,26 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
   const { medications, indicators } = result;
   const totalItems = medications.length;
 
-  // --- 1. Data for Availability Bar Chart ---
+  const essentialMedications = medications.filter(m => {
+      const isMed = (m.medtip || '').toUpperCase().trim() === 'M';
+      const isPet = (m.medpet || '').toUpperCase().trim() === 'P';
+      const est = (m.medest || '').toUpperCase().trim();
+      const isEst = est === '_' || est === 'S';
+      return isMed && isPet && isEst;
+  });
+  const essentialTotalItems = essentialMedications.length;
+
+  // --- 1. Data for Availability Bar Chart (Only Essential Medications) ---
   const statusData = [
-    { name: 'Desabastecido', key: StockStatus.DESABASTECIDO, value: medications.filter(m => m.status === StockStatus.DESABASTECIDO).length },
-    { name: 'SubStock', key: StockStatus.SUBSTOCK, value: medications.filter(m => m.status === StockStatus.SUBSTOCK).length },
-    { name: 'NormoStock', key: StockStatus.NORMOSTOCK, value: medications.filter(m => m.status === StockStatus.NORMOSTOCK).length },
-    { name: 'SobreStock', key: StockStatus.SOBRESTOCK, value: medications.filter(m => m.status === StockStatus.SOBRESTOCK).length },
-    { name: 'Sin Rotación', key: StockStatus.SIN_ROTACION, value: medications.filter(m => m.status === StockStatus.SIN_ROTACION).length },
+    { name: 'Desabastecido', key: StockStatus.DESABASTECIDO, value: essentialMedications.filter(m => m.status === StockStatus.DESABASTECIDO).length },
+    { name: 'SubStock', key: StockStatus.SUBSTOCK, value: essentialMedications.filter(m => m.status === StockStatus.SUBSTOCK).length },
+    { name: 'NormoStock', key: StockStatus.NORMOSTOCK, value: essentialMedications.filter(m => m.status === StockStatus.NORMOSTOCK).length },
+    { name: 'SobreStock', key: StockStatus.SOBRESTOCK, value: essentialMedications.filter(m => m.status === StockStatus.SOBRESTOCK).length },
+    { name: 'Sin Rotación', key: StockStatus.SIN_ROTACION, value: essentialMedications.filter(m => m.status === StockStatus.SIN_ROTACION).length },
   ].map(item => ({
     ...item,
-    percentageStr: totalItems > 0 ? ((item.value / totalItems) * 100).toFixed(1) : "0.0",
-    numericPercentage: totalItems > 0 ? (item.value / totalItems) * 100 : 0
+    percentageStr: essentialTotalItems > 0 ? ((item.value / essentialTotalItems) * 100).toFixed(1) : "0.0",
+    numericPercentage: essentialTotalItems > 0 ? (item.value / essentialTotalItems) * 100 : 0
   }));
 
   // --- 2. Data for Distribution Chart (Meds vs Insumos) ---
@@ -75,9 +84,9 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
   // Helper for DME Style
   const getIndicatorStyle = (status: string) => {
     switch(status) {
-      case 'OPTIMO': return { container: 'bg-emerald-50 border-emerald-100', text: 'text-emerald-800', badge: 'bg-emerald-200 text-emerald-900' };
-      case 'ALTO': return { container: 'bg-blue-50 border-blue-100', text: 'text-blue-800', badge: 'bg-blue-200 text-blue-900' };
-      case 'REGULAR': return { container: 'bg-orange-50 border-orange-100', text: 'text-orange-800', badge: 'bg-orange-200 text-orange-900' };
+      case 'OPTIMO': return { container: 'bg-blue-50 border-blue-100', text: 'text-blue-800', badge: 'bg-blue-200 text-blue-900' };
+      case 'ALTO': return { container: 'bg-emerald-50 border-emerald-100', text: 'text-emerald-800', badge: 'bg-emerald-200 text-emerald-900' };
+      case 'REGULAR': return { container: 'bg-amber-50 border-amber-200', text: 'text-amber-800', badge: 'bg-amber-200 text-amber-900' };
       default: return { container: 'bg-red-50 border-red-100', text: 'text-red-800', badge: 'bg-red-200 text-red-900' };
     }
   };
