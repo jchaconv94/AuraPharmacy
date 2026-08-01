@@ -93,9 +93,17 @@ Olvidar cualquiera de estos deja el módulo inaccesible o sin título.
 - **Autenticación propia** sobre tabla `users` con `bcryptjs` — **no** se usa Supabase Auth.
 - Por eso las **políticas RLS son temporales/permisivas**. La seguridad real hoy vive en el frontend/servicios vía `ImmunizationScope`. RLS definitiva requiere migrar a Supabase Auth o mover escrituras a Edge Functions/RPC. Está documentado como deuda conocida en `INMUNIZACIONES_DISENO_FUNCIONAL.md` §25.
 
-> **La clave `anon` es pública y hoy tiene permisos de administración.** Auditoría del 2026-07-31 (`SEGURIDAD_AUDITORIA.md`): `anon` puede leer, escribir y borrar **todas** las tablas de `public`, incluida `users`. Cualquiera que extraiga la clave del bundle desplegado puede crear una cuenta `ADMIN` y entrar. También quedan expuestos DNI, teléfono y correo de 70 personas en `personnel`.
+> **La clave `anon` es pública**: el workflow de GitHub Pages la inyecta en el build, así que cualquiera puede extraerla del bundle desplegado. Todo lo que `anon` pueda hacer, lo puede hacer cualquiera en internet.
 >
-> La causa es de diseño: al no usarse Supabase Auth, la base no sabe quién llama y todas las peticiones llegan como `anon`, así que no se pueden escribir políticas RLS por rol. **No se arregla rotando la clave**: la nueva volvería a publicarse en el siguiente despliegue.
+> **Modelo de acceso vigente (desde el 2026-08-01).** `app_login` valida la contraseña en el servidor y devuelve un token de sesión de 12 h. El cliente lo adjunta en la cabecera `x-session-token` mediante un `fetch` propio en `supabaseClient.ts`. Las 15 tablas de inmunizaciones tienen RLS que exige ese token, y las escrituras sobre `users` / `roles_config` pasan por funciones `SECURITY DEFINER` que exigen sesión de ADMIN.
+>
+> **Reglas al tocar esta zona:**
+> - Nunca pidas `password_hash` ni uses `select("*")` sobre `users`; usa `USER_SELECT`.
+> - Una tabla nueva del módulo necesita su política de sesión, o quedará abierta a internet.
+> - Si añades RLS: **despliega primero, aplica el SQL después.** Al revés dejas la app sin datos hasta que el navegador recoja la versión nueva.
+> - `pgcrypto` no verifica hashes `$2b$` (los que genera bcryptjs). Las funciones reetiquetan el prefijo a `$2a$` al comparar; no toques eso sin leer `SEGURIDAD_AUDITORIA.md`.
+>
+> Auditoría, hallazgos y lo que sigue pendiente: `SEGURIDAD_AUDITORIA.md`.
 >
 > **Nunca pidas `password_hash` desde el cliente ni uses `select("*")` sobre `users`** — usa la constante `USER_SELECT` de `services/api.ts`. La verificación de contraseña ocurre en el servidor con la función `app_verify_password`. Contexto completo en `SEGURIDAD_ETAPA_1_LOGIN.md`.
 - **Todo servicio de inmunizaciones tiene fallback a `localStorage`** cuando `supabase` es null o falla la consulta. Patrón: `try { if (supabase) {...} } catch { console.warn("Fallback local ...") }` y luego `getCachedList<T>(CACHE_KEY)`. Al agregar una operación nueva hay que implementar **ambos** caminos, o los datos se comportan distinto según el entorno.

@@ -66,6 +66,58 @@ Esto ya estaba anticipado como deuda en `INMUNIZACIONES_DISENO_FUNCIONAL.md` §2
 
 **Esa corrección sigue siendo válida pero ya no es la prioridad.** Ocultar el hash no sirve de mucho si cualquiera puede fabricarse un ADMIN sin necesidad de contraseñas.
 
+## Estado tras la corrección (2026-08-01)
+
+Todo lo anterior quedó cerrado. Verificado desde fuera con la clave `anon`:
+
+| Acción | Antes | Ahora |
+|---|---|---|
+| Crear un usuario `ADMIN` | posible | `401` |
+| Modificar o borrar usuarios | posible | `401` |
+| Leer `password_hash` | posible | `401` |
+| Modificar permisos por rol | posible | `401` |
+| Leer stock, movimientos y cierres | posible | 0 filas |
+| Crear productos de inmunizaciones | posible | `401` |
+
+Sigue abierta la lectura del perfil (`username`, `role`, `personnel_id`, `is_active`,
+`created_at`), que el login necesita para armar la sesión.
+
+### Cómo quedó resuelto
+
+1. **Autenticación en el servidor.** `app_login` valida la contraseña y devuelve un token
+   de sesión con 12 horas de vigencia. El hash nunca sale de la base.
+2. **Operaciones administrativas por función.** Crear, editar, activar, eliminar usuarios
+   y guardar permisos por rol pasan por funciones `SECURITY DEFINER` que exigen sesión de
+   ADMIN. El navegador ya no escribe sobre `users` ni `roles_config`.
+3. **Datos de inmunizaciones por sesión.** El cliente envía el token en la cabecera
+   `x-session-token` y las 15 tablas del módulo tienen RLS con una política que lo exige.
+
+Scripts aplicados: `SUPABASE_SEGURIDAD_APLICAR_ESTO.sql` y
+`SUPABASE_SEGURIDAD_PASO_2_DATOS.sql`.
+
+### Dos tropiezos que conviene recordar
+
+**pgcrypto no verifica hashes `$2b$`.** bcryptjs los genera así y `crypt()` solo entiende
+`$2a$`, con lo que `app_verify_password` devolvía siempre falso y nadie podía entrar. Las
+dos variantes producen el mismo resultado, así que la función reetiqueta el prefijo al
+comparar; los hashes almacenados no se tocan. La comprobación original del script era
+insuficiente: verificaba que pgcrypto pudiera *leer* el hash, no que lo *verificara*.
+
+**Desplegar antes de aplicar RLS.** Al activar las políticas con el navegador todavía
+sirviendo la versión anterior, la aplicación no enviaba la cabecera y se quedó sin datos.
+No era un fallo de la política. El orden correcto es desplegar primero, aplicar el SQL
+después, y forzar recarga con `Ctrl + Shift + R`.
+
+## Lo que queda pendiente
+
+- **Alcance por rol dentro de la sesión.** Hoy la política distingue "con sesión" de "sin
+  sesión". No impide que un usuario con sesión válida consulte datos de otra IPRESS
+  construyendo peticiones a mano. El control de ámbito sigue viviendo en el frontend
+  (`ImmunizationScope`).
+- **Resto de tablas.** `personnel`, `facilities`, `ungets` y las de farmacia siguen
+  abiertas a lectura. Se dejaron fuera porque el login las necesita antes de tener sesión.
+- **Migración a Supabase Auth**, que permitiría políticas por rol y ámbito reales.
+
 ## Prioridades recomendadas
 
 ### 1. Cortar la escalada de privilegios (inmediato)
