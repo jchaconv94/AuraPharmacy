@@ -101,20 +101,30 @@ REVOKE ALL ON FUNCTION public.app_require_admin(uuid) FROM PUBLIC, anon, authent
 
 
 -- Verifica la contraseña sin que el hash salga de la base.
+--
+-- Ojo con el prefijo: bcryptjs genera hashes `$2b$` y pgcrypto solo sabe verificar
+-- `$2a$`. Comprobado el 2026-08-01: `crypt()` contra un hash `$2b$` devuelve siempre
+-- falso, con lo que nadie podría iniciar sesión.
+--
+-- Las dos variantes producen el mismo resultado para contraseñas normales (verificado
+-- también con tildes y ñ), así que basta con reetiquetar el prefijo al comparar. Los
+-- hashes almacenados NO se modifican.
 CREATE OR REPLACE FUNCTION public.app_verify_password(p_username text, p_password text)
 RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, extensions, pg_temp
-AS $$
+AS $fn$
   SELECT EXISTS (
-    SELECT 1 FROM public.users u
+    SELECT 1
+    FROM public.users u
     WHERE u.username = p_username
-      AND u.password_hash IS NOT NULL
-      AND u.password_hash = crypt(p_password, u.password_hash)
+      AND u.password_hash LIKE '$2%'
+      AND crypt(p_password, '$2a$' || substring(u.password_hash from 5))
+          = '$2a$' || substring(u.password_hash from 5)
   );
-$$;
+$fn$;
 
 REVOKE ALL ON FUNCTION public.app_verify_password(text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.app_verify_password(text, text) TO anon, authenticated;
@@ -393,9 +403,11 @@ WITH revisiones AS (
              'app_admin_save_user','app_admin_toggle_user','app_admin_delete_user',
              'app_update_own_account','app_admin_save_role_config')) = 10
   UNION ALL
-  SELECT 'pgcrypto entiende los hashes actuales',
-         (SELECT crypt('x', u.password_hash) <> u.password_hash
-          FROM public.users u WHERE u.password_hash LIKE '$2%' LIMIT 1)
+  -- Prueba real de verificación: hash `$2b$` conocido de la contraseña `prueba123`,
+  -- generado con la misma librería que usa la aplicación. Debe dar true.
+  SELECT 'pgcrypto verifica los hashes de la app',
+         crypt('prueba123', '$2a$10$4gQ.iVa9IODLG/vf9W8wcOg8faa.ewSSSFpjlV5SwgFsLaxcqwvg2')
+           = '$2a$10$4gQ.iVa9IODLG/vf9W8wcOg8faa.ewSSSFpjlV5SwgFsLaxcqwvg2'
 )
 SELECT
   CASE WHEN bool_and(correcto) THEN 'TODO CORRECTO' ELSE 'HAY ALGO MAL - revisar el detalle' END AS resultado,
