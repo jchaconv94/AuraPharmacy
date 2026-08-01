@@ -189,7 +189,9 @@ export const ImmunizationClosuresModule: React.FC = () => {
             ? immunizationApi.getStockLayers({ level: "GLOBAL" })
             : immunizationApi.getStockLayers(scope);
       const [closureRows, distributionRows, returnRows, stockRows, movementRows] = await Promise.all([
-        immunizationApi.listMonthlyClosures(listScope, period),
+        // Sin filtro de periodo: se necesita el historial completo. Cada consumidor de
+        // `closures` filtra por el periodo seleccionado donde corresponde.
+        immunizationApi.listMonthlyClosures(listScope),
         immunizationApi.listDistributionBatches(listScope),
         immunizationApi.listReturnBatches(listScope),
         stockPromise,
@@ -254,6 +256,19 @@ export const ImmunizationClosuresModule: React.FC = () => {
   const isFuturePeriod = periodIsFuture(period);
   const validOwnIpressClosure = isFuturePeriod ? undefined : ownIpressClosure;
   const validOwnUngetClosure = isFuturePeriod ? undefined : ownUngetClosure;
+
+  /**
+   * Cierres propios de todos los periodos, para poder consultarlos.
+   *
+   * El cierre es mensual: cada periodo se precierra y se cierra por separado, y el
+   * usuario necesita ver qué hizo en los meses anteriores sin adivinar la fecha.
+   */
+  const closureHistory = useMemo(() => {
+    const propios = closures.filter(closure => (isIpress
+      ? closure.ownerType === "IPRESS" && closure.facilityCode === scope.facilityCode
+      : closure.ownerType === "UNGET" && closure.ungetId === scope.ungetId));
+    return [...propios].sort((a, b) => b.period.localeCompare(a.period));
+  }, [closures, isIpress, scope.facilityCode, scope.ungetId]);
 
   const ipressClosuresByCode = useMemo(() => {
     const map = new Map<string, ImmunizationMonthlyClosure>();
@@ -709,6 +724,15 @@ export const ImmunizationClosuresModule: React.FC = () => {
             />
           )}
 
+          {/* El historial va al final: primero se opera el periodo, luego se consulta. */}
+          {(isIpress || isUnget) && (
+            <ClosureHistoryPanel
+              rows={closureHistory}
+              period={period}
+              onSelectPeriod={setPeriod}
+            />
+          )}
+
           {isSupervisor && !isIpress && !isUnget && (
             <SupervisorPanel
               rows={supervisorRows}
@@ -877,6 +901,79 @@ const ChecklistCard: React.FC<{ ok: boolean; title: string; value: number | stri
       </div>
     </div>
   </div>
+);
+
+/** `2026-07` -> `Julio de 2026`. */
+const periodLabel = (period: string) => {
+  const [year, month] = period.split("-");
+  const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"];
+  const nombre = meses[Number(month) - 1];
+  return nombre ? `${nombre} de ${year}` : period;
+};
+
+const ClosureHistoryPanel: React.FC<{
+  rows: ImmunizationMonthlyClosure[];
+  period: string;
+  onSelectPeriod: (period: string) => void;
+}> = ({ rows, period, onSelectPeriod }) => (
+  <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+    <div className="border-b border-slate-100 p-5">
+      <h3 className="text-lg font-black text-slate-900">Historial de cierres</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Cada periodo se cierra por separado. Selecciona un mes para revisar su corte y descargar su reporte.
+      </p>
+    </div>
+
+    {rows.length === 0 ? (
+      <p className="p-8 text-center text-sm font-semibold text-slate-500">
+        Todavía no hay cierres registrados.
+      </p>
+    ) : (
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead className="bg-slate-50">
+            <tr className="text-[10px] uppercase tracking-wider text-slate-500">
+              <th className="px-4 py-3 text-left font-black">Periodo</th>
+              <th className="px-4 py-3 text-center font-black">Estado</th>
+              <th className="px-4 py-3 text-left font-black">Responsable</th>
+              <th className="px-4 py-3 text-left font-black">Fecha</th>
+              <th className="px-4 py-3 text-center font-black"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map(row => {
+              const esActual = row.period === period;
+              return (
+                <tr key={`${row.period}-${row.facilityCode || row.ungetId}`} className={esActual ? "bg-teal-50/50" : "transition hover:bg-slate-50/70"}>
+                  <td className="px-4 py-3 font-black text-slate-900">
+                    {periodLabel(row.period)}
+                    {esActual && <span className="ml-2 text-[10px] font-black uppercase text-teal-700">viendo</span>}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`rounded-full border px-2.5 py-1 text-xs font-black ${closureStatusClass(row)}`}>
+                      {closureStatusLabel(row)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-slate-600">{closureUserLabel(row)}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-600">{closureDateLabel(row)}</td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      type="button"
+                      disabled={esActual}
+                      onClick={() => onSelectPeriod(row.period)}
+                      className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Ver periodo
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
 );
 
 const ReportDownloadCard: React.FC<{
