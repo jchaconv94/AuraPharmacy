@@ -106,7 +106,18 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
       .finally(() => setOrganizationsLoading(false));
   }, [isGlobalAdmin]);
 
-  const activeInventory = inventories.find(item => item.period === currentPeriod);
+  /**
+   * El inventario inicial es una carga única por establecimiento, no un ciclo mensual.
+   *
+   * Antes se buscaba por el periodo en curso, así que cada primero de mes el inventario
+   * cargado dejaba de verse y no había forma de recuperarlo. Ahora se toma el del ámbito
+   * seleccionado sin mirar el periodo: primero un borrador en curso, si no el más
+   * reciente que ya esté cerrado.
+   */
+  const activeInventory = useMemo(() => {
+    const ordenados = [...inventories].sort((a, b) => (b.period || "").localeCompare(a.period || ""));
+    return ordenados.find(item => item.status === "DRAFT") || ordenados[0];
+  }, [inventories]);
 
   const loadInventoryItems = async (inventoryId?: string) => {
     if (!inventoryId) {
@@ -357,9 +368,10 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
               </p>
             </div>
           </div>
+          {/* Con inventario cargado se muestra su periodo real, no el mes en curso. */}
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            <span>Periodo</span>
-            <span className="font-black text-teal-700">{currentPeriod}</span>
+            <span>{activeInventory ? "Cargado en" : "Periodo"}</span>
+            <span className="font-black text-teal-700">{activeInventory?.period || currentPeriod}</span>
           </div>
         </div>
       </div>
