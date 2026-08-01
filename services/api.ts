@@ -1,5 +1,5 @@
 import { User, UserRole, Personnel, HealthFacility, RoleConfig, SystemConfig, Unget, Diresa, Ogess, Microred } from "../types";
-import { supabase } from "./supabaseClient";
+import { SESSION_TOKEN_KEY, supabase } from "./supabaseClient";
 import bcrypt from "bcryptjs";
 
 // MOCK DATA (Respaldo en caso de error de conexión/sin supabase)
@@ -52,8 +52,6 @@ let usersCache: any[] | null = null;
  * Ver `SUPABASE_SECURITY_STAGE1_LOGIN.sql`.
  */
 const USER_SELECT = "username, role, personnel_id, is_active, created_at, personnel:personnel_id(*, facilities:facility_code(*), labor_regimes:labor_regime_id(*), professions:profession_id(*)), roles_config:role(*)";
-
-const SESSION_TOKEN_KEY = "aura_session_token";
 
 /**
  * Token de sesión emitido por `app_login`.
