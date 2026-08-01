@@ -1,0 +1,1228 @@
+
+import React, { useState, useRef } from 'react';
+import { toast } from 'sonner';
+import { Trash2, Activity, Upload, FileSpreadsheet, Calendar, Check, AlertCircle, AlertTriangle, X, Syringe, Settings2, Play, RefreshCw, Sparkles, Download, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import { read, utils, writeFile } from 'xlsx';
+import { MedicationInput } from '../types';
+
+interface InputSectionProps {
+  onAnalyze: (
+    data: MedicationInput[], 
+    referenceDate: string, 
+    excludeVaccines: boolean,
+    metadata?: {
+      microred?: string;
+      codEess?: string;
+      establishmentName?: string;
+      category?: string;
+    }
+  ) => void;
+  onReset: () => void;
+  isAnalyzing: boolean;
+  hasAnalyzedData: boolean; // Prop to know if there is active data
+  analysisResult?: any;
+  // PROPS FOR LIFTED STATE
+  currentItems: MedicationInput[];
+  onItemsChange: (items: MedicationInput[]) => void;
+  onResultChange?: (res: any | null) => void;
+  reviewedIds?: Set<string>;
+  onReviewedIdsChange?: (ids: Set<string>) => void;
+  additionalItems?: any[];
+  onAdditionalItemsChange?: (items: any[]) => void;
+}
+
+// Sample data with spikes for demonstration
+const SAMPLE_DATA: MedicationInput[] = [
+  {
+    id: '00143',
+    name: 'Paracetamol 500mg (Con Pico Anormal)',
+    currentStock: 1000,
+    unitPrice: 0.10,
+    monthlyConsumption: [450, 480, 460, 2000, 460, 450, 455, 460, 470, 480, 450, 460],
+    ff: 'TABLETA',
+    medtip: 'MED',
+    medpet: '01',
+    medest: 'S',
+  },
+  {
+    id: '02312',
+    name: 'Amoxicilina 500mg (Estable)',
+    currentStock: 0,
+    unitPrice: 0.50,
+    monthlyConsumption: [200, 210, 190, 220, 200, 205, 195, 200, 210, 190, 200, 210],
+    ff: 'TABLETA',
+    medtip: 'MED',
+    medpet: '01',
+    medest: 'N',
+  },
+  {
+    id: '05432',
+    name: 'Ibuprofeno 400mg (Varios Picos)',
+    currentStock: 150, 
+    unitPrice: 0.20,
+    monthlyConsumption: [100, 500, 110, 105, 500, 110, 100, 105, 110, 115, 120, 110],
+    ff: 'TABLETA',
+    medtip: 'MED',
+    medpet: '01',
+    medest: 'S',
+  }
+];
+
+export const InputSection: React.FC<InputSectionProps> = ({ 
+    onAnalyze, 
+    onReset, 
+    isAnalyzing, 
+    hasAnalyzedData,
+    analysisResult,
+    currentItems,
+    onItemsChange,
+    onResultChange,
+    reviewedIds,
+    onReviewedIdsChange,
+    additionalItems,
+    onAdditionalItemsChange
+}) => {
+  // Use Props instead of Local State
+  const items = currentItems;
+  const setItems = onItemsChange;
+
+  const [isUploadSectionCollapsed, setIsUploadSectionCollapsed] = useState(() => hasAnalyzedData);
+  const [tempItems, setTempItems] = useState<MedicationInput[]>([]); // Store items temporarily while asking for date
+  
+  // Modal State
+  const [isDateModalOpen, setIsDateModalOpen] = useState(false);
+  const [isVaccineModalOpen, setIsVaccineModalOpen] = useState(false); // NEW: Vaccine Check
+  const [excludeVaccinesSelection, setExcludeVaccinesSelection] = useState(true); // Default selection
+  const [detectedMonthsCount, setDetectedMonthsCount] = useState<number>(12);
+  const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
+  const [showClearWarning, setShowClearWarning] = useState(false); 
+  
+  // Imported metadata states
+  const [importedMicrored, setImportedMicrored] = useState<string>('');
+  const [importedCodEess, setImportedCodEess] = useState<string>('');
+  const [importedEstablishmentName, setImportedEstablishmentName] = useState<string>('');
+  const [importedCategory, setImportedCategory] = useState<string>('');
+  const [showReanalysisWarning, setShowReanalysisWarning] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+
+  // Default to CURRENT month
+  const [referenceDate, setReferenceDate] = useState<string>(() => {
+    const d = new Date();
+    return d.toISOString().slice(0, 7);
+  });
+
+  // Sync state if there is already an analysisResult loaded (e.g. page reload)
+  React.useEffect(() => {
+    if (analysisResult) {
+      if (analysisResult.establishmentName) setImportedEstablishmentName(analysisResult.establishmentName);
+      if (analysisResult.codEess) setImportedCodEess(analysisResult.codEess);
+      if (analysisResult.microred) setImportedMicrored(analysisResult.microred);
+      if (analysisResult.category) setImportedCategory(analysisResult.category);
+      if (analysisResult.referenceDate) setReferenceDate(analysisResult.referenceDate);
+      setIsUploadSectionCollapsed(true);
+    }
+  }, [analysisResult]);
+
+  // Collapsed state synchronization
+  React.useEffect(() => {
+    if (hasAnalyzedData) {
+      setIsUploadSectionCollapsed(true);
+    } else {
+      setIsUploadSectionCollapsed(false);
+    }
+  }, [hasAnalyzedData]);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // --- EXPORT PROGRESS ---
+  const handleExportSession = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try {
+      const exportData: any = {
+        version: "1.0",
+        source: "aura-pharma-ipress-requirement",
+        timestamp: new Date().toISOString(),
+        localStorage: {
+          aura_data_v1: window.localStorage.getItem('aura_data_v1'),
+          aura_reviews_v1: window.localStorage.getItem('aura_reviews_v1'),
+          aura_additional_v1: window.localStorage.getItem('aura_additional_v1'),
+          aura_input_data_v1: window.localStorage.getItem('aura_input_data_v1'),
+        },
+        rawInputItems: items,
+        metadata: {
+          importedMicrored,
+          importedCodEess,
+          importedEstablishmentName,
+          importedCategory,
+          referenceDate
+        }
+      };
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", `Requerimiento_IPRESS_Avance_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+
+      toast.success("Avance del requerimiento exportado correctamente");
+    } catch (error) {
+      console.error("Error exporting session:", error);
+      toast.error("Error al exportar el avance");
+    }
+  };
+
+  // --- IMPORT PROGRESS ---
+  const handleImportSession = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsProcessingFile(true);
+      setUploadError(null);
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const content = event.target?.result as string;
+          const importedData = JSON.parse(content);
+
+          if (importedData.source !== "aura-pharma-ipress-requirement") {
+            throw new Error("El archivo no corresponde a un respaldo de Requerimiento IPRESS.");
+          }
+
+          if (!importedData.localStorage) {
+            throw new Error("Formato de archivo inválido de respaldo.");
+          }
+
+          // Restore localStorage keys
+          if (importedData.localStorage.aura_data_v1) {
+            window.localStorage.setItem('aura_data_v1', importedData.localStorage.aura_data_v1);
+          } else {
+            window.localStorage.removeItem('aura_data_v1');
+          }
+
+          if (importedData.localStorage.aura_reviews_v1) {
+            window.localStorage.setItem('aura_reviews_v1', importedData.localStorage.aura_reviews_v1);
+          } else {
+            window.localStorage.removeItem('aura_reviews_v1');
+          }
+
+          if (importedData.localStorage.aura_additional_v1) {
+            window.localStorage.setItem('aura_additional_v1', importedData.localStorage.aura_additional_v1);
+          } else {
+            window.localStorage.removeItem('aura_additional_v1');
+          }
+
+          if (importedData.localStorage.aura_input_data_v1) {
+            window.localStorage.setItem('aura_input_data_v1', importedData.localStorage.aura_input_data_v1);
+          } else {
+            const rawItems = importedData.rawInputItems || [];
+            if (rawItems.length > 0) {
+              window.localStorage.setItem('aura_input_data_v1', JSON.stringify(rawItems));
+            } else {
+              window.localStorage.removeItem('aura_input_data_v1');
+            }
+          }
+
+          // Restore React States
+          const rawItems = importedData.rawInputItems || [];
+          setItems(rawItems);
+
+          if (importedData.localStorage.aura_data_v1) {
+            onResultChange?.(JSON.parse(importedData.localStorage.aura_data_v1));
+          } else {
+            onResultChange?.(null);
+          }
+
+          if (importedData.localStorage.aura_reviews_v1) {
+            onReviewedIdsChange?.(new Set(JSON.parse(importedData.localStorage.aura_reviews_v1)));
+          } else {
+            onReviewedIdsChange?.(new Set());
+          }
+
+          if (importedData.localStorage.aura_additional_v1) {
+            onAdditionalItemsChange?.(JSON.parse(importedData.localStorage.aura_additional_v1));
+          } else {
+            onAdditionalItemsChange?.([]);
+          }
+
+          // Restore components internal metadata
+          if (importedData.metadata) {
+            setImportedMicrored(importedData.metadata.importedMicrored || '');
+            setImportedCodEess(importedData.metadata.importedCodEess || '');
+            setImportedEstablishmentName(importedData.metadata.importedEstablishmentName || '');
+            setImportedCategory(importedData.metadata.importedCategory || '');
+            setReferenceDate(importedData.metadata.referenceDate || '');
+          }
+
+          setIsUploadSectionCollapsed(!!importedData.localStorage.aura_data_v1);
+          toast.success("Avance del requerimiento importado correctamente");
+        } catch (error: any) {
+          console.error("Error parsing backup file:", error);
+          setUploadError(`Error al importar respaldo: ${error.message || "Estructura inválida"}`);
+          toast.error("Archivo de respaldo inválido");
+        } finally {
+          setIsProcessingFile(false);
+          if (importInputRef.current) importInputRef.current.value = '';
+        }
+      };
+      reader.readAsText(file);
+    } catch (error) {
+      console.error("Error reading file:", error);
+      setIsProcessingFile(false);
+      toast.error("Error al leer el archivo de respaldo");
+    }
+  };
+
+  const processData = (parsedItems: MedicationInput[]) => {
+      onReset(); // Clear previous analysis (and items via App.tsx logic) when new data is processed
+      setTempItems(parsedItems);
+      setIsDateModalOpen(true); // Open modal immediately after parsing
+  };
+
+  const loadSampleData = () => {
+    processData(SAMPLE_DATA);
+  };
+
+    const downloadTemplate = () => {
+    const header = [
+      "RED", "MICRORED", "COD EESS", "ESTABLECIMIENTO", "CAT",
+      "MED COD", "DESCRIPCION DEL PRODUCTO", "MEDFF", "PRECIO",
+      "MEDTIP", "MEDPET", "MEDEST",
+      "MES_1", "MES_2", "MES_3", "MES_4", "MES_5", "MES_6",
+      "MES_7", "MES_8", "MES_9", "MES_10", "MES_11", "MES_12", "STOCK_FIN"
+    ];
+
+    const ws = utils.json_to_sheet([], { header });
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, ws, "Plantilla Requerimiento");
+    writeFile(wb, "Plantilla_Requerimiento.xlsx");
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError(null);
+    setIsProcessingFile(true);
+
+    // Simulate processing delay for animation
+    setTimeout(async () => {
+        try {
+          const data = await file.arrayBuffer();
+          const workbook = read(data, { type: 'array' });
+          
+          if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+            setUploadError("Error al procesar el archivo: El archivo no contiene hojas válidas.");
+            setIsProcessingFile(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
+
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          const jsonData = utils.sheet_to_json<any>(worksheet);
+          
+          // Validate required headers
+          if (jsonData.length === 0) {
+            setUploadError("Error al procesar el archivo: El archivo está vacío.");
+            setIsProcessingFile(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
+          
+            const REQUIRED_HEADERS = [
+              'codigo_med', 'descrip', 'medtip', 'medpet', 'mes01', 'mes02', 'mes03', 
+              'mes04', 'mes05', 'mes06', 'mes07', 'mes08', 'mes09', 'mes10', 'mes11', 
+              'mes12', 'precio', 'stock', 'sumames', 'cuenta', 'cpa', 'meses_prov', 
+              'situacion', 'ff', 'medest'
+            ];
+          
+          const fileHeaders = Object.keys(jsonData[0]).map(h => h.toLowerCase().trim());
+          
+          let hasValidStructure = false;
+          const hasOfficialSismed = ['codigo', 'descrip'].every(req => fileHeaders.some(h => h.includes(req))) || Object.keys(jsonData[0]).some(k => k.toLowerCase().includes('mes01'));
+          const hasConsolidated = ['med cod', 'descripcion del producto'].every(req => fileHeaders.some(h => h.includes(req)));
+          
+          if (hasOfficialSismed || hasConsolidated) {
+            hasValidStructure = true;
+          }
+
+          if (!hasValidStructure) {
+            setUploadError("Error al procesar el archivo: Estructura inválida. El archivo no contiene las columnas necesarias (Ej: CODIGO_MED / MED COD, DESCRIPCION). Verifique que sea la plantilla correcta.");
+            setIsProcessingFile(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
+
+          // Extract general establishment metadata from the first few rows
+          let mrTemp = '';
+          let codTemp = '';
+          let estTemp = '';
+          let catTemp = '';
+
+          for (const row of jsonData) {
+            const findRowKey = (keys: string[], exclude: string[] = []) => Object.keys(row).find(k => {
+                const cleanedK = k.toLowerCase().replace(/[\s\u00a0_]+/g, ' ').trim();
+                if (exclude.some(ex => cleanedK.includes(ex.toLowerCase()))) return false;
+                return keys.some(key => {
+                    const cleanedKey = key.toLowerCase();
+                    return cleanedK === cleanedKey || cleanedK.includes(cleanedKey);
+                });
+            });
+            
+            const mrKey = findRowKey(['microred', 'micro red', 'micro-red', 'microrred']);
+            const codKey = findRowKey(['cod eess', 'codeess', 'cod_eess', 'codigo de eess', 'codigo eess', 'codigo_eess', 'cod_est', 'cod_ipress']);
+            const estKey = findRowKey(['establecimiento', 'nombre de establecimiento', 'nombre_establecimiento', 'eess', 'ipress', 'nombre eess'], ['cod', 'codigo']);
+            const catKey = findRowKey(['cat', 'categoria', 'categoria del establecimiento', 'categoria_establecimiento', 'categoria eess']);
+
+            if (mrKey && !mrTemp) mrTemp = String(row[mrKey] || '').trim();
+            if (codKey && !codTemp) codTemp = String(row[codKey] || '').trim();
+            if (estKey && !estTemp) estTemp = String(row[estKey] || '').trim();
+            if (catKey && !catTemp) catTemp = String(row[catKey] || '').trim();
+
+            if (mrTemp && codTemp && estTemp && catTemp) break;
+          }
+
+          setImportedMicrored(mrTemp);
+          setImportedCodEess(codTemp);
+          setImportedEstablishmentName(estTemp);
+          setImportedCategory(catTemp);
+
+          // Detect last month and count from headers
+          let detectedCount = 12;
+          if (jsonData.length > 0) {
+            for (const row of jsonData) {
+                const numKeys = Object.keys(row).filter(k => /^\d{6}$/.test(String(k).trim())).sort();
+                if (numKeys.length > 0) {
+                    detectedCount = numKeys.length;
+                    const lastYyyyMm = String(numKeys[numKeys.length - 1]).trim();
+                    const year = lastYyyyMm.substring(0, 4);
+                    const month = lastYyyyMm.substring(4, 6);
+                    setReferenceDate(`${year}-${month}`);
+                    break;
+                } else {
+                    const monthNames = [
+                        ['enero', 'ene', 'mes01', 'mes1'], ['febrero', 'feb', 'mes02', 'mes2'], ['marzo', 'mar', 'mes03', 'mes3'],
+                        ['abril', 'abr', 'mes04', 'mes4'], ['mayo', 'may', 'mes05', 'mes5'], ['junio', 'jun', 'mes06', 'mes6'],
+                        ['julio', 'jul', 'mes07', 'mes7'], ['agosto', 'ago', 'mes08', 'mes8'], ['setiembre', 'septiembre', 'set', 'sep', 'mes09', 'mes9'],
+                        ['octubre', 'oct', 'mes10'], ['noviembre', 'nov', 'mes11'], ['diciembre', 'dic', 'mes12']
+                    ];
+                    
+                    const findKey = (keys: string[]) => Object.keys(row).find(k => keys.some(key => k.toLowerCase().includes(key.toLowerCase())));
+                    let countFound = 0;
+                    monthNames.forEach(names => {
+                        if (findKey(names)) countFound++;
+                    });
+                    if (countFound > 0) {
+                        detectedCount = countFound;
+                    }
+                    // Relies on default date if no YYYYMM format exists
+                    break;
+                }
+            }
+          }
+          setDetectedMonthsCount(detectedCount);
+
+          const rawData = utils.sheet_to_json<any>(worksheet, { header: "A" });
+
+          const parsedItems: MedicationInput[] = jsonData.map((row: any, index: number): MedicationInput | null => {
+            const findKey = (keys: string[]) => Object.keys(row).find(k => keys.some(key => k.toLowerCase().includes(key.toLowerCase())));
+            const findExactKey = (keys: string[]) => Object.keys(row).find(k => keys.some(key => k.toLowerCase() === key.toLowerCase()));
+
+            const nameKey = findKey(['descrip', 'medicamento', 'nombre', 'descripcion del producto']);
+            const stockKey = findExactKey(['stock', 'stock_actual', 'stk', 'stock_fin']) || findKey(['stock']);
+            const priceKey = findKey(['precio', 'costo', 'unit']);
+            
+            // Precise matching for the real SISMED medication code (to prevent grabbing "COD EESS")
+            const rowKeys = Object.keys(row);
+            
+            // Helper to clean and normalize headers
+            const cleanHeader = (str: string) => {
+                return str.toLowerCase()
+                    .replace(/[\s\u00a0_]+/g, ' ') // replace multiple spaces, non-breaking spaces, underscores with single space
+                    .trim();
+            };
+
+            let codeKey = rowKeys.find(k => {
+                const cleaned = cleanHeader(k);
+                return ['med cod', 'medcod', 'cod med', 'codmed', 'codigo med', 'codigomed', 'codigo sismed', 'cod sismed', 'cod_sismed', 'cod_med', 'codigo de medicamento', 'cod_prod', 'codigo de producto'].includes(cleaned);
+            });
+            
+            if (!codeKey) {
+                // Secondary fallback containing both "med" and "cod", avoiding establishment/EESS keywords
+                codeKey = rowKeys.find(k => {
+                    const cleaned = cleanHeader(k);
+                    const isEstablishment = cleaned.includes('eess') || cleaned.includes('establecimiento') || cleaned.includes('ipress') || cleaned.includes('red') || cleaned.includes('microred') || cleaned.includes('unget') || cleaned.includes('ogess') || cleaned.includes('diresa') || cleaned.includes('dias') || cleaned.includes('user') || cleaned.includes('usuario');
+                    const hasMed = cleaned.includes('med') || cleaned.includes('sismed') || cleaned.includes('prod') || cleaned.includes('item');
+                    const hasCod = cleaned.includes('cod') || cleaned.includes('code') || cleaned.includes('codigo');
+                    return !isEstablishment && hasMed && hasCod;
+                });
+            }
+
+            if (!codeKey) {
+                // Third level fallback, strictly avoiding common establishment/EESS/IPRESS/User keywords
+                codeKey = rowKeys.find(k => {
+                    const cleaned = cleanHeader(k);
+                    const isEstablishment = cleaned.includes('eess') || cleaned.includes('establecimiento') || cleaned.includes('ipress') || cleaned.includes('red') || cleaned.includes('microred') || cleaned.includes('unget') || cleaned.includes('ogess') || cleaned.includes('diresa') || cleaned.includes('dias') || cleaned.includes('user') || cleaned.includes('usuario');
+                    return !isEstablishment && (cleaned.includes('codigo') || cleaned.includes('cod') || cleaned.includes('code'));
+                });
+            }
+
+            const ffKey = findKey(['ff', 'forma', 'presentacion', 'farmaceutica', 'medff']);
+            const tipKey = findKey(['tip', 'tipo', 'medtip']);
+            const petKey = findKey(['pet', 'petitorio', 'medpet']);
+            
+            let estValue = undefined;
+            // Safe access for rawData lookahead
+            if (rawData && rawData[index + 1] && rawData[index + 1]['AH']) {
+                estValue = rawData[index + 1]['AH'];
+            } 
+            if (!estValue) {
+                const estKey = findKey(['estrategico', 'medest', 'situacion', 'condicion']);
+                if (estKey) estValue = row[estKey];
+            }
+
+            const name = nameKey ? row[nameKey] : `Item ${index + 1}`;
+            const stock = stockKey ? Number(row[stockKey]) : 0;
+            const price = priceKey ? Number(row[priceKey]) : 0;
+            const code = codeKey ? String(row[codeKey]).trim() : (Date.now() + index).toString();
+            
+            let months: number[] = [];
+            const numKeys = Object.keys(row).filter(k => /^\d{6}$/.test(String(k).trim())).sort();
+
+            if (numKeys.length > 0) {
+                const targetKeys = numKeys.slice(-12);
+                targetKeys.forEach(k => {
+                    const val = Number(row[k]);
+                    months.push(isNaN(val) ? 0 : val);
+                });
+            } else {
+                const monthNames = [
+                    ['enero', 'ene', 'mes01', 'mes1'], ['febrero', 'feb', 'mes02', 'mes2'], ['marzo', 'mar', 'mes03', 'mes3'],
+                    ['abril', 'abr', 'mes04', 'mes4'], ['mayo', 'may', 'mes05', 'mes5'], ['junio', 'jun', 'mes06', 'mes6'],
+                    ['julio', 'jul', 'mes07', 'mes7'], ['agosto', 'ago', 'mes08', 'mes8'], ['setiembre', 'septiembre', 'set', 'sep', 'mes09', 'mes9'],
+                    ['octubre', 'oct', 'mes10'], ['noviembre', 'nov', 'mes11'], ['diciembre', 'dic', 'mes12']
+                ];
+                monthNames.forEach(names => {
+                    const key = findKey(names);
+                    if (key) {
+                        const val = Number(row[key]);
+                        months.push(isNaN(val) ? 0 : val);
+                    } else {
+                        months.push(0); 
+                    }
+                });
+            }
+
+            if (!nameKey && !stockKey && !codeKey) return null;
+
+            return {
+              id: code,
+              code: code,
+              name: String(name),
+              currentStock: isNaN(stock) ? 0 : stock,
+              unitPrice: isNaN(price) ? 0 : price,
+              monthlyConsumption: months,
+              ff: ffKey ? String(row[ffKey]) : undefined,
+              medtip: tipKey ? String(row[tipKey]) : undefined,
+              medpet: petKey ? String(row[petKey]) : undefined,
+              medest: estValue ? String(estValue) : undefined,
+            };
+          }).filter((item): item is MedicationInput => item !== null);
+
+          if (parsedItems.length === 0) {
+            setUploadError("Error al procesar el archivo: No se detectaron filas válidas con información de medicamentos.");
+            setIsProcessingFile(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
+
+          setUploadError(null);
+          setIsProcessingFile(false);
+          processData(parsedItems);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+
+        } catch (err: any) {
+          console.error("Error parsing Excel:", err);
+          setUploadError(`Error al procesar el archivo: ${err.message}`);
+          setIsProcessingFile(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    }, 800); // 800ms delay for animation
+  };
+
+  const triggerFileUpload = () => {
+    // Check if we have analyzed data that might be lost
+    if (hasAnalyzedData) {
+        setShowOverwriteWarning(true);
+    } else {
+        fileInputRef.current?.click();
+    }
+  };
+
+  const confirmOverwrite = () => {
+      setShowOverwriteWarning(false);
+      // Clear the existing data to allow a fresh upload
+      setItems([]);
+      onReset(); // This triggers the reset in App.tsx which clears analyzed data
+      setUploadError(null);
+      setIsUploadSectionCollapsed(false);
+      
+      // Reset metadata
+      setImportedMicrored('');
+      setImportedCodEess('');
+      setImportedEstablishmentName('');
+      setImportedCategory('');
+      
+      // Use setTimeout to ensure the modal state updates before triggering the click
+      setTimeout(() => {
+          if (fileInputRef.current) {
+              fileInputRef.current.value = ''; // Reset input value
+              fileInputRef.current.click();
+          }
+      }, 100);
+  };
+
+  const handleConfirmDate = () => {
+    setItems(tempItems);
+    setTempItems([]);
+    setIsDateModalOpen(false);
+  };
+
+  // --- CLEAR LOGIC ---
+  const handleClearClick = () => {
+      // Show confirmation modal
+      setShowClearWarning(true);
+  };
+
+  const confirmClearAll = () => {
+      setItems([]); // Clear input items
+      onReset(); // Clear analysis result
+      setShowClearWarning(false);
+      setIsUploadSectionCollapsed(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+
+      // Reset metadata
+      setImportedMicrored('');
+      setImportedCodEess('');
+      setImportedEstablishmentName('');
+      setImportedCategory('');
+  };
+
+  // --- ANALYSIS EXECUTION LOGIC (WITH VACCINE CHECK) ---
+  const handleExecuteClick = () => {
+      if (hasAnalyzedData) {
+          setShowReanalysisWarning(true);
+      } else {
+          setExcludeVaccinesSelection(true); // Reset to default true every time modal opens
+          setIsVaccineModalOpen(true);
+      }
+  };
+
+  const confirmReanalysis = () => {
+      setShowReanalysisWarning(false);
+      setExcludeVaccinesSelection(true);
+      setIsVaccineModalOpen(true);
+  };
+
+  const handleRunAnalysis = () => {
+      let finalData = [...items];
+      const excludeVaccines = excludeVaccinesSelection;
+      
+      if (excludeVaccines) {
+          finalData = finalData.filter(item => {
+              const name = item.name.toUpperCase();
+              return !name.includes("VACUNA") && !name.includes("DILUYENTE");
+          });
+      }
+
+      // Pass the excludeVaccines decision and parsed metadata to App.tsx so it knows the data is already filtered
+      onAnalyze(finalData, referenceDate, excludeVaccines, {
+          microred: importedMicrored,
+          codEess: importedCodEess,
+          establishmentName: importedEstablishmentName,
+          category: importedCategory
+      });
+      setIsVaccineModalOpen(false);
+      setIsUploadSectionCollapsed(true);
+  };
+
+  return (
+    <>
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-200 transition-all relative ${isUploadSectionCollapsed && items.length > 0 ? 'p-4' : 'p-4 sm:p-6'} mb-6`}>
+      
+      {items.length > 0 && !isProcessingFile && (
+          <button
+              onClick={() => setIsUploadSectionCollapsed(!isUploadSectionCollapsed)}
+              className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors z-20"
+              title={isUploadSectionCollapsed ? "Expandir" : "Contraer"}
+          >
+              {isUploadSectionCollapsed ? <ChevronDown className="h-5 w-5 text-gray-500" /> : <ChevronUp className="h-5 w-5 text-gray-500" />}
+          </button>
+      )}
+
+      {isUploadSectionCollapsed && items.length > 0 ? (
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center gap-4">
+                  <div className="bg-teal-50 p-2 rounded-lg shrink-0">
+                      <FileSpreadsheet className="h-5 w-5 text-teal-600" />
+                  </div>
+                  <div>
+                      <h3 className="text-sm font-bold text-gray-900">
+                          {importedEstablishmentName ? importedEstablishmentName.toUpperCase() : "Requerimiento IPRESS Cargado"}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">
+                          {importedCodEess && <span className="text-[10px] text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded">CÓD: {importedCodEess}</span>}
+                          {importedCategory && <span className="text-[10px] text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded">CAT: {importedCategory}</span>}
+                          {importedMicrored && <span className="text-[10px] text-teal-850 font-bold bg-teal-100/70 px-1.5 py-0.5 rounded">MR: {importedMicrored}</span>}
+                          <span className="text-xs font-bold text-teal-600">{items.length.toLocaleString()} registros</span>
+                          <span className="text-[10px] text-gray-400">•</span>
+                          <span className="text-xs text-gray-500">Corte: <strong className="text-gray-700">{referenceDate}</strong></span>
+                          <span className="text-[10px] text-gray-400">•</span>
+                          <span className="text-[10px] text-green-600 font-medium flex items-center gap-1">
+                              <CheckCircle className="h-3.5 w-3.5 text-green-500 fill-green-50" />
+                              Validado correctamente
+                          </span>
+                      </div>
+                  </div>
+              </div>
+              <div className="flex items-center gap-2 sm:mr-10">
+                  {!hasAnalyzedData && (
+                      <button 
+                          onClick={handleExecuteClick}
+                          disabled={isAnalyzing}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold text-xs rounded-lg shadow-sm transition-all animate-pulse"
+                          title="Comenzar análisis"
+                      >
+                          <Play className="h-3 w-3 fill-current" />
+                          <span>Analizar Datos</span>
+                      </button>
+                  )}
+                  {/* Exportar Avance */}
+                  <button 
+                      onClick={handleExportSession}
+                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      title="Exportar Avance"
+                  >
+                      <Download className="w-4 h-4" />
+                  </button>
+                  {/* Importar Avance */}
+                  <button 
+                      onClick={(e) => {
+                          e.stopPropagation();
+                          importInputRef.current?.click();
+                      }}
+                      className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                      title="Importar Avance"
+                  >
+                      <Upload className="w-4 h-4" />
+                  </button>
+                  <button 
+                      onClick={triggerFileUpload}
+                      className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-all"
+                      title="Cargar nuevo archivo"
+                  >
+                      <RefreshCw className="w-4 h-4" />
+                  </button>
+                  <button 
+                      onClick={handleClearClick}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      title="Limpiar Todo"
+                  >
+                      <Trash2 className="w-4 h-4" />
+                  </button>
+              </div>
+          </div>
+      ) : (
+          <div className="mb-0 flex flex-col items-center">
+            {isProcessingFile ? (
+                <div className="w-full max-w-2xl bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center min-h-[300px] animate-in fade-in duration-300">
+                    <div className="relative mb-6">
+                        <div className="absolute inset-0 border-4 border-teal-100 rounded-full"></div>
+                        <div className="absolute inset-0 border-4 border-teal-600 rounded-full border-t-transparent animate-spin"></div>
+                        <div className="w-16 h-16 flex items-center justify-center bg-white rounded-full">
+                            <FileSpreadsheet className="h-6 w-6 text-teal-600" />
+                        </div>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Procesando Archivo Excel</h3>
+                    <p className="text-sm text-slate-500">Validando estructura y cargando registros...</p>
+                </div>
+            ) : (
+                <div 
+                    className={`w-full max-w-2xl mx-auto border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer relative overflow-hidden group 
+                        ${isDragging 
+                            ? 'border-teal-500 bg-teal-50 scale-[1.02]' 
+                            : 'border-teal-200 hover:border-teal-400 hover:bg-slate-50'}`}
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) {
+                            const fakeEvent = { target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>;
+                            handleFileUpload(fakeEvent);
+                        }
+                    }}
+                    onClick={triggerFileUpload}
+                >
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleFileUpload} 
+                        onClick={(e) => e.stopPropagation()}
+                        className="hidden" 
+                        accept=".xlsx, .xls, .csv"
+                    />
+                    
+                    <input 
+                        type="file" 
+                        ref={importInputRef} 
+                        onChange={handleImportSession} 
+                        onClick={(e) => e.stopPropagation()}
+                        className="hidden" 
+                        accept=".json"
+                    />
+                    
+                    <div className="flex flex-col items-center gap-4 group-hover:scale-105 transition-transform duration-300">
+                        <div className="bg-white p-4 rounded-full shadow-md group-hover:shadow-lg transition-shadow">
+                            <FileSpreadsheet className="h-10 w-10 text-teal-600" />
+                        </div>
+                        
+                        <div className="text-center">
+                            <h3 className="text-lg font-bold text-gray-900">Cargar Requerimiento IPRESS</h3>
+                            <p className="text-sm text-gray-500 mt-1">Arrastre su archivo Excel aquí o haga clic para buscar</p>
+                        </div>
+    
+                        <div className="flex items-center gap-2 text-xs text-teal-600 font-medium bg-teal-100 px-3 py-1 rounded-full">
+                            <Sparkles className="h-3 w-3" />
+                            <span>Formato .xlsx o .xls requerido</span>
+                        </div>
+    
+                        <button
+                            onClick={(e) => { e.stopPropagation(); downloadTemplate(); }}
+                            className="text-xs text-slate-500 hover:text-teal-600 underline mt-2"
+                        >
+                            Descargar Plantilla Estándar
+                        </button>
+    
+                        <div className="mt-4 w-full flex flex-wrap gap-4 justify-center items-center z-10">
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    triggerFileUpload();
+                                }}
+                                className="bg-white border border-teal-200 text-teal-700 hover:bg-teal-50 hover:border-teal-300 w-full sm:w-auto justify-center px-4 py-2 font-bold text-sm rounded-lg transition-all flex items-center gap-2 shadow-sm"
+                            >
+                                <Upload className="h-4 w-4" />
+                                Subir Archivo
+                            </button>
+
+                            {(items.length > 0 || hasAnalyzedData) && (
+                                <button 
+                                    onClick={handleExportSession}
+                                    className="bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 w-full sm:w-auto justify-center px-4 py-2 font-bold text-sm rounded-lg transition-all flex items-center gap-2 shadow-sm"
+                                    title="Exportar avance actual para continuar en otra PC"
+                                >
+                                    <Download className="h-4 w-4 text-indigo-650" />
+                                    <span>Exportar Avance</span>
+                                </button>
+                            )}
+
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    importInputRef.current?.click();
+                                }}
+                                className="bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 w-full sm:w-auto justify-center px-4 py-2 font-bold text-sm rounded-lg transition-all flex items-center gap-2 shadow-sm"
+                                title="Importar avance guardado en archivo JSON"
+                            >
+                                <Upload className="h-4 w-4 text-emerald-600" />
+                                <span>Importar Avance</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {uploadError && !isProcessingFile && (
+                <div className="w-full max-w-2xl mt-4 bg-red-50 text-red-700 p-4 rounded-xl border border-red-100 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4">
+                    <AlertCircle className="h-5 w-5 shrink-0" />
+                    <p className="text-sm font-medium">{uploadError}</p>
+                </div>
+            )}
+          </div>
+      )}
+
+      {/* Item Preview */}
+      {items.length > 0 && !isUploadSectionCollapsed && (
+        <div className="space-y-4 mt-12 sm:mt-16 pt-6 border-t border-dashed border-gray-200 animate-in fade-in duration-500">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center max-w-5xl mx-auto px-1 gap-4">
+            <div className="space-y-1.5 text-left">
+              <h3 className="text-sm font-black text-gray-700 uppercase tracking-wide flex flex-wrap items-center gap-2">
+                <span>Items Cargados ({items.length})</span>
+                <span className="text-xs font-semibold bg-gray-100 text-gray-500 px-2.5 py-0.5 rounded-full normal-case whitespace-nowrap border border-gray-200">
+                  Corte: {referenceDate}
+                </span>
+              </h3>
+              {(importedCodEess || importedEstablishmentName || importedMicrored) && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  {(importedCodEess || importedEstablishmentName) && (
+                    <span className="text-[10px] font-extrabold text-teal-850 bg-teal-50 border border-teal-150 px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                      <span>
+                        {importedCodEess ? `${importedCodEess} - ` : ''}
+                        {importedEstablishmentName ? importedEstablishmentName.toUpperCase() : 'ESTABLECIMIENTO'}
+                      </span>
+                    </span>
+                  )}
+                  {importedMicrored && (
+                    <span className="text-[10px] font-bold text-indigo-800 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded uppercase">
+                      MR: {importedMicrored}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <button 
+              onClick={handleClearClick}
+              className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 bg-red-50 px-3 py-2 rounded hover:bg-red-100 transition-colors w-full sm:w-auto justify-center border border-red-100"
+            >
+              <Trash2 className="h-3 w-3" /> Limpiar Todo
+            </button>
+          </div>
+          
+          {/* Scrollable Table Container for Mobile */}
+          <div className="bg-gray-50 rounded-lg border border-gray-200 max-h-60 overflow-y-auto max-w-5xl mx-auto shadow-sm overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-100 sticky top-0 z-10">
+                <tr>
+                  <th className="px-3 py-2 text-left font-bold text-gray-600 text-xs uppercase tracking-wider whitespace-nowrap">Código</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-600 text-xs uppercase tracking-wider min-w-[150px]">Descripción</th>
+                  <th className="px-3 py-2 text-right font-bold text-gray-600 text-xs uppercase tracking-wider whitespace-nowrap">Stock</th>
+                  <th className="px-3 py-2 text-center font-bold text-gray-600 text-xs uppercase tracking-wider whitespace-nowrap">Meses</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {items.map((item, index) => (
+                  <tr key={`${item.id}-${index}`} className="hover:bg-gray-50">
+                    <td className="px-3 py-1.5 text-xs font-mono text-gray-500 font-medium w-24 whitespace-nowrap">{item.id}</td>
+                    <td className="px-3 py-1.5 text-gray-900 truncate max-w-[150px] sm:max-w-[300px] text-xs font-medium" title={item.name}>{item.name}</td>
+                    <td className="px-3 py-1.5 text-right font-mono text-xs font-bold text-gray-700 whitespace-nowrap">{item.currentStock.toLocaleString()}</td>
+                    <td className="px-3 py-1.5 text-center text-xs text-gray-500 whitespace-nowrap">
+                      {item.monthlyConsumption.filter(v => v > 0).length}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex justify-center pt-2">
+            <button
+              onClick={handleExecuteClick}
+              disabled={isAnalyzing}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-gray-900 text-white font-bold text-sm rounded-full hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+            >
+              {isAnalyzing ? (
+                <>
+                  <Activity className="h-4 w-4 animate-spin" />
+                  Calculando CPA...
+                </>
+              ) : (
+                <>
+                  <Activity className="h-4 w-4" />
+                  Ejecutar Análisis
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+
+    {/* VACCINE CONFIG MODAL */}
+    {isVaccineModalOpen && (
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-t-4 border-blue-500">
+                <div className="p-6 sm:p-8 flex flex-col items-center text-center">
+                    
+                    <div className="bg-blue-50 p-4 rounded-full mb-4">
+                       <Settings2 className="h-8 w-8 text-blue-600" />
+                    </div>
+
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
+                       Configuración de Análisis
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-500 mb-6 max-w-xs mx-auto">
+                       Antes de procesar la matriz, defina cómo desea tratar los productos de la cadena de frío.
+                    </p>
+
+                    <div className="w-full space-y-3">
+                        {/* Option 1: Exclude (Selected by Default) */}
+                        <div
+                            onClick={() => setExcludeVaccinesSelection(true)}
+                            className={`w-full flex items-center justify-between p-4 rounded-xl transition-all cursor-pointer group border-2 ${
+                                excludeVaccinesSelection 
+                                ? 'bg-teal-50 border-teal-500 shadow-md ring-1 ring-teal-500/20' 
+                                : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                            }`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg transition-colors ${
+                                    excludeVaccinesSelection ? 'bg-teal-200 text-teal-800' : 'bg-gray-100 text-gray-500'
+                                }`}>
+                                     <Syringe className="h-5 w-5" />
+                                </div>
+                                <div className="text-left">
+                                    <span className={`block font-bold text-sm ${excludeVaccinesSelection ? 'text-teal-900' : 'text-gray-700'}`}>
+                                        Excluir Vacunas y Diluyentes
+                                    </span>
+                                    <span className="block text-xs text-gray-500">Se eliminarán del cálculo (Recomendado)</span>
+                                </div>
+                            </div>
+                            <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                excludeVaccinesSelection ? 'border-teal-500' : 'border-gray-300'
+                            }`}>
+                                {excludeVaccinesSelection && <div className="h-2.5 w-2.5 rounded-full bg-teal-500" />}
+                            </div>
+                        </div>
+
+                        {/* Option 2: Include All */}
+                        <div
+                            onClick={() => setExcludeVaccinesSelection(false)}
+                            className={`w-full flex items-center justify-between p-4 rounded-xl transition-all cursor-pointer group border-2 ${
+                                !excludeVaccinesSelection 
+                                ? 'bg-teal-50 border-teal-500 shadow-md ring-1 ring-teal-500/20' 
+                                : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                            }`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg transition-colors ${
+                                    !excludeVaccinesSelection ? 'bg-teal-200 text-teal-800' : 'bg-gray-100 text-gray-500'
+                                }`}>
+                                     <FileSpreadsheet className="h-5 w-5" />
+                                </div>
+                                <div className="text-left">
+                                    <span className={`block font-bold text-sm ${!excludeVaccinesSelection ? 'text-teal-900' : 'text-gray-700'}`}>
+                                        Incluir Todo
+                                    </span>
+                                    <span className="block text-xs text-gray-500">Analizar todos los ítems cargados</span>
+                                </div>
+                            </div>
+                            <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                !excludeVaccinesSelection ? 'border-teal-500' : 'border-gray-300'
+                            }`}>
+                                {!excludeVaccinesSelection && <div className="h-2.5 w-2.5 rounded-full bg-teal-500" />}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 w-full mt-8">
+                        <button 
+                            onClick={() => setIsVaccineModalOpen(false)}
+                            className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={handleRunAnalysis}
+                            className="flex-1 py-2.5 text-sm font-bold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors shadow-lg flex items-center justify-center gap-2"
+                        >
+                            <Play className="h-4 w-4 fill-current" />
+                            Aceptar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )}
+
+    {/* MANDATORY DATE MODAL */}
+    {isDateModalOpen && (
+      <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-t-4 border-teal-600">
+          <div className="p-6 sm:p-8 flex flex-col items-center text-center">
+            
+            <div className="bg-teal-100 p-4 rounded-full mb-4">
+               <Calendar className="h-8 w-8 text-teal-700" />
+            </div>
+
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
+              Confirme la Fecha del Reporte
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-500 mb-6">
+              Para realizar un cálculo preciso, el sistema necesita saber a qué mes corresponde la última columna de datos.
+            </p>
+
+            <div className="w-full bg-gray-50 p-5 rounded-xl border border-gray-200 mb-6 shadow-sm">
+                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center justify-center gap-1 mb-4">
+                    Mes de Corte (Mes {detectedMonthsCount})
+                </label>
+                <input 
+                    type="month" 
+                    value={referenceDate}
+                    onChange={(e) => setReferenceDate(e.target.value)}
+                    className="w-full text-center px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-gray-900 font-bold text-lg shadow-sm bg-white hover:bg-gray-50 transition-colors cursor-pointer cursor-text"
+                />
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-100 p-3 rounded-lg flex gap-3 text-left mb-6">
+               <AlertCircle className="h-5 w-5 text-blue-600 shrink-0" />
+               <p className="text-xs text-blue-800">
+                  <strong>Nota:</strong> Si descargó el reporte hoy, la fecha por defecto suele ser correcta.
+               </p>
+            </div>
+
+            <button
+              onClick={handleConfirmDate}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 text-white font-bold rounded-xl hover:bg-teal-700 transition-all shadow-md transform hover:scale-[1.02]"
+            >
+              <Check className="h-5 w-5" />
+              Confirmar y Cargar Datos
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* OVERWRITE WARNING MODAL */}
+    {showOverwriteWarning && (
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
+                <div className="bg-amber-500 p-4 flex justify-between items-center text-white">
+                    <div className="flex items-center gap-2">
+                         <AlertTriangle className="h-6 w-6" />
+                         <h3 className="font-bold text-lg">¡Atención! Datos no guardados</h3>
+                    </div>
+                    <button onClick={() => setShowOverwriteWarning(false)} className="hover:bg-amber-600 p-1 rounded transition-colors">
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+                
+                <div className="p-6">
+                    <p className="text-gray-700 mb-4 text-sm leading-relaxed">
+                        Actualmente hay un análisis realizado en pantalla. 
+                        <br/><br/>
+                        <strong>Si sube un nuevo archivo, los resultados actuales se perderán permanentemente</strong> si no los ha exportado (PDF/Excel).
+                    </p>
+                    <p className="text-gray-500 text-xs italic mb-6">
+                        ¿Desea continuar y sobrescribir los datos actuales?
+                    </p>
+                    
+                    <div className="flex gap-3 justify-end">
+                        <button 
+                            onClick={() => setShowOverwriteWarning(false)}
+                            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium text-sm hover:bg-gray-50 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={confirmOverwrite}
+                            className="px-4 py-2 bg-amber-600 text-white rounded-lg font-bold text-sm hover:bg-amber-700 transition-colors shadow-sm"
+                        >
+                            Continuar y Sobrescribir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )}
+
+    {/* REANALYSIS WARNING MODAL */}
+    {showReanalysisWarning && (
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
+                <div className="bg-amber-500 p-4 flex justify-between items-center text-white">
+                    <div className="flex items-center gap-2">
+                         <AlertTriangle className="h-6 w-6" />
+                         <h3 className="font-bold text-lg">Reiniciar Análisis</h3>
+                    </div>
+                    <button onClick={() => setShowReanalysisWarning(false)} className="hover:bg-amber-600 p-1 rounded transition-colors">
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+                
+                <div className="p-6">
+                    <p className="text-gray-700 mb-4 text-sm leading-relaxed">
+                        Ya existe un análisis generado. Si vuelve a ejecutarlo:
+                    </p>
+                    <ul className="list-disc list-inside text-xs text-amber-800 bg-amber-50 p-3 rounded border border-amber-100 mb-6 space-y-1">
+                        <li>Se perderá el <strong>progreso de la auditoría</strong>.</li>
+                        <li>Se restablecerán las <strong>validaciones manuales</strong>.</li>
+                        <li>Los datos volverán a su estado calculado original.</li>
+                    </ul>
+                    <p className="text-gray-500 text-xs italic mb-6">
+                        ¿Está seguro que desea volver a calcular y perder los cambios actuales?
+                    </p>
+                    
+                    <div className="flex gap-3 justify-end">
+                        <button 
+                            onClick={() => setShowReanalysisWarning(false)}
+                            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium text-sm hover:bg-gray-50 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={confirmReanalysis}
+                            className="px-4 py-2 bg-amber-600 text-white rounded-lg font-bold text-sm hover:bg-amber-700 transition-colors shadow-sm flex items-center gap-2"
+                        >
+                            <RefreshCw className="h-4 w-4" />
+                            Sí, Reiniciar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )}
+
+    {/* CLEAR ALL WARNING MODAL */}
+    {showClearWarning && (
+        <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
+                <div className="bg-red-600 p-4 flex justify-between items-center text-white">
+                    <div className="flex items-center gap-2">
+                         <Trash2 className="h-6 w-6" />
+                         <h3 className="font-bold text-lg">Eliminar Datos</h3>
+                    </div>
+                    <button onClick={() => setShowClearWarning(false)} className="hover:bg-red-700 p-1 rounded transition-colors">
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+                
+                <div className="p-6">
+                    <p className="text-gray-700 mb-4 text-sm leading-relaxed">
+                        Esta acción eliminará <strong>todos los items cargados</strong> y el <strong>análisis generado</strong> actualmente.
+                    </p>
+                    <p className="text-red-600 font-bold text-xs mb-6 bg-red-50 p-3 rounded border border-red-100 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        Esta acción no se puede deshacer.
+                    </p>
+                    
+                    <div className="flex gap-3 justify-end">
+                        <button 
+                            onClick={() => setShowClearWarning(false)}
+                            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium text-sm hover:bg-gray-50 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={confirmClearAll}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg font-bold text-sm hover:bg-red-700 transition-colors shadow-sm"
+                        >
+                            Sí, Eliminar Todo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )}
+    </>
+  );
+};
