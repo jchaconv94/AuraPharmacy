@@ -66,13 +66,16 @@ Primer corte implementado:
 - Ejecutada la reparacion `SUPABASE_REPAIR_IMMUNIZATION_IPRESS_UNGET_LINK.sql`. Verificado: 0 filas huerfanas.
 - Con la Fase 19 queda cubierta la seccion 20 del diseno funcional: consolidado biologico en `Cierre Mensual` y avance operativo en `Reportes Inmunizaciones`.
 
+- Cerrada la deuda UX principal: capa de componentes compartidos en `components/ui/immunization.tsx`, vista de celular en Consumo IPRESS y Distribuciones, y menu movil con panel lateral al 90% y barra inferior sin saturar.
+- Implementado el modulo `Consulta de Stock Biologico` con permiso propio `IMMUNIZATION_STOCK_QUERY`. Era el ultimo modulo del plan que quedaba disenado y sin construir.
+- Con esto el alcance funcional del plan queda completo.
+
 Siguiente corte recomendado:
 
 - Las migraciones de consumo, devoluciones y cierres mensuales YA estan ejecutadas en Supabase. Verificado el 2026-07-30.
 - La Etapa 2 queda funcionalmente completa. Lo que sigue es consolidacion, no construccion nueva:
   1. Validar un periodo real completo con varias IPRESS usando `scripts/validateImmunizationReportsAgainstSupabase.ts`.
   2. Deuda UX pendiente del `UX_PLAN_INMUNIZACIONES.md`: capa de componentes comunes, revision movil y filtros territoriales avanzados.
-  3. Modulo `Consulta de Stock Biologico`, disenado pero no implementado.
   4. RLS definitiva, que requiere Supabase Auth o Edge Functions/RPC.
 
 Seguridad, etapa 1 (2026-07-31):

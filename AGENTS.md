@@ -184,6 +184,7 @@ Precedencia: ADMIN → `GLOBAL`; si hay `facilityCode` → `IPRESS`; luego UNGET
 | `IMMUNIZATION_CATALOG` | Catálogo Biológico | `ImmunizationCatalogModule.tsx` | DIRESA/Admin |
 | `IMMUNIZATION_INITIAL_INVENTORY` | Inventario Inicial | `ImmunizationInitialInventoryModule.tsx` | UNGET/IPRESS |
 | `IMMUNIZATION_STOCK` | Stock Biológico | `ImmunizationStockModule.tsx` | propietario del stock |
+| `IMMUNIZATION_STOCK_QUERY` | Consulta de Stock Biológico | `ImmunizationStockQueryModule.tsx` | supervisor, **solo lectura** |
 | `IMMUNIZATION_INCOMES` | Ingresos Regionales | `ImmunizationIncomesModule.tsx` | DIRESA |
 | `IMMUNIZATION_INCOME_ORIGINS` | Orígenes de Ingreso | `ImmunizationIncomeOriginsModule.tsx` | DIRESA/Admin |
 | `IMMUNIZATION_DISTRIBUTIONS` | Distribuciones | `ImmunizationDistributionsModule.tsx` | DIRESA→UNGET, UNGET→IPRESS |
@@ -199,6 +200,7 @@ Precedencia: ADMIN → `GLOBAL`; si hay `facilityCode` → `IPRESS`; luego UNGET
 |---|---|
 | `services/immunizationApi.ts` (~171 KB) | Objeto `immunizationApi` con toda la lógica CRUD + reglas. Es el archivo más importante del módulo. |
 | `services/immunizationMonthlyReportService.ts` | Filas y export PDF/Excel del movimiento biológico mensual. **Cinco** variantes sobre el **mismo** formato de 19 columnas: `IPRESS`, `UNGET_WAREHOUSE`, `UNGET_NETWORK`, `DIRESA_WAREHOUSE` y `DIRESA_NETWORK` (ver `REPORT_VARIANTS`). Un cambio de layout aplica a las cinco. |
+| `components/ui/immunization.tsx` | Kit visual compartido: `ImmunizationKpiCard`, `ImmunizationPageHeader`, `ImmunizationStatusChip`, `ImmunizationEmptyState`, y las clases de input y el normalizador de texto. **Úsalo en vez de redefinir tarjetas o clases por módulo.** Los tonos se nombran por significado (`success`, `warning`, `danger`, `info`, `locked`), nunca por color. |
 | `services/immunizationProgressService.ts` | Avance operativo mensual en **funciones puras**: estado de cierres, pendientes, incidencias, consumo, vencimientos y valorización. Fuente única de "precerrada / pendiente / cerrada" para el tablero y el módulo de cierre. |
 | `services/immunizationExcelService.ts` | Parser `.xlsx` de inventario inicial, detección de columnas alternativas, plantilla. |
 | `services/immunizationAdjustmentPdfService.ts` | Constancia PDF A4 de reajuste. |
@@ -324,7 +326,6 @@ Regla del reporte IPRESS que también aplica a los tres: si el inventario inicia
 
 1. **Validar un periodo real completo** con varias IPRESS y muchos lotes. Todo lo construido está probado con datos escasos (1 producto, 11 movimientos); es el mayor riesgo abierto.
 2. **Deuda UX** del `UX_PLAN_INMUNIZACIONES.md`: la capa de componentes comunes §4.1 nunca se creó, falta la revisión móvil §9 y los filtros territoriales avanzados para DIRESA.
-3. **Módulo `Consulta de Stock Biológico`**: diseñado (§7.3) y nunca implementado.
 4. **Seguridad de acceso a datos — es ahora la prioridad real.** La auditoría (`SEGURIDAD_AUDITORIA.md`) confirmó escalada de privilegios explotable. Orden: (a) `SUPABASE_SECURITY_STAGE2_LOCKDOWN.sql` corta la escritura sobre `users` y `roles_config`; (b) reconstruir la administración de usuarios como funciones `SECURITY DEFINER` con reautenticación; (c) migrar a Supabase Auth, única vía para proteger el resto sin romper la app. La etapa 1 (`SEGURIDAD_ETAPA_1_LOGIN.md`) sigue pendiente de aplicar.
 
 **Antes de empezar, corre el diagnóstico contra datos reales** (solo lectura, necesita `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`):
