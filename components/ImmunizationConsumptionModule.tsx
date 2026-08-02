@@ -368,7 +368,59 @@ export const ImmunizationConsumptionModule: React.FC = () => {
             <p className="mt-1 text-sm text-slate-500">Use “Nuevo registro” para descargar varios productos en un solo movimiento.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* En celular la tabla de 9 columnas es inservible: se muestran tarjetas. */}
+            <div className="divide-y divide-slate-100 md:hidden">
+              {visibleGroups.map(group => (
+                <article key={group.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-slate-900">{group.reference || "Sin número"}</p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">
+                        {group.consumptionDate || (group.createdAt ? new Date(group.createdAt).toLocaleDateString("es-PE") : "-")}
+                        <span className="ml-2 font-mono text-teal-700">{group.period}</span>
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-black text-slate-600">
+                      {group.movements.length} ítem(s)
+                    </span>
+                  </div>
+
+                  <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-xl bg-slate-50 py-2">
+                      <dt className="text-[10px] font-black uppercase text-slate-400">Consumo</dt>
+                      <dd className="text-sm font-black text-slate-900">{formatNumber(group.totalQuantity)}</dd>
+                    </div>
+                    <div className="rounded-xl bg-emerald-50 py-2">
+                      <dt className="text-[10px] font-black uppercase text-emerald-600">Aplicadas</dt>
+                      <dd className="text-sm font-black text-emerald-800">{formatNumber(group.dosesApplied)}</dd>
+                    </div>
+                    <div className={`rounded-xl py-2 ${group.lossFactor > 0 ? "bg-amber-50" : "bg-slate-50"}`}>
+                      <dt className={`text-[10px] font-black uppercase ${group.lossFactor > 0 ? "text-amber-600" : "text-slate-400"}`}>Factor</dt>
+                      <dd className={`text-sm font-black ${group.lossFactor > 0 ? "text-amber-800" : "text-slate-900"}`}>
+                        {formatNumber(group.lossFactor, 2)}%
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <button
+                    type="button"
+                    onClick={() => setExpandedGroupId(current => current === group.id ? "" : group.id)}
+                    className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-black text-slate-700"
+                  >
+                    {expandedGroupId === group.id ? "Ocultar detalle" : "Ver detalle"}
+                  </button>
+
+                  {expandedGroupId === group.id && (
+                    <div className="mt-3">
+                      <GroupDetail group={group} productById={productById} layerById={layerById} />
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
                 <tr>
@@ -412,7 +464,8 @@ export const ImmunizationConsumptionModule: React.FC = () => {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </section>
 

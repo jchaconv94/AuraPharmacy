@@ -381,6 +381,36 @@ export const ImmunizationDistributionsModule: React.FC = () => {
     });
   }, [availableFilterFacilities, availableFilterUngets, criterionFilter, dateFrom, dateTo, distributions, facilities, facilityFilter, isSupervisorView, periodFilter, search, statusFilter, ungetFilter, ungets, userScope]);
 
+  /**
+   * Etiquetas y permisos de una distribución.
+   *
+   * Lo usan la tabla de escritorio y las tarjetas de celular. Estaba calculado dentro del
+   * `map` de la tabla; al extraerlo, ambas vistas comparten el mismo criterio y no pueden
+   * desincronizarse.
+   */
+  const describeDistribution = useCallback((distribution: ImmunizationDistributionBatch) => {
+    const flow = distributionFlow(distribution);
+    const destinationUngetId = distributionDestinationUngetId(distribution);
+    const originUngetId = distributionOriginUngetId(distribution);
+    return {
+      flow,
+      originLabel: flow === "DIRESA_UNGET" ? "DIRESA Regional" : ungetName(originUngetId, ungets),
+      originMeta: flow === "DIRESA_UNGET" ? "ALMACEN REGIONAL" : "UNGET",
+      destinationLabel: flow === "DIRESA_UNGET"
+        ? ungetName(destinationUngetId, ungets)
+        : facilityName(distribution.destinationFacilityCode, facilities),
+      destinationMeta: flow === "DIRESA_UNGET" ? "UNGET" : distribution.destinationFacilityCode,
+      canSendDraft: distribution.status === "DRAFT" && (
+        (flow === "DIRESA_UNGET" && isRegionalOperator) ||
+        (flow === "UNGET_IPRESS" && canCreateUnget && originUngetId === currentUngetId)
+      ),
+      canReceiveSent: distribution.status === "SENT" && (
+        (flow === "DIRESA_UNGET" && userScope.ownerType === "UNGET" && destinationUngetId === currentUngetId) ||
+        (flow === "UNGET_IPRESS" && isIpressUser && distribution.destinationFacilityCode === userScope.facilityCode)
+      )
+    };
+  }, [canCreateUnget, currentUngetId, facilities, isIpressUser, isRegionalOperator, ungets, userScope]);
+
   const hasFilters = Boolean(search || periodFilter !== currentPeriod || statusFilter !== "ALL" || criterionFilter !== "ALL" || ungetFilter || facilityFilter || dateFrom || dateTo);
   const clearFilters = () => {
     setSearch("");
@@ -563,7 +593,77 @@ export const ImmunizationDistributionsModule: React.FC = () => {
             {distributions.length > 0 && <button type="button" onClick={clearFilters} className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white">Limpiar filtros</button>}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* En celular la tabla de 8 columnas obliga a desplazarse: se usan tarjetas. */}
+            <div className="divide-y divide-slate-100 md:hidden">
+              {visibleDistributions.map(distribution => {
+                const { originLabel, destinationLabel, destinationMeta, canSendDraft, canReceiveSent } =
+                  describeDistribution(distribution);
+                return (
+                  <article key={distribution.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-900">{destinationLabel}</p>
+                        <p className="mt-0.5 font-mono text-[10px] text-slate-400">{destinationMeta || "-"}</p>
+                      </div>
+                      <StatusBadge status={distribution.status} />
+                    </div>
+
+                    <p className="mt-2 text-xs font-bold text-slate-600">
+                      Desde {originLabel}
+                      <span className="ml-2 font-mono text-teal-700">{distribution.period}</span>
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {formatDate(distribution.sentAt || distribution.createdAt)}
+                      {distribution.referenceDocument ? ` · ${distribution.referenceDocument}` : ""}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {canSendDraft && (
+                        <button
+                          type="button"
+                          onClick={() => void sendExistingDistribution(distribution)}
+                          disabled={sendingId === distribution.id}
+                          className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-sky-700 px-3 py-2.5 text-xs font-black text-white disabled:opacity-60"
+                        >
+                          {sendingId === distribution.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                          Enviar
+                        </button>
+                      )}
+                      {canReceiveSent && (
+                        <button
+                          type="button"
+                          onClick={() => void openReceptionModal(distribution)}
+                          disabled={receivingId === distribution.id}
+                          className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white disabled:opacity-60"
+                        >
+                          {receivingId === distribution.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                          Recepcionar
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void toggleDetail(distribution)}
+                        className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-black text-slate-700"
+                      >
+                        {expandedId === distribution.id ? "Ocultar" : "Ver detalle"}
+                      </button>
+                    </div>
+
+                    {expandedId === distribution.id && (
+                      <div className="mt-3">
+                        <DistributionDetail
+                          items={detailByDistribution[distribution.id || ""] || []}
+                          loading={loadingDetailId === distribution.id}
+                        />
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
                 <tr>
@@ -579,21 +679,8 @@ export const ImmunizationDistributionsModule: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visibleDistributions.map(distribution => {
-                  const flow = distributionFlow(distribution);
-                  const destinationUngetId = distributionDestinationUngetId(distribution);
-                  const originUngetId = distributionOriginUngetId(distribution);
-                  const originLabel = flow === "DIRESA_UNGET" ? "DIRESA Regional" : ungetName(originUngetId, ungets);
-                  const originMeta = flow === "DIRESA_UNGET" ? "ALMACEN REGIONAL" : "UNGET";
-                  const destinationLabel = flow === "DIRESA_UNGET" ? ungetName(destinationUngetId, ungets) : facilityName(distribution.destinationFacilityCode, facilities);
-                  const destinationMeta = flow === "DIRESA_UNGET" ? "UNGET" : distribution.destinationFacilityCode;
-                  const canSendDraft = distribution.status === "DRAFT" && (
-                    (flow === "DIRESA_UNGET" && isRegionalOperator) ||
-                    (flow === "UNGET_IPRESS" && canCreateUnget && originUngetId === currentUngetId)
-                  );
-                  const canReceiveSent = distribution.status === "SENT" && (
-                    (flow === "DIRESA_UNGET" && userScope.ownerType === "UNGET" && destinationUngetId === currentUngetId) ||
-                    (flow === "UNGET_IPRESS" && isIpressUser && distribution.destinationFacilityCode === userScope.facilityCode)
-                  );
+                  const { originLabel, originMeta, destinationLabel, destinationMeta, canSendDraft, canReceiveSent } =
+                    describeDistribution(distribution);
                   return (
                   <React.Fragment key={distribution.id}>
                     <tr className="hover:bg-slate-50/70">
@@ -634,7 +721,8 @@ export const ImmunizationDistributionsModule: React.FC = () => {
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </section>
 
