@@ -36,6 +36,7 @@ import {
   ImmunizationReturnType,
   ImmunizationStockLayer
 } from "../types";
+import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
 
 type ReturnItemDraft = ImmunizationReturnItem & {
   tempId: string;
@@ -52,11 +53,9 @@ interface ProductStockOption {
 }
 
 const currentPeriod = getCurrentImmunizationPeriod();
-const inputClassName = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition-shadow placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-500";
 
 const todayInputValue = () => new Date().toISOString().slice(0, 10);
 const periodFromDate = (value: string) => (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) ? value.slice(0, 7) : currentPeriod);
-const normalizeText = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 const formatNumber = (value: number) => value.toLocaleString("es-PE", { maximumFractionDigits: 2 });
 const sortLayersByFefo = (a: ImmunizationStockLayer, b: ImmunizationStockLayer) => {
   const expiration = (a.expirationDate || "").localeCompare(b.expirationDate || "");
@@ -312,10 +311,10 @@ export const ImmunizationReturnsModule: React.FC = () => {
       </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard label="Pendientes" value={formatNumber(totals.pending)} />
-        <SummaryCard label="Recibidos" value={formatNumber(totals.received)} />
-        <SummaryCard label="Observados" value={formatNumber(totals.observed)} />
-        <SummaryCard label="Bajas" value={formatNumber(totals.disposals)} />
+        <ImmunizationKpiCard label="Pendientes" value={formatNumber(totals.pending)} />
+        <ImmunizationKpiCard label="Recibidos" value={formatNumber(totals.received)} />
+        <ImmunizationKpiCard label="Observados" value={formatNumber(totals.observed)} />
+        <ImmunizationKpiCard label="Bajas" value={formatNumber(totals.disposals)} />
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
@@ -1046,12 +1045,6 @@ function ReturnDetail({ items, loading }: { items: ImmunizationReturnItem[]; loa
   );
 }
 
-const SummaryCard: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-    <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">{label}</p>
-    <p className="mt-3 text-2xl font-black text-slate-950">{value}</p>
-  </div>
-);
 
 const HeaderCell: React.FC<{ children: React.ReactNode; align?: "left" | "right" }> = ({ children, align = "left" }) => (
   <th className={`px-4 py-3 ${align === "right" ? "text-right" : "text-left"} text-[11px] font-black uppercase tracking-wide text-slate-500`}>

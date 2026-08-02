@@ -24,6 +24,7 @@ import {
 import { api } from "../services/api";
 import { getCurrentImmunizationPeriod, getImmunizationScope, ImmunizationScope, immunizationApi } from "../services/immunizationApi";
 import { HealthFacility, ImmunizationInitialInventory, ImmunizationInitialInventoryItem, ImmunizationOwnerType, ImmunizationProduct, Unget } from "../types";
+import { ImmunizationKpiCard } from "./ui/immunization";
 import { ConfirmationDialog } from "./ui/ConfirmationDialog";
 import { ImmunizationInventoryItemModal, InventoryItemFormData } from "./ImmunizationInventoryItemModal";
 
@@ -637,10 +638,10 @@ const SavedInventoryView: React.FC<SavedInventoryViewProps> = ({ inventory, item
   return (
     <div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-slate-50 border-b border-slate-100">
-        <SummaryCard label="Productos/lotes" value={String(items.length)} tone="success" />
-        <SummaryCard label="Frascos/unidades" value={totalQuantity.toLocaleString("es-PE")} tone="neutral" />
-        <SummaryCard label="Valorizacion" value={currencyFormatter.format(totalValue)} tone="neutral" />
-        <SummaryCard label="Estado" value={inventory.status === "CLOSED" ? "Cerrado" : "Borrador"} tone={inventory.status === "CLOSED" ? "success" : "warning"} />
+        <ImmunizationKpiCard filled label="Productos/lotes" value={String(items.length)} tone="success" />
+        <ImmunizationKpiCard filled label="Frascos/unidades" value={totalQuantity.toLocaleString("es-PE")} tone="neutral" />
+        <ImmunizationKpiCard filled label="Valorizacion" value={currencyFormatter.format(totalValue)} tone="neutral" />
+        <ImmunizationKpiCard filled label="Estado" value={inventory.status === "CLOSED" ? "Cerrado" : "Borrador"} tone={inventory.status === "CLOSED" ? "success" : "warning"} />
       </div>
 
       <div className="overflow-auto max-h-[470px]">
@@ -833,10 +834,10 @@ const ImportPreview: React.FC<ImportPreviewProps> = ({
 }) => (
   <div>
     <div className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 border-b border-slate-100">
-      <SummaryCard label="Filas validas" value={String(validCount)} tone="success" />
-      <SummaryCard label="Con errores" value={String(invalidCount)} tone={invalidCount ? "danger" : "neutral"} />
-      <SummaryCard label="Advertencias" value={String(warningCount)} tone={warningCount ? "warning" : "neutral"} />
-      <SummaryCard label="Valor valido" value={currencyFormatter.format(totalValue)} tone="neutral" />
+      <ImmunizationKpiCard filled label="Filas validas" value={String(validCount)} tone="success" />
+      <ImmunizationKpiCard filled label="Con errores" value={String(invalidCount)} tone={invalidCount ? "danger" : "neutral"} />
+      <ImmunizationKpiCard filled label="Advertencias" value={String(warningCount)} tone={warningCount ? "warning" : "neutral"} />
+      <ImmunizationKpiCard filled label="Valor valido" value={currencyFormatter.format(totalValue)} tone="neutral" />
     </div>
 
     {preview.missingColumns.length > 0 && (
@@ -918,21 +919,6 @@ const ImportPreview: React.FC<ImportPreviewProps> = ({
     </div>
   </div>
 );
-
-const SummaryCard: React.FC<{ label: string; value: string; tone: "success" | "danger" | "warning" | "neutral" }> = ({ label, value, tone }) => {
-  const tones = {
-    success: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    danger: "border-red-200 bg-red-50 text-red-800",
-    warning: "border-amber-200 bg-amber-50 text-amber-800",
-    neutral: "border-slate-200 bg-white text-slate-800"
-  };
-  return (
-    <div className={`rounded-xl border px-3 py-3 ${tones[tone]}`}>
-      <div className="text-[10px] font-black uppercase tracking-wider opacity-70">{label}</div>
-      <div className="text-lg font-black mt-0.5 truncate">{value}</div>
-    </div>
-  );
-};
 
 const ActionCard: React.FC<{
   icon: React.ReactNode;

@@ -27,6 +27,7 @@ import {
   ImmunizationStockLayer,
   Unget
 } from "../types";
+import { normalizeImmunizationText as normalizeText } from "./ui/immunization";
 
 type ExpirationKey = "EXPIRED" | "CRITICAL" | "UPCOMING" | "VALID" | "UNKNOWN";
 type ExpirationFilter = "ALL" | ExpirationKey | "ALERTS";
@@ -51,11 +52,6 @@ interface StockProductGroup {
   nearest?: string;
 }
 
-const normalizeText = (value: string) => value
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase()
-  .trim();
 
 const getExpirationStatus = (dateStr: string): ExpirationStatus => {
   const today = new Date();

@@ -51,9 +51,9 @@ import {
   ImmunizationStockMovement,
   Unget
 } from "../types";
+import { ImmunizationKpiCard, immunizationFilterInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
 
 const currentPeriod = getCurrentImmunizationPeriod();
-const inputClassName = "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition-shadow placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 
 const statusOptions: Array<{ value: ImmunizationClosureStatusFilter; label: string }> = [
   { value: "ALL", label: "Todos los estados" },
@@ -63,11 +63,6 @@ const statusOptions: Array<{ value: ImmunizationClosureStatusFilter; label: stri
   { value: "REOPENED", label: "Reabiertas" }
 ];
 
-const normalizeText = (value: string) => value
-  .normalize("NFD")
-  .replace(/[̀-ͯ]/g, "")
-  .toLowerCase()
-  .trim();
 
 const number = (value: number) => value.toLocaleString("es-PE", { maximumFractionDigits: 0 });
 const money = (value: number) => `S/ ${value.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -304,52 +299,52 @@ export const ImmunizationReportsModule: React.FC = () => {
       ) : (
         <>
           <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricCard
+            <ImmunizationKpiCard
               icon={<CalendarCheck className="h-5 w-5" />}
               label="UNGET cerradas"
               value={`${summary.closedUngets} / ${summary.totalUngets}`}
-              tone={summary.pendingUngets > 0 ? "amber" : "emerald"}
+              tone={summary.pendingUngets > 0 ? "warning" : "success"}
             />
-            <MetricCard
+            <ImmunizationKpiCard
               icon={<Building2 className="h-5 w-5" />}
               label="IPRESS precerradas"
               value={`${summary.preclosedIpress} / ${summary.totalIpress}`}
-              tone={summary.pendingIpress > 0 ? "amber" : "emerald"}
+              tone={summary.pendingIpress > 0 ? "warning" : "success"}
             />
-            <MetricCard
+            <ImmunizationKpiCard
               icon={<AlertTriangle className="h-5 w-5" />}
               label="Incidencias abiertas"
               value={summary.openIncidents}
-              tone={summary.openIncidents > 0 ? "red" : "slate"}
+              tone={summary.openIncidents > 0 ? "danger" : "neutral"}
               hint={`${summary.observedDistributions} distrib. · ${summary.observedReturns} devol.`}
             />
-            <MetricCard
+            <ImmunizationKpiCard
               icon={<Clock className="h-5 w-5" />}
               label="Pendientes de recepción"
               value={summary.pendingDistributions + summary.pendingReturns}
-              tone={summary.pendingDistributions + summary.pendingReturns > 0 ? "amber" : "slate"}
+              tone={summary.pendingDistributions + summary.pendingReturns > 0 ? "warning" : "neutral"}
               hint={`${summary.pendingDistributions} distrib. · ${summary.pendingReturns} devol.`}
             />
           </section>
 
           <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-            <MetricCard icon={<Syringe className="h-5 w-5" />} label="Consumo (frascos)" value={number(summary.consumoFrascos)} />
-            <MetricCard icon={<CheckCircle2 className="h-5 w-5" />} label="Dosis aplicadas" value={number(summary.dosisAplicadas)} tone="emerald" />
-            <MetricCard
+            <ImmunizationKpiCard icon={<Syringe className="h-5 w-5" />} label="Consumo (frascos)" value={number(summary.consumoFrascos)} />
+            <ImmunizationKpiCard icon={<CheckCircle2 className="h-5 w-5" />} label="Dosis aplicadas" value={number(summary.dosisAplicadas)} tone="success" />
+            <ImmunizationKpiCard
               icon={<TrendingDown className="h-5 w-5" />}
               label="Factor de pérdida"
               value={percent(summary.factorPerdida)}
-              tone={summary.factorPerdida > 0 ? "amber" : "slate"}
+              tone={summary.factorPerdida > 0 ? "warning" : "neutral"}
               hint={`${number(summary.dosisPerdidas)} dosis perdidas`}
             />
-            <MetricCard
+            <ImmunizationKpiCard
               icon={<PackageX className="h-5 w-5" />}
               label="Vencidos / por vencer"
               value={`${summary.expiredLots} / ${summary.expiringLots}`}
-              tone={summary.expiredLots > 0 ? "red" : "slate"}
+              tone={summary.expiredLots > 0 ? "danger" : "neutral"}
               hint="Lotes con saldo"
             />
-            <MetricCard
+            <ImmunizationKpiCard
               icon={<Wallet className="h-5 w-5" />}
               label="Valorización"
               value={money(summary.valorizacion)}
@@ -543,32 +538,6 @@ const RegionalDownloadCard: React.FC<{
         <FileSpreadsheet className="h-4 w-4" />
         Excel
       </button>
-    </div>
-  </div>
-);
-
-const toneClasses: Record<string, string> = {
-  slate: "bg-slate-100 text-slate-700",
-  emerald: "bg-emerald-100 text-emerald-700",
-  amber: "bg-amber-100 text-amber-700",
-  red: "bg-red-100 text-red-700"
-};
-
-const MetricCard: React.FC<{
-  icon: React.ReactNode;
-  label: string;
-  value: React.ReactNode;
-  tone?: "slate" | "emerald" | "amber" | "red";
-  hint?: string;
-}> = ({ icon, label, value, tone = "slate", hint }) => (
-  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-    <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0">
-        <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p>
-        <p className="mt-1 truncate text-xl font-black text-slate-900">{value}</p>
-        {hint && <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{hint}</p>}
-      </div>
-      <span className={`shrink-0 rounded-xl p-2 ${toneClasses[tone]}`}>{icon}</span>
     </div>
   </div>
 );

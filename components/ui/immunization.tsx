@@ -1,0 +1,159 @@
+import React from "react";
+
+/**
+ * Piezas visuales compartidas por los módulos de Inmunizaciones.
+ *
+ * Antes cada módulo redefinía lo mismo: `SummaryCard` estaba escrito cuatro veces con
+ * firmas distintas, `MetricCard` dos, y la clase de los inputs se repetía en nueve
+ * archivos. Eso hacía que cualquier ajuste visual se aplicara solo a la pantalla que se
+ * tocaba y el conjunto se fuera separando.
+ *
+ * Guía de referencia: `UX_PLAN_INMUNIZACIONES.md`.
+ */
+
+/** Campos de formulario. Alto 44 px, según el plan UX. */
+export const immunizationInputClass =
+  "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition-shadow placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-500";
+
+/** Campos dentro de una barra de filtros. Más compactos que los de formulario. */
+export const immunizationFilterInputClass =
+  "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition-shadow placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-500";
+
+/** Normaliza para buscar sin tildes ni mayúsculas. */
+export const normalizeImmunizationText = (value: string) => value
+  .normalize("NFD")
+  .replace(/[̀-ͯ]/g, "")
+  .toLowerCase()
+  .trim();
+
+/**
+ * Color con significado operativo, no decorativo.
+ *
+ * emerald: aplicado, vigente · amber: pendiente, advertencia · red: vencido, error
+ * teal: información del módulo · slate: neutro · oscuro: periodo cerrado o bloqueado
+ */
+export type ImmunizationTone = "neutral" | "success" | "warning" | "danger" | "info" | "locked";
+
+const toneIcon: Record<ImmunizationTone, string> = {
+  neutral: "bg-slate-100 text-slate-700",
+  success: "bg-emerald-100 text-emerald-700",
+  warning: "bg-amber-100 text-amber-700",
+  danger: "bg-red-100 text-red-700",
+  info: "bg-teal-100 text-teal-700",
+  locked: "bg-slate-900 text-white"
+};
+
+const toneFilled: Record<ImmunizationTone, string> = {
+  neutral: "border-slate-200 bg-white text-slate-800",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  warning: "border-amber-200 bg-amber-50 text-amber-800",
+  danger: "border-red-200 bg-red-50 text-red-800",
+  info: "border-teal-200 bg-teal-50 text-teal-800",
+  locked: "border-slate-300 bg-slate-900 text-white"
+};
+
+const toneChip: Record<ImmunizationTone, string> = {
+  neutral: "border-slate-200 bg-slate-50 text-slate-600",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  warning: "border-amber-200 bg-amber-50 text-amber-700",
+  danger: "border-red-200 bg-red-50 text-red-700",
+  info: "border-teal-200 bg-teal-50 text-teal-700",
+  locked: "border-slate-300 bg-slate-900 text-white"
+};
+
+/**
+ * Tarjeta de indicador.
+ *
+ * Por defecto es blanca con el número en grande. Con `filled` se tiñe entera, para
+ * resúmenes donde el color en sí comunica el estado (validaciones de una importación,
+ * por ejemplo).
+ */
+export const ImmunizationKpiCard: React.FC<{
+  label: string;
+  value: React.ReactNode;
+  icon?: React.ReactNode;
+  tone?: ImmunizationTone;
+  hint?: string;
+  filled?: boolean;
+}> = ({ label, value, icon, tone = "neutral", hint, filled }) => {
+  if (filled) {
+    return (
+      <div className={`rounded-2xl border px-3 py-3 ${toneFilled[tone]}`}>
+        <p className="text-[10px] font-black uppercase tracking-wider opacity-70">{label}</p>
+        <p className="mt-0.5 truncate text-lg font-black">{value}</p>
+        {hint && <p className="mt-0.5 truncate text-[11px] font-semibold opacity-70">{hint}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p>
+          <p className="mt-1 truncate text-xl font-black text-slate-900">{value}</p>
+          {hint && <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-400">{hint}</p>}
+        </div>
+        {icon && <span className={`shrink-0 rounded-xl p-2 ${toneIcon[tone]}`}>{icon}</span>}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Cabecera estándar de módulo: icono, título, distintivos, una línea de descripción y
+ * el ámbito operativo. Las acciones van a la derecha.
+ */
+export const ImmunizationPageHeader: React.FC<{
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+  scopeLabel?: string;
+  badges?: React.ReactNode;
+  actions?: React.ReactNode;
+  tone?: ImmunizationTone;
+}> = ({ icon, title, description, scopeLabel, badges, actions, tone = "info" }) => (
+  <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex items-start gap-4">
+        <div className={`rounded-2xl p-3 ${toneIcon[tone]}`}>{icon}</div>
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-black text-slate-900">{title}</h2>
+            {badges}
+          </div>
+          {description && <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-600">{description}</p>}
+          {scopeLabel && <p className="mt-2 text-xs font-black text-teal-700">{scopeLabel}</p>}
+        </div>
+      </div>
+      {actions && <div className="flex flex-col gap-2 sm:flex-row">{actions}</div>}
+    </div>
+  </section>
+);
+
+/** Distintivo de estado. El texto siempre acompaña al color, nunca al revés. */
+export const ImmunizationStatusChip: React.FC<{
+  label: string;
+  tone?: ImmunizationTone;
+}> = ({ label, tone = "neutral" }) => (
+  <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-black ${toneChip[tone]}`}>
+    {label}
+  </span>
+);
+
+/** Estado vacío: qué pasa y qué puede hacer el usuario a continuación. */
+export const ImmunizationEmptyState: React.FC<{
+  title: string;
+  description?: string;
+  icon?: React.ReactNode;
+  action?: React.ReactNode;
+}> = ({ title, description, icon, action }) => (
+  <div className="flex flex-col items-center gap-3 p-10 text-center">
+    {icon && <span className="rounded-2xl bg-slate-100 p-3 text-slate-400">{icon}</span>}
+    <div>
+      <p className="text-sm font-black text-slate-600">{title}</p>
+      {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+    </div>
+    {action}
+  </div>
+);

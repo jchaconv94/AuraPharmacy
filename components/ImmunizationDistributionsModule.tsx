@@ -41,6 +41,7 @@ import {
   ImmunizationStockLayer,
   Unget
 } from "../types";
+import { immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
 
 type DistributionItemDraft = ImmunizationDistributionItem & { tempId: string };
 type AllocationMode = "FEFO" | "MANUAL";
@@ -53,14 +54,8 @@ interface StockProductGroup {
 }
 
 const currentPeriod = getCurrentImmunizationPeriod();
-const inputClassName = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition-shadow placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-500";
 const selectClassName = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400";
 
-const normalizeText = (value: string) => value
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase()
-  .trim();
 
 const statusLabel = (status: ImmunizationDistributionStatus) => {
   if (status === "SENT") return "Pendiente recepcion";

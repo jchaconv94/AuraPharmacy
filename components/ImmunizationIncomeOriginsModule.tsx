@@ -15,14 +15,9 @@ import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { getImmunizationScope, immunizationApi } from "../services/immunizationApi";
 import { ImmunizationIncomeOrigin } from "../types";
+import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
 
-const normalizeText = (value: string) => value
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase()
-  .trim();
 
-const inputClassName = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition-shadow placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-500";
 
 export const ImmunizationIncomeOriginsModule: React.FC = () => {
   const { user } = useAuth();
@@ -202,9 +197,9 @@ export const ImmunizationIncomeOriginsModule: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <SummaryCard label="Total" value={totals.all} />
-        <SummaryCard label="Activos" value={totals.active} tone="active" />
-        <SummaryCard label="Inactivos" value={totals.inactive} tone="inactive" />
+        <ImmunizationKpiCard label="Total" value={totals.all} tone="info" />
+        <ImmunizationKpiCard label="Activos" value={totals.active} tone="success" />
+        <ImmunizationKpiCard label="Inactivos" value={totals.inactive} tone="neutral" />
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -342,23 +337,6 @@ export const ImmunizationIncomeOriginsModule: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
-  );
-};
-
-const SummaryCard: React.FC<{ label: string; value: number; tone?: "active" | "inactive" }> = ({ label, value, tone }) => {
-  const toneClass = tone === "active"
-    ? "text-emerald-700 bg-emerald-50"
-    : tone === "inactive"
-      ? "text-slate-500 bg-slate-100"
-      : "text-teal-700 bg-teal-50";
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">{label}</p>
-        <span className={`rounded-xl px-2 py-1 text-[10px] font-black uppercase ${toneClass}`}>{label}</span>
-      </div>
-      <p className="mt-3 text-2xl font-black text-slate-950">{value}</p>
     </div>
   );
 };

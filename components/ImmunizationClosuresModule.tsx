@@ -62,12 +62,12 @@ import {
   ImmunizationStockMovement,
   Unget
 } from "../types";
+import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
 
 type DialogMode = "IPRESS_PRE_CLOSE" | "UNGET_FINAL_CLOSE" | "IPRESS_REOPEN" | null;
 type ClosureStatusFilter = ImmunizationClosureStatusFilter;
 
 const currentPeriod = getCurrentImmunizationPeriod();
-const inputClassName = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition-shadow placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100";
 const periodIsFuture = (period: string) => period > currentPeriod;
 
 const closureStatusOptions: Array<{ value: ClosureStatusFilter; label: string }> = [
@@ -78,11 +78,6 @@ const closureStatusOptions: Array<{ value: ClosureStatusFilter; label: string }>
   { value: "REOPENED", label: "Reabiertas" }
 ];
 
-const normalizeText = (value: string) => value
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase()
-  .trim();
 
 const formatDateTime = (value?: string) => {
   if (!value) return "-";
@@ -668,10 +663,10 @@ export const ImmunizationClosuresModule: React.FC = () => {
       )}
 
       <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
-        <MetricCard icon={<Building2 className="h-5 w-5" />} label={isIpress ? "IPRESS" : "IPRESS evaluadas"} value={totals.total} />
-        <MetricCard icon={<CheckCircle2 className="h-5 w-5" />} label="Precerradas" value={totals.closed} />
-        <MetricCard icon={<Clock className="h-5 w-5" />} label="Pendientes" value={totals.pending} tone={totals.pending > 0 ? "amber" : "slate"} />
-        <MetricCard icon={<Lock className="h-5 w-5" />} label={isUnget || isSupervisor ? "UNGET cerradas" : "Periodo bloqueado"} value={totals.locked} tone="dark" />
+        <ImmunizationKpiCard icon={<Building2 className="h-5 w-5" />} label={isIpress ? "IPRESS" : "IPRESS evaluadas"} value={totals.total} tone="info" />
+        <ImmunizationKpiCard icon={<CheckCircle2 className="h-5 w-5" />} label="Precerradas" value={totals.closed} tone="info" />
+        <ImmunizationKpiCard icon={<Clock className="h-5 w-5" />} label="Pendientes" value={totals.pending} tone={totals.pending > 0 ? "warning" : "info"} />
+        <ImmunizationKpiCard icon={<Lock className="h-5 w-5" />} label={isUnget || isSupervisor ? "UNGET cerradas" : "Periodo bloqueado"} value={totals.locked} tone="locked" />
       </section>
 
       {loading ? (
@@ -773,25 +768,6 @@ export const ImmunizationClosuresModule: React.FC = () => {
         />,
         document.body
       )}
-    </div>
-  );
-};
-
-const MetricCard: React.FC<{ icon: React.ReactNode; label: string; value: number; tone?: "slate" | "amber" | "dark" }> = ({ icon, label, value, tone = "slate" }) => {
-  const toneClass = tone === "amber"
-    ? "bg-amber-50 text-amber-700"
-    : tone === "dark"
-      ? "bg-slate-900 text-white"
-      : "bg-teal-50 text-teal-700";
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">{label}</p>
-          <p className="mt-2 text-3xl font-black text-slate-900">{value}</p>
-        </div>
-        <div className={`rounded-2xl p-3 ${toneClass}`}>{icon}</div>
-      </div>
     </div>
   );
 };

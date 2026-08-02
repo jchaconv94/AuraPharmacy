@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays, CheckCircle2, PackagePlus, Save, Search, X } from "lucide-react";
 import { ImmunizationInitialInventoryItem, ImmunizationProduct } from "../types";
+import { immunizationInputClass as inputClassName } from "./ui/immunization";
 
 export interface InventoryItemFormData {
   productId: string;
@@ -34,7 +35,6 @@ const emptyForm = {
   observation: ""
 };
 
-const inputClassName = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none transition-shadow placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-500";
 
 const normalizeSearchText = (value: string) => value
   .normalize("NFD")
