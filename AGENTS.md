@@ -1,6 +1,6 @@
 # AGENTS.md - ToolKit SISMED Web
 
-Guía de contexto para agentes de IA que trabajen en este repositorio. Última actualización: 2026-07-30 (cierre de Fase 17).
+Guía de contexto para agentes de IA que trabajen en este repositorio. Última actualización: 2026-08-01 (kit de UI, menú móvil y Consulta de Stock Biológico).
 
 ---
 
@@ -49,15 +49,19 @@ npm run build
 
 ---
 
-## 3. Estado del repositorio — advertencia importante
+## 3. Repositorio y despliegue
 
-`.git/` existe pero está **vacío**: el proyecto **no tiene historial de versiones funcional**. `git log`, `git status` y `git diff` fallan con *"not a git repository"*.
+El repositorio se inicializó el 2026-08-01. El trabajo vive en la rama **`respaldo-inmunizaciones`**, no en `main`.
 
-Consecuencias prácticas:
+`main` en GitHub sigue con el código del 16 de julio, anterior a todo el módulo de inmunizaciones. **No las unifiques sin acordarlo con el usuario**: reconciliarlas es un paso aparte y delicado.
 
-- No hay forma de revertir cambios ni de ver un diff de trabajo.
-- Antes de refactors grandes conviene copiar los archivos afectados o pedir al usuario que inicialice el repo (`git init` + primer commit).
-- No asumir que existe una rama `main` sincronizada, aunque `.github/workflows/deploy.yml` despliegue desde `main` a GitHub Pages.
+El sitio publicado no se despliega desde `main`. Se publica el `dist` compilado directamente a la rama `gh-pages`:
+
+```bash
+npx gh-pages -d dist -r https://github.com/jchaconv94/ToolkitSISMED.git
+```
+
+Requiere credenciales de GitHub del usuario. **El entorno bloquea `git push` y el despliegue**, así que esos dos pasos los ejecuta siempre el usuario; prepárale el commit y el build, y dale el comando exacto.
 
 ---
 
@@ -69,11 +73,11 @@ index.tsx                   Bootstrap
 types.ts                    Fuente única de tipos, AppModule y AVAILABLE_MODULES
 contexts/AuthContext.tsx    Sesión, rol, hasPermission()
 components/                 Un archivo .tsx por módulo (componentes grandes, sin subcarpetas por dominio)
-components/ui/              ConfirmationDialog, CustomSelect (única capa "compartida" real)
+components/ui/              ConfirmationDialog, CustomSelect e immunization.tsx (kit visual compartido)
 services/                   Acceso a datos y generación de documentos
 supabase/functions/         Edge function sync-stock
 backend/                    Google Apps Script legado
-scripts/                    Generadores de preview de PDF (ejecución manual)
+scripts/                    Previews de PDF/Excel y diagnóstico contra Supabase (ejecución manual)
 reportes-ejemplo/           PDFs de referencia visual
 ```
 
@@ -91,7 +95,7 @@ Olvidar cualquiera de estos deja el módulo inaccesible o sin título.
 
 - **Supabase** (`services/supabaseClient.ts`) es el backend real. Cliente `anon`.
 - **Autenticación propia** sobre tabla `users` con `bcryptjs` — **no** se usa Supabase Auth.
-- Por eso las **políticas RLS son temporales/permisivas**. La seguridad real hoy vive en el frontend/servicios vía `ImmunizationScope`. RLS definitiva requiere migrar a Supabase Auth o mover escrituras a Edge Functions/RPC. Está documentado como deuda conocida en `INMUNIZACIONES_DISENO_FUNCIONAL.md` §25.
+- Como la base no conoce al usuario por sí misma, el alcance se resuelve con un **token de sesión propio**; ver el recuadro de abajo. `ImmunizationScope` sigue recortando en el frontend, pero ya no es la única defensa.
 
 > **La clave `anon` es pública**: el workflow de GitHub Pages la inyecta en el build, así que cualquiera puede extraerla del bundle desplegado. Todo lo que `anon` pueda hacer, lo puede hacer cualquiera en internet.
 >
@@ -104,8 +108,6 @@ Olvidar cualquiera de estos deja el módulo inaccesible o sin título.
 > - `pgcrypto` no verifica hashes `$2b$` (los que genera bcryptjs). Las funciones reetiquetan el prefijo a `$2a$` al comparar; no toques eso sin leer `SEGURIDAD_AUDITORIA.md`.
 >
 > Auditoría, hallazgos y lo que sigue pendiente: `SEGURIDAD_AUDITORIA.md`.
->
-> **Nunca pidas `password_hash` desde el cliente ni uses `select("*")` sobre `users`** — usa la constante `USER_SELECT` de `services/api.ts`. La verificación de contraseña ocurre en el servidor con la función `app_verify_password`. Contexto completo en `SEGURIDAD_ETAPA_1_LOGIN.md`.
 - **Todo servicio de inmunizaciones tiene fallback a `localStorage`** cuando `supabase` es null o falla la consulta. Patrón: `try { if (supabase) {...} } catch { console.warn("Fallback local ...") }` y luego `getCachedList<T>(CACHE_KEY)`. Al agregar una operación nueva hay que implementar **ambos** caminos, o los datos se comportan distinto según el entorno.
 
 ---
