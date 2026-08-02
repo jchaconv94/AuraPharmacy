@@ -40,6 +40,7 @@ import { ImmunizationInitialInventoryModule } from './components/ImmunizationIni
 import { ImmunizationReportsModule } from './components/ImmunizationReportsModule';
 import { ImmunizationReturnsModule } from './components/ImmunizationReturnsModule';
 import { ImmunizationStockModule } from './components/ImmunizationStockModule';
+import { ImmunizationStockQueryModule } from './components/ImmunizationStockQueryModule';
 
 const SuspenseFallback = () => (
     <div className="flex-1 flex h-full w-full items-center justify-center p-8 bg-gray-50/50">
@@ -128,6 +129,7 @@ const AuthenticatedApp: React.FC = () => {
         if (isAuthenticated && !isLoading && user && !hasPermission(currentView)) {
             if (hasPermission('DASHBOARD')) setCurrentView('DASHBOARD');
             else if (hasPermission('IMMUNIZATION_STOCK')) setCurrentView('IMMUNIZATION_STOCK');
+                            else if (hasPermission('IMMUNIZATION_STOCK_QUERY')) setCurrentView('IMMUNIZATION_STOCK_QUERY');
             else if (hasPermission('IMMUNIZATION_INCOMES')) setCurrentView('IMMUNIZATION_INCOMES');
             else if (hasPermission('IMMUNIZATION_INCOME_ORIGINS')) setCurrentView('IMMUNIZATION_INCOME_ORIGINS');
             else if (hasPermission('IMMUNIZATION_DISTRIBUTIONS')) setCurrentView('IMMUNIZATION_DISTRIBUTIONS');
@@ -202,6 +204,7 @@ const AuthenticatedApp: React.FC = () => {
                            {currentView === 'IMMUNIZATION_CATALOG' && 'Catálogo Biológico'}
                            {currentView === 'IMMUNIZATION_INITIAL_INVENTORY' && 'Inventario Inicial'}
                            {currentView === 'IMMUNIZATION_STOCK' && 'Stock Biológico'}
+                           {currentView === 'IMMUNIZATION_STOCK_QUERY' && 'Consulta de Stock Biológico'}
 	                           {currentView === 'IMMUNIZATION_INCOMES' && 'Ingresos Regionales'}
 	                           {currentView === 'IMMUNIZATION_INCOME_ORIGINS' && 'Orígenes de Ingreso'}
                            {currentView === 'IMMUNIZATION_DISTRIBUTIONS' && 'Distribuciones'}
@@ -234,6 +237,7 @@ const AuthenticatedApp: React.FC = () => {
                                 {currentView === 'IMMUNIZATION_CATALOG' && <ImmunizationCatalogModule />}
                                 {currentView === 'IMMUNIZATION_INITIAL_INVENTORY' && <ImmunizationInitialInventoryModule />}
                                 {currentView === 'IMMUNIZATION_STOCK' && <ImmunizationStockModule />}
+                                {currentView === 'IMMUNIZATION_STOCK_QUERY' && <ImmunizationStockQueryModule />}
 	                                {currentView === 'IMMUNIZATION_INCOMES' && <ImmunizationIncomesModule />}
 	                                {currentView === 'IMMUNIZATION_INCOME_ORIGINS' && <ImmunizationIncomeOriginsModule />}
                                 {currentView === 'IMMUNIZATION_DISTRIBUTIONS' && <ImmunizationDistributionsModule />}

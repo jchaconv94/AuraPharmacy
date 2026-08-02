@@ -121,6 +121,7 @@ export type AppModule =
   | 'IMMUNIZATION_CATALOG'
   | 'IMMUNIZATION_INITIAL_INVENTORY'
   | 'IMMUNIZATION_STOCK'
+  | 'IMMUNIZATION_STOCK_QUERY'
   | 'IMMUNIZATION_INCOMES'
   | 'IMMUNIZATION_INCOME_ORIGINS'
   | 'IMMUNIZATION_DISTRIBUTIONS'
@@ -149,6 +150,7 @@ export const AVAILABLE_MODULES: { id: AppModule; label: string; description: str
   ,{ id: 'IMMUNIZATION_CATALOG', label: 'Catálogo Biológico', description: 'Catálogo maestro de vacunas, jeringas y diluyentes' },
   { id: 'IMMUNIZATION_INITIAL_INVENTORY', label: 'Inventario Inicial', description: 'Carga manual o Excel del inventario inicial por lote' },
   { id: 'IMMUNIZATION_STOCK', label: 'Stock Biológico', description: 'Stock de inmunizaciones agrupado por producto y detallado por lote' },
+  { id: 'IMMUNIZATION_STOCK_QUERY', label: 'Consulta de Stock Biológico', description: 'Consulta territorial de solo lectura del stock de UNGET e IPRESS' },
   { id: 'IMMUNIZATION_INCOMES', label: 'Ingresos Regionales', description: 'Registro de ingresos nuevos de biológicos al almacén regional DIRESA' },
   { id: 'IMMUNIZATION_INCOME_ORIGINS', label: 'Orígenes de Ingreso', description: 'Catálogo administrable de orígenes para ingresos regionales' },
   { id: 'IMMUNIZATION_DISTRIBUTIONS', label: 'Distribuciones', description: 'Distribución jerárquica de biológicos DIRESA -> UNGET -> IPRESS' },
