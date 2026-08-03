@@ -41,7 +41,7 @@ import { ImmunizationReportsModule } from './components/ImmunizationReportsModul
 import { ImmunizationReturnsModule } from './components/ImmunizationReturnsModule';
 import { ImmunizationStockModule } from './components/ImmunizationStockModule';
 import { ImmunizationStockQueryModule } from './components/ImmunizationStockQueryModule';
-import { moduleForPath, pathForModule } from './services/appRoutes';
+import { APP_BASE, moduleForPath, pathForModule } from './services/appRoutes';
 
 const SuspenseFallback = () => (
     <div className="flex-1 flex h-full w-full items-center justify-center p-8 bg-gray-50/50">
@@ -95,11 +95,26 @@ const AuthenticatedApp: React.FC = () => {
     );
 
     // La direccion del navegador sigue a la vista, sin agregar una entrada por render.
+    // Solo con sesion iniciada: sin ella la direccion debe ser la raiz.
     useEffect(() => {
+        if (!isAuthenticated) return;
         const destino = pathForModule(currentView);
         if (window.location.pathname === destino) return;
         window.history.pushState({ view: currentView }, '', destino);
-    }, [currentView]);
+    }, [currentView, isAuthenticated]);
+
+    // Al cerrar sesion, la direccion vuelve a la raiz y la vista al inicio.
+    //
+    // Este componente no se desmonta al salir: solo cambia lo que muestra. Sin esto la
+    // ruta del ultimo modulo quedaba en la barra del navegador, y el siguiente usuario
+    // entraba directo a la pantalla del anterior.
+    useEffect(() => {
+        if (isAuthenticated || isLoading) return;
+        setCurrentView('DASHBOARD');
+        if (window.location.pathname !== APP_BASE) {
+            window.history.replaceState({}, '', APP_BASE);
+        }
+    }, [isAuthenticated, isLoading]);
 
     // Botones de atras y adelante del navegador.
     useEffect(() => {
