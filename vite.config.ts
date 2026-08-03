@@ -22,8 +22,23 @@ const spaFallback = (outDir: string): Plugin => ({
   }
 });
 
+const devBaseRedirect = (basePath: string): Plugin => ({
+  name: 'dev-base-redirect',
+  apply: 'serve',
+  configureServer(server) {
+    server.middlewares.use((req, res, next) => {
+      if (req.url === '/' || req.url === '') {
+        res.writeHead(302, { Location: basePath });
+        res.end();
+        return;
+      }
+      next();
+    });
+  }
+});
+
 export default defineConfig({
-  plugins: [react(), spaFallback('dist')],
+  plugins: [react(), spaFallback('dist'), devBaseRedirect('/ToolkitSISMED/')],
   // IMPORTANTE: Esto debe coincidir con el nombre de tu repositorio en GitHub
   base: '/ToolkitSISMED/', 
   build: {
