@@ -41,6 +41,7 @@ import { ImmunizationReportsModule } from './components/ImmunizationReportsModul
 import { ImmunizationReturnsModule } from './components/ImmunizationReturnsModule';
 import { ImmunizationStockModule } from './components/ImmunizationStockModule';
 import { ImmunizationStockQueryModule } from './components/ImmunizationStockQueryModule';
+import { moduleForPath, pathForModule } from './services/appRoutes';
 
 const SuspenseFallback = () => (
     <div className="flex-1 flex h-full w-full items-center justify-center p-8 bg-gray-50/50">
@@ -88,7 +89,24 @@ const App: React.FC = () => {
 // --- AUTHENTICATED LOGIC WRAPPER ---
 const AuthenticatedApp: React.FC = () => {
     const { isAuthenticated, isLoading, user, logout, hasPermission } = useAuth();
-    const [currentView, setCurrentView] = useState<AppModule>('DASHBOARD');
+    // La vista inicial sale de la direccion, para que un enlace compartido abra donde debe.
+    const [currentView, setCurrentView] = useState<AppModule>(
+        () => moduleForPath(window.location.pathname) || 'DASHBOARD'
+    );
+
+    // La direccion del navegador sigue a la vista, sin agregar una entrada por render.
+    useEffect(() => {
+        const destino = pathForModule(currentView);
+        if (window.location.pathname === destino) return;
+        window.history.pushState({ view: currentView }, '', destino);
+    }, [currentView]);
+
+    // Botones de atras y adelante del navegador.
+    useEffect(() => {
+        const alNavegar = () => setCurrentView(moduleForPath(window.location.pathname) || 'DASHBOARD');
+        window.addEventListener('popstate', alNavegar);
+        return () => window.removeEventListener('popstate', alNavegar);
+    }, []);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     
     const wasSidebarCollapsedRef = React.useRef(false);
