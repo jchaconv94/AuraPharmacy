@@ -62,7 +62,8 @@ import {
   ImmunizationStockMovement,
   Unget
 } from "../types";
-import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
+import { distributionFlow } from "../services/immunizationDomain";
+import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, formatImmunizationDateTime as formatDateTime } from "./ui/immunization";
 
 type DialogMode = "IPRESS_PRE_CLOSE" | "UNGET_FINAL_CLOSE" | "IPRESS_REOPEN" | null;
 type ClosureStatusFilter = ImmunizationClosureStatusFilter;
@@ -78,19 +79,6 @@ const closureStatusOptions: Array<{ value: ClosureStatusFilter; label: string }>
   { value: "REOPENED", label: "Reabiertas" }
 ];
 
-
-const formatDateTime = (value?: string) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("es-PE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-};
 
 const closureStatusClass = (closure?: ImmunizationMonthlyClosure) => {
   if (!closure) return "border-amber-200 bg-amber-50 text-amber-700";
@@ -112,9 +100,6 @@ const closureDateLabel = (closure?: ImmunizationMonthlyClosure) => {
   if (closure.status === "FINAL_CLOSED") return formatDateTime(closure.closedAt || closure.preclosedAt);
   return formatDateTime(closure.preclosedAt);
 };
-
-const distributionFlow = (batch: ImmunizationDistributionBatch) =>
-  batch.flowType || (batch.destinationOwnerType === "UNGET" || batch.destinationUngetId ? "DIRESA_UNGET" : "UNGET_IPRESS");
 
 const destinationUngetId = (batch: ImmunizationDistributionBatch) =>
   batch.destinationUngetId || (distributionFlow(batch) === "DIRESA_UNGET" ? batch.ungetId : undefined);

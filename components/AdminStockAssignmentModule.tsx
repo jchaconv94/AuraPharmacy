@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Search, Plus, Trash2, Shield, User, FileSpreadsheet, CheckCircle2, ChevronRight, Check, Edit2, Save, X, ChevronDown, AlertTriangle } from "lucide-react";
+import { Search, Plus, Trash2, Shield, FileSpreadsheet, Check, Edit2, Save, X, ChevronDown, AlertTriangle } from "lucide-react";
 import { api } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";

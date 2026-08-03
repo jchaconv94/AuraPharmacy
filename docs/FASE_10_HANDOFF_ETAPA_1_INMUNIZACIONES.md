@@ -107,8 +107,8 @@ Se corrigio la confusion con los modulos de stock:
 
 ### Base de datos
 
-- `SUPABASE_SCHEMA_IMMUNIZATIONS_V1.sql`
-- `SUPABASE_MIGRATION_IMMUNIZATION_ADJUSTMENTS.sql`
+- `supabase/SUPABASE_SCHEMA_IMMUNIZATIONS_V1.sql`
+- `supabase/SUPABASE_MIGRATION_IMMUNIZATION_ADJUSTMENTS.sql`
 
 ### Tipos y servicios
 
@@ -135,9 +135,9 @@ Se corrigio la confusion con los modulos de stock:
 
 ### Documentacion
 
-- `INMUNIZACIONES_DISENO_FUNCIONAL.md`
-- `PLAN_IMPLEMENTACION_INMUNIZACIONES.md`
-- `FASE_9_VERIFICACION_INMUNIZACIONES.md`
+- `docs/INMUNIZACIONES_DISENO_FUNCIONAL.md`
+- `docs/PLAN_IMPLEMENTACION_INMUNIZACIONES.md`
+- `docs/FASE_9_VERIFICACION_INMUNIZACIONES.md`
 - `FASE_10_HANDOFF_ETAPA_1_INMUNIZACIONES.md`
 
 ## Verificacion realizada

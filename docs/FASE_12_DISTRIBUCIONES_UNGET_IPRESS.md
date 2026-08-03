@@ -53,19 +53,19 @@ Esta fase agrega el flujo base para que una UNGET distribuya biologicos desde su
 ## Archivos creados o modificados
 
 - `components/ImmunizationDistributionsModule.tsx`
-- `SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`
+- `supabase/SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`
 - `types.ts`
 - `services/immunizationApi.ts`
 - `App.tsx`
 - `components/Sidebar.tsx`
 - `components/MobileNav.tsx`
-- `PLAN_IMPLEMENTACION_INMUNIZACIONES.md`
+- `docs/PLAN_IMPLEMENTACION_INMUNIZACIONES.md`
 
 ## Base de datos
 
 Nueva migracion:
 
-- `SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`
+- `supabase/SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`
 
 Incluye:
 
@@ -92,7 +92,7 @@ Resultado del build:
 
 Para Supabase real:
 
-1. Ejecutar `SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`.
+1. Ejecutar `supabase/SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`.
 2. Asignar `IMMUNIZATION_DISTRIBUTIONS` al rol `INMU_UNGET`.
 3. Asignar `IMMUNIZATION_DISTRIBUTIONS` al rol `INMU_IPRESS` si la IPRESS aceptara distribuciones desde este mismo modulo.
 4. Asignar `IMMUNIZATION_DISTRIBUTIONS` a `INMU_DIRESA` para supervision.

@@ -12,7 +12,7 @@ Las 15 tablas de inmunizaciones existen y responden:
 
 También están las columnas de las migraciones tardías: `stock_layers.regional_warehouse_id`, `stock_movements.doses_applied` / `doses_lost` / `loss_factor`, `distribution_batches.origin_owner_type` / `destination_owner_type`, `monthly_closures.preclosed_by` / `reopen_reason`, `return_batches.return_type`.
 
-**Corrección al plan:** `PLAN_IMPLEMENTACION_INMUNIZACIONES.md` listaba las migraciones de consumo, devoluciones y cierres como pendientes de ejecutar. Ya estaban aplicadas.
+**Corrección al plan:** `docs/PLAN_IMPLEMENTACION_INMUNIZACIONES.md` listaba las migraciones de consumo, devoluciones y cierres como pendientes de ejecutar. Ya estaban aplicadas.
 
 ## Resultado de los reportes
 
@@ -59,7 +59,7 @@ Verificado contra Supabase: la consulta pasa de devolver **8 a 11 movimientos**,
 Las filas ya escritas siguen con `unget_id` nulo. El script está en:
 
 ```
-SUPABASE_REPAIR_IMMUNIZATION_IPRESS_UNGET_LINK.sql
+supabase/SUPABASE_REPAIR_IMMUNIZATION_IPRESS_UNGET_LINK.sql
 ```
 
 Incluye diagnóstico, reparación en transacción y verificación. Solo escribe donde `unget_id IS NULL` y el establecimiento tiene UNGET asignada; no toca cantidades ni saldos. **No es urgente**, porque el arreglo 4 ya hace que el reporte lea bien los datos antiguos, pero conviene ejecutarlo para dejar la base coherente.

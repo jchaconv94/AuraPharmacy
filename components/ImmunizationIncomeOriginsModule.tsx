@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { getImmunizationScope, immunizationApi } from "../services/immunizationApi";
 import { ImmunizationIncomeOrigin } from "../types";
-import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
+import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, ImmunizationTableHeader as HeaderCell } from "./ui/immunization";
 
 
 
@@ -341,8 +341,3 @@ export const ImmunizationIncomeOriginsModule: React.FC = () => {
   );
 };
 
-const HeaderCell: React.FC<{ children: React.ReactNode; align?: "left" | "right" }> = ({ children, align = "left" }) => (
-  <th className={`px-4 py-3 ${align === "right" ? "text-right" : "text-left"} text-[11px] font-black uppercase tracking-wide text-slate-500`}>
-    {children}
-  </th>
-);

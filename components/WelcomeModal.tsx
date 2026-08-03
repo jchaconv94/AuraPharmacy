@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { User } from '../types';
-import { Sparkles, ArrowRight, ShieldCheck, Building2, Calendar, Layers } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Building2, Calendar, Layers } from 'lucide-react';
 import { api } from '../services/api';
 
 interface WelcomeModalProps {

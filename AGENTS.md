@@ -1,6 +1,8 @@
 # AGENTS.md - ToolKit SISMED Web
 
-Guía de contexto para agentes de IA que trabajen en este repositorio. Última actualización: 2026-08-01 (kit de UI, menú móvil y Consulta de Stock Biológico).
+Guía de contexto para agentes de IA que trabajen en este repositorio. Última actualización: 2026-08-02 (auditoría: consolidación de duplicados, limpieza y reorganización de la raíz).
+
+> **Lee la sección 8 antes de escribir cualquier componente o utilidad.** El error más caro que ha cometido una IA en este proyecto es volver a escribir algo que ya existía: llegó a haber cinco `HeaderCell` distintos, cuatro `formatDate` y seis `Field`. Antes de crear una tarjeta, un formateador, una celda de tabla o una regla de negocio, **búscala** en `components/ui/immunization.tsx` y `services/immunizationDomain.ts`.
 
 ---
 
@@ -41,7 +43,11 @@ npm run build
 
 - `npm run lint` = `tsc --noEmit`. **No hay ESLint.** Es la única verificación estática.
 - `npm run build` = `tsc && vite build`. Vite emite una advertencia de *bundle grande*: es preexistente y **no bloquea**.
-- `npm test` = `vitest run`. La cobertura es mínima y deliberadamente enfocada: `services/immunizationMonthlyReportService.test.ts` (aritmética de los reportes mensuales) y `services/DropdownPositioningService.test.ts`. No hay tests de componentes.
+- `npm test` = `vitest run`. 45 pruebas, cobertura deliberadamente enfocada en lo que se puede romper en silencio. No hay tests de componentes.
+  - `services/immunizationMonthlyReportService.test.ts` — aritmética de los reportes mensuales y posición de celdas del Excel
+  - `services/immunizationProgressService.test.ts` — estados del tablero de avance
+  - `services/appRoutes.test.ts` — incluye una prueba que **falla si agregas un módulo sin declararle ruta**
+  - `services/DropdownPositioningService.test.ts`
 - Servidor local: `http://127.0.0.1:3000/ToolkitSISMED/` (nota el `base: '/ToolkitSISMED/'` en `vite.config.ts`).
 - En Windows, si `npm` falla desde bash, usar `npm.cmd`.
 
@@ -73,23 +79,30 @@ index.tsx                   Bootstrap
 types.ts                    Fuente única de tipos, AppModule y AVAILABLE_MODULES
 contexts/AuthContext.tsx    Sesión, rol, hasPermission()
 components/                 Un archivo .tsx por módulo (componentes grandes, sin subcarpetas por dominio)
-components/ui/              ConfirmationDialog, CustomSelect e immunization.tsx (kit visual compartido)
-services/                   Acceso a datos y generación de documentos
+components/ui/              Kit compartido: immunization.tsx, ConfirmationDialog, CustomSelect
+services/                   Acceso a datos, reglas de dominio y generación de documentos
+docs/                       Toda la documentación (fases, planes, auditorías). Solo README y AGENTS viven en la raíz
+supabase/                   Todos los .sql que el usuario ejecuta a mano en el panel de Supabase
 supabase/functions/         Edge function sync-stock
 backend/                    Google Apps Script legado
 scripts/                    Previews de PDF/Excel y diagnóstico contra Supabase (ejecución manual)
 reportes-ejemplo/           PDFs de referencia visual
 ```
 
-**No hay react-router.** La navegación es `currentView: AppModule` en `App.tsx`, con Sidebar/MobileNav como disparadores. Al agregar un módulo hay que tocar **cinco** lugares:
+**No hay react-router.** La navegación es `currentView: AppModule` en `App.tsx`, con Sidebar/MobileNav como disparadores. La URL se sincroniza a mano con `history.pushState` usando `services/appRoutes.ts`.
+
+Al agregar un módulo hay que tocar **seis** lugares:
 
 1. `types.ts` → union `AppModule` + entrada en `AVAILABLE_MODULES`
 2. `App.tsx` → import, título de cabecera, render condicional y fallback de permisos
-3. `components/Sidebar.tsx`
-4. `components/MobileNav.tsx`
-5. Permisos por rol en Supabase (`roles_config.allowed_modules`)
+3. `services/appRoutes.ts` → su ruta (`inmunizaciones/catalogo`, etc.)
+4. `components/Sidebar.tsx`
+5. `components/MobileNav.tsx` → el grupo que le corresponde en `GRUPOS`
+6. Permisos por rol en Supabase (`roles_config.allowed_modules`)
 
-Olvidar cualquiera de estos deja el módulo inaccesible o sin título.
+Olvidar cualquiera deja el módulo inaccesible, sin título o sin URL propia. El paso 3 está protegido: `services/appRoutes.test.ts` falla si un módulo de `AVAILABLE_MODULES` no tiene ruta declarada.
+
+**Rutas y GitHub Pages.** `APP_BASE = "/ToolkitSISMED"`. Pages devuelve 404 ante cualquier ruta que no sea un archivo real, así que el build copia `index.html` a `404.html` para que la SPA resuelva la navegación profunda. Al cerrar sesión, `App.tsx` devuelve la URL a la raíz: si no, la ventana se queda en la ruta del usuario anterior.
 
 ### Persistencia
 
@@ -99,15 +112,15 @@ Olvidar cualquiera de estos deja el módulo inaccesible o sin título.
 
 > **La clave `anon` es pública**: el workflow de GitHub Pages la inyecta en el build, así que cualquiera puede extraerla del bundle desplegado. Todo lo que `anon` pueda hacer, lo puede hacer cualquiera en internet.
 >
-> **Modelo de acceso vigente (desde el 2026-08-01).** `app_login` valida la contraseña en el servidor y devuelve un token de sesión de 12 h. El cliente lo adjunta en la cabecera `x-session-token` mediante un `fetch` propio en `supabaseClient.ts`. Las 15 tablas de inmunizaciones tienen RLS que exige ese token, y las escrituras sobre `users` / `roles_config` pasan por funciones `SECURITY DEFINER` que exigen sesión de ADMIN.
+> **Modelo de acceso vigente (desde el 2026-08-01).** `app_login` valida la contraseña en el servidor y devuelve un token de sesión de 12 h. El cliente lo adjunta en la cabecera `x-session-token` mediante un `fetch` propio en `services/supabaseClient.ts`. Las 15 tablas de inmunizaciones tienen RLS que exige ese token, y las escrituras sobre `users` / `roles_config` pasan por funciones `SECURITY DEFINER` que exigen sesión de ADMIN.
 >
 > **Reglas al tocar esta zona:**
 > - Nunca pidas `password_hash` ni uses `select("*")` sobre `users`; usa `USER_SELECT`.
 > - Una tabla nueva del módulo necesita su política de sesión, o quedará abierta a internet.
 > - Si añades RLS: **despliega primero, aplica el SQL después.** Al revés dejas la app sin datos hasta que el navegador recoja la versión nueva.
-> - `pgcrypto` no verifica hashes `$2b$` (los que genera bcryptjs). Las funciones reetiquetan el prefijo a `$2a$` al comparar; no toques eso sin leer `SEGURIDAD_AUDITORIA.md`.
+> - `pgcrypto` no verifica hashes `$2b$` (los que genera bcryptjs). Las funciones reetiquetan el prefijo a `$2a$` al comparar; no toques eso sin leer `docs/SEGURIDAD_AUDITORIA.md`.
 >
-> Auditoría, hallazgos y lo que sigue pendiente: `SEGURIDAD_AUDITORIA.md`.
+> Auditoría, hallazgos y lo que sigue pendiente: `docs/SEGURIDAD_AUDITORIA.md`.
 - **Todo servicio de inmunizaciones tiene fallback a `localStorage`** cuando `supabase` es null o falla la consulta. Patrón: `try { if (supabase) {...} } catch { console.warn("Fallback local ...") }` y luego `getCachedList<T>(CACHE_KEY)`. Al agregar una operación nueva hay que implementar **ambos** caminos, o los datos se comportan distinto según el entorno.
 
 ---
@@ -164,7 +177,7 @@ Precedencia: ADMIN → `GLOBAL`; si hay `facilityCode` → `IPRESS`; luego UNGET
 
 **Todo listado nuevo debe filtrarse por scope en las dos rutas** (query Supabase y filtro del fallback local). El helper `applyOwnerScope(query, scope)` cubre el caso simple; los listados con lógica propia (ver `listMonthlyClosures`, `listStockMovements`) repiten el patrón a mano.
 
-**Regla aprendida (2026-07-30):** un registro propiedad de una IPRESS **siempre debe llevar `unget_id`**, además de `facility_code`. Si no, queda invisible para toda consulta por UNGET y el consolidado mensual pierde esos movimientos. Al escribir capas o movimientos de IPRESS usa `resolveOwnerUngetId(ownerType, ungetId, facilityCode)`, que lo deduce de `facilities.unget_id`. `closeInitialInventory` y `createAdjustment` incumplían esto; ver `VALIDACION_DATOS_REALES_INMUNIZACIONES.md`.
+**Regla aprendida (2026-07-30):** un registro propiedad de una IPRESS **siempre debe llevar `unget_id`**, además de `facility_code`. Si no, queda invisible para toda consulta por UNGET y el consolidado mensual pierde esos movimientos. Al escribir capas o movimientos de IPRESS usa `resolveOwnerUngetId(ownerType, ungetId, facilityCode)`, que lo deduce de `facilities.unget_id`. `closeInitialInventory` y `createAdjustment` incumplían esto; ver `docs/VALIDACION_DATOS_REALES_INMUNIZACIONES.md`.
 
 ### Reglas críticas (no negociables)
 
@@ -183,18 +196,18 @@ Precedencia: ADMIN → `GLOBAL`; si hay `facilityCode` → `IPRESS`; luego UNGET
 
 | `AppModule` | Etiqueta UI | Componente | Rol operativo |
 |---|---|---|---|
-| `IMMUNIZATION_CATALOG` | Catálogo Biológico | `ImmunizationCatalogModule.tsx` | DIRESA/Admin |
-| `IMMUNIZATION_INITIAL_INVENTORY` | Inventario Inicial | `ImmunizationInitialInventoryModule.tsx` | UNGET/IPRESS |
-| `IMMUNIZATION_STOCK` | Stock Biológico | `ImmunizationStockModule.tsx` | propietario del stock |
-| `IMMUNIZATION_STOCK_QUERY` | Consulta de Stock Biológico | `ImmunizationStockQueryModule.tsx` | supervisor, **solo lectura** |
-| `IMMUNIZATION_INCOMES` | Ingresos Regionales | `ImmunizationIncomesModule.tsx` | DIRESA |
-| `IMMUNIZATION_INCOME_ORIGINS` | Orígenes de Ingreso | `ImmunizationIncomeOriginsModule.tsx` | DIRESA/Admin |
-| `IMMUNIZATION_DISTRIBUTIONS` | Distribuciones | `ImmunizationDistributionsModule.tsx` | DIRESA→UNGET, UNGET→IPRESS |
-| `IMMUNIZATION_CONSUMPTION` | Consumo IPRESS | `ImmunizationConsumptionModule.tsx` | IPRESS |
-| `IMMUNIZATION_RETURNS` | Devoluciones y Bajas | `ImmunizationReturnsModule.tsx` | IPRESS → UNGET |
-| `IMMUNIZATION_ADJUSTMENTS` | Reajustes de Stock | `ImmunizationAdjustmentsModule.tsx` + `ImmunizationAdjustmentModal.tsx` | UNGET/IPRESS |
-| `IMMUNIZATION_CLOSURES` | Cierre Mensual | `ImmunizationClosuresModule.tsx` | IPRESS precierra / UNGET cierra |
-| `IMMUNIZATION_REPORTS` | Reportes Inmunizaciones | `ImmunizationReportsModule.tsx` | tablero de avance + descargas por UNGET y del ámbito |
+| `IMMUNIZATION_CATALOG` | Catálogo Biológico | `components/ImmunizationCatalogModule.tsx` | DIRESA/Admin |
+| `IMMUNIZATION_INITIAL_INVENTORY` | Inventario Inicial | `components/ImmunizationInitialInventoryModule.tsx` | UNGET/IPRESS |
+| `IMMUNIZATION_STOCK` | Stock Biológico | `components/ImmunizationStockModule.tsx` | propietario del stock |
+| `IMMUNIZATION_STOCK_QUERY` | Consulta de Stock Biológico | `components/ImmunizationStockQueryModule.tsx` | supervisor, **solo lectura** |
+| `IMMUNIZATION_INCOMES` | Ingresos Regionales | `components/ImmunizationIncomesModule.tsx` | DIRESA |
+| `IMMUNIZATION_INCOME_ORIGINS` | Orígenes de Ingreso | `components/ImmunizationIncomeOriginsModule.tsx` | DIRESA/Admin |
+| `IMMUNIZATION_DISTRIBUTIONS` | Distribuciones | `components/ImmunizationDistributionsModule.tsx` | DIRESA→UNGET, UNGET→IPRESS |
+| `IMMUNIZATION_CONSUMPTION` | Consumo IPRESS | `components/ImmunizationConsumptionModule.tsx` | IPRESS |
+| `IMMUNIZATION_RETURNS` | Devoluciones y Bajas | `components/ImmunizationReturnsModule.tsx` | IPRESS → UNGET |
+| `IMMUNIZATION_ADJUSTMENTS` | Reajustes de Stock | `components/ImmunizationAdjustmentsModule.tsx` + `components/ImmunizationAdjustmentModal.tsx` | UNGET/IPRESS |
+| `IMMUNIZATION_CLOSURES` | Cierre Mensual | `components/ImmunizationClosuresModule.tsx` | IPRESS precierra / UNGET cierra |
+| `IMMUNIZATION_REPORTS` | Reportes Inmunizaciones | `components/ImmunizationReportsModule.tsx` | tablero de avance + descargas por UNGET y del ámbito |
 
 ### Servicios
 
@@ -202,7 +215,9 @@ Precedencia: ADMIN → `GLOBAL`; si hay `facilityCode` → `IPRESS`; luego UNGET
 |---|---|
 | `services/immunizationApi.ts` (~171 KB) | Objeto `immunizationApi` con toda la lógica CRUD + reglas. Es el archivo más importante del módulo. |
 | `services/immunizationMonthlyReportService.ts` | Filas y export PDF/Excel del movimiento biológico mensual. **Cinco** variantes sobre el **mismo** formato de 19 columnas: `IPRESS`, `UNGET_WAREHOUSE`, `UNGET_NETWORK`, `DIRESA_WAREHOUSE` y `DIRESA_NETWORK` (ver `REPORT_VARIANTS`). Un cambio de layout aplica a las cinco. |
-| `components/ui/immunization.tsx` | Kit visual compartido: `ImmunizationKpiCard`, `ImmunizationPageHeader`, `ImmunizationStatusChip`, `ImmunizationEmptyState`, y las clases de input y el normalizador de texto. **Úsalo en vez de redefinir tarjetas o clases por módulo.** Los tonos se nombran por significado (`success`, `warning`, `danger`, `info`, `locked`), nunca por color. |
+| `components/ui/immunization.tsx` | **Kit visual compartido. Catálogo completo en la sección 8.** Tarjetas, cabeceras, chips, celdas de tabla, campos, clases de input y formateadores de fecha/número/moneda. Úsalo en vez de redefinir nada por módulo. |
+| `services/immunizationDomain.ts` | Reglas de negocio usadas por varias pantallas: FEFO, periodo de una fecha, sentido de una distribución. Sin nada visual. |
+| `services/appRoutes.ts` | `APP_BASE`, `pathForModule`, `moduleForPath`. Tabla de rutas por módulo; su prueba obliga a declarar la ruta de cada módulo nuevo. |
 | `services/immunizationProgressService.ts` | Avance operativo mensual en **funciones puras**: estado de cierres, pendientes, incidencias, consumo, vencimientos y valorización. Fuente única de "precerrada / pendiente / cerrada" para el tablero y el módulo de cierre. |
 | `services/immunizationExcelService.ts` | Parser `.xlsx` de inventario inicial, detección de columnas alternativas, plantilla. |
 | `services/immunizationAdjustmentPdfService.ts` | Constancia PDF A4 de reajuste. |
@@ -211,27 +226,29 @@ Precedencia: ADMIN → `GLOBAL`; si hay `facilityCode` → `IPRESS`; luego UNGET
 
 ## 7. Migraciones SQL
 
-Los `.sql` de la raíz son **scripts que el usuario ejecuta manualmente en el panel de Supabase**. No hay CLI de migraciones ni control de versión de esquema. Al crear una migración: archivo nuevo, idempotente donde sea posible, y anotarla en el documento de fase.
+Los `.sql` de `supabase/` son **scripts que el usuario ejecuta manualmente en el panel de Supabase**. No hay CLI de migraciones ni control de versión de esquema. Al crear una migración: archivo nuevo en `supabase/`, idempotente donde sea posible, y anotarla en el documento de fase.
+
+**El entorno del agente no puede aplicar SQL ni desplegar.** Prepárale al usuario el script y el comando exactos, listos para pegar; él los ejecuta.
 
 Orden histórico del módulo:
 
-1. `SUPABASE_SCHEMA_IMMUNIZATIONS_V1.sql` — base (productos, inventario inicial, capas, movimientos, reajustes)
-2. `SUPABASE_MIGRATION_IMMUNIZATION_ADJUSTMENTS.sql`
-3. `SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql`
-4. `SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`
-5. `SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql`
-6. `SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql` — refactor de Fase 14
-7. `SUPABASE_MIGRATION_IMMUNIZATION_CONSUMPTION.sql`
-8. `SUPABASE_MIGRATION_IMMUNIZATION_RETURNS.sql`
-9. `SUPABASE_MIGRATION_IMMUNIZATION_MONTHLY_CLOSURES.sql`
+1. `supabase/SUPABASE_SCHEMA_IMMUNIZATIONS_V1.sql` — base (productos, inventario inicial, capas, movimientos, reajustes)
+2. `supabase/SUPABASE_MIGRATION_IMMUNIZATION_ADJUSTMENTS.sql`
+3. `supabase/SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql`
+4. `supabase/SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`
+5. `supabase/SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql`
+6. `supabase/SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql` — refactor de Fase 14
+7. `supabase/SUPABASE_MIGRATION_IMMUNIZATION_CONSUMPTION.sql`
+8. `supabase/SUPABASE_MIGRATION_IMMUNIZATION_RETURNS.sql`
+9. `supabase/SUPABASE_MIGRATION_IMMUNIZATION_MONTHLY_CLOSURES.sql`
 
-Los `SUPABASE_SCHEMA_V2..V15.sql` pertenecen al dominio de farmacia/SISMED, no a inmunizaciones.
+Los esquemas `supabase/SUPABASE_SCHEMA_V2.sql` a `supabase/SUPABASE_SCHEMA_V15.sql` pertenecen al dominio de farmacia/SISMED, no a inmunizaciones.
 
 ---
 
 ## 8. Convenciones de UI
 
-Referencia normativa: `UX_PLAN_INMUNIZACIONES.md`. Resumen operativo:
+Referencia normativa: `docs/UX_PLAN_INMUNIZACIONES.md`. Resumen operativo:
 
 - **Estilo base:** sidebar oscuro, fondo `slate` claro, tarjetas `rounded-2xl border border-slate-200 bg-white shadow-sm`, iconos `lucide-react`, Tailwind.
 - **Color con significado:** teal/cyan = información/stock; emerald = aplicado/cerrado/vigente; amber = pendiente/advertencia/reajuste; red = vencido/error/bloqueo; violet = reclasificación; blue = vista supervisora; slate = neutro.
@@ -243,31 +260,70 @@ Referencia normativa: `UX_PLAN_INMUNIZACIONES.md`. Resumen operativo:
 - **Móvil:** tablas → tarjetas; filtros → bottom sheet; footer sticky en modales.
 - **Acentos:** cuidado con mojibake. `Biológico`, `Catálogo`, `Código`, `Distribución` deben renderizarse correctos en pantalla **y en PDF/Excel** (ver `services/pdfUnicodeFont.ts`).
 
-Deuda UX conocida y aceptada: la capa de componentes comunes propuesta en `UX_PLAN_INMUNIZACIONES.md` §4.1 (`ImmunizationPageHeader`, `ImmunizationKpiCard`, `ImmunizationFilterBar`, etc.) **nunca se creó**. Cada módulo repite sus propios estilos. Si se toca UI a fondo, evaluar extraerlos; si no, mantener consistencia copiando el patrón del módulo más cercano.
+### Qué reutilizar — mira aquí ANTES de escribir nada nuevo
+
+La capa de componentes comunes **ya existe** (se creó el 2026-08-01 y se completó en la auditoría del 2026-08-02). Antes existían cinco `HeaderCell` con relleno y tamaño de letra distintos, cuatro `formatDate`, tres `SummaryCard` y seis `Field`; cambiar un estilo solo afectaba a la pantalla que se tocaba. **No lo reintroduzcas.**
+
+**`components/ui/immunization.tsx` — todo lo visual y de formato**
+
+| Necesitas | Usa |
+|---|---|
+| Tarjeta de indicador / KPI | `ImmunizationKpiCard` (`label`, `value`, `icon?`, `tone?`, `hint?`, `filled?`) |
+| Cabecera de módulo | `ImmunizationPageHeader` |
+| Chip de estado | `ImmunizationStatusChip` (`label`, `tone`) |
+| Celda `<th>` de tabla | `ImmunizationTableHeader` (`align?: left \| right \| center`) |
+| Campo de formulario con etiqueta | `ImmunizationField` (`label`, `required?`, `hint?`) |
+| Dato suelto etiqueta/valor | `ImmunizationInfoPill` |
+| Estado vacío | `ImmunizationEmptyState` |
+| Clase de `<input>` de formulario | `immunizationInputClass` (h-11) |
+| Clase de `<select>` | `immunizationSelectClass` (h-11) |
+| Clase de campo en barra de filtros | `immunizationFilterInputClass` (h-10) |
+| Fecha `15/07/2026` | `formatImmunizationDate` |
+| Fecha y hora | `formatImmunizationDateTime` |
+| Cantidad con separador de miles | `formatImmunizationNumber` |
+| Importe en soles | `formatImmunizationCurrency` |
+| Hoy para un `<input type="date">` | `todayInputValue` |
+| Buscar sin tildes ni mayúsculas | `normalizeImmunizationText` |
+
+**`services/immunizationDomain.ts` — reglas de negocio compartidas**
+
+| Necesitas | Usa |
+|---|---|
+| Ordenar lotes por vencimiento (FEFO) | `sortLayersByFefo` |
+| Periodo `YYYY-MM` de una fecha | `periodFromDate` |
+| Sentido de una distribución | `distributionFlow` |
+| UNGET que recibe / que envía | `distributionDestinationUngetId` / `distributionOriginUngetId` |
+
+**Los tonos se nombran por significado, nunca por color:** `success`, `warning`, `danger`, `info`, `locked`, `neutral`. Si escribes `bg-emerald-100` a mano en un módulo, casi siempre querías un `tone`.
+
+**Lo que sí es correcto que esté duplicado.** `statusLabel` y `StatusBadge` existen por separado en Distribuciones, Ingresos y Devoluciones porque cada entidad tiene **estados y textos distintos** (`SENT` es "Pendiente recepción" en una y "Pendiente UNGET" en otra). Unificarlos sería un error. La regla es: se comparte la *forma*, no el *vocabulario del dominio*.
+
+**Si de verdad falta una pieza**, agrégala al kit y úsala desde todos los módulos que la necesiten — no la dejes local "por ahora". Se importa con alias cuando el nombre local ya está establecido: `import { ImmunizationTableHeader as HeaderCell } from "./ui/immunization"`.
 
 ---
 
 ## 9. Historial de fases
 
-Documento maestro: `PLAN_IMPLEMENTACION_INMUNIZACIONES.md`. Diseño funcional de referencia: `INMUNIZACIONES_DISENO_FUNCIONAL.md`.
+Documento maestro: `docs/PLAN_IMPLEMENTACION_INMUNIZACIONES.md`. Diseño funcional de referencia: `docs/INMUNIZACIONES_DISENO_FUNCIONAL.md`.
 
 **Etapa 1 — base (Fases 1–10, cerrada)**
-Catálogo maestro, tipos/permisos/navegación, servicios y alcance, importador `.xlsx` de inventario inicial, registro manual, cierre de inventario que genera capas, stock agrupado por producto/lote con alertas de vencimiento, reajustes auditados con constancia PDF. Handoff: `FASE_10_HANDOFF_ETAPA_1_INMUNIZACIONES.md`.
+Catálogo maestro, tipos/permisos/navegación, servicios y alcance, importador `.xlsx` de inventario inicial, registro manual, cierre de inventario que genera capas, stock agrupado por producto/lote con alertas de vencimiento, reajustes auditados con constancia PDF. Handoff: `docs/FASE_10_HANDOFF_ETAPA_1_INMUNIZACIONES.md`.
 
 **Etapa 2 — operación mensual**
 
 | Fase | Alcance | Doc | Estado |
 |---|---|---|---|
-| 11 | Ingresos (modelo antiguo UNGET) | `FASE_11_INGRESOS_UNGET.md` | refactorizada en F14 |
-| 12 | Distribución UNGET → IPRESS | `FASE_12_DISTRIBUCION_UNGET_IPRESS.md` | refactorizada en F14 |
-| 13 | Recepción IPRESS con incidencias | `FASE_13_RECEPCION_IPRESS_INCIDENCIAS.md` | generalizada en F14 |
-| 14 | **Refactor abastecimiento regional** DIRESA → UNGET → IPRESS | `FASE_14_REFACTOR_ABASTECIMIENTO_REGIONAL.md` | implementada |
-| 15 | Devoluciones, bajas y transferencias IPRESS → UNGET | `FASE_15_DEVOLUCIONES_BAJAS_IPRESS_UNGET.md` | implementada |
-| 16 | Cierre mensual: precierre IPRESS, cierre definitivo UNGET, reapertura con motivo, bloqueo por periodo, reporte mensual IPRESS PDF/Excel | `FASE_16_CIERRE_MENSUAL_INMUNIZACIONES.md` | implementada |
-| 17 | **Reportes mensuales UNGET**: almacén y consolidado de red, PDF + Excel, dentro de Cierre Mensual | `FASE_17_REPORTE_CONSOLIDADO_UNGET.md` | implementada y rediseñada el 2026-07-30 |
-| — | **Validación con datos reales** contra Supabase; destapó el defecto de `unget_id` nulo en registros de IPRESS | `VALIDACION_DATOS_REALES_INMUNIZACIONES.md` | corregido; reparación de datos opcional pendiente |
-| 18 | **Reportes mensuales regionales DIRESA**: almacén regional y consolidado de región, con marcado preliminar/definitivo | `FASE_18_REPORTE_CONSOLIDADO_DIRESA.md` | implementada |
-| 19 | **Tablero de avance operativo** en `Reportes Inmunizaciones`, con alcance por rol y descargas por UNGET | `FASE_19_TABLERO_AVANCE_OPERATIVO.md` | **implementada — último punto de trabajo** |
+| 11 | Ingresos (modelo antiguo UNGET) | `docs/FASE_11_INGRESOS_UNGET.md` | refactorizada en F14 |
+| 12 | Distribución UNGET → IPRESS | `docs/FASE_12_DISTRIBUCION_UNGET_IPRESS.md` | refactorizada en F14 |
+| 13 | Recepción IPRESS con incidencias | `docs/FASE_13_RECEPCION_IPRESS_INCIDENCIAS.md` | generalizada en F14 |
+| 14 | **Refactor abastecimiento regional** DIRESA → UNGET → IPRESS | `docs/FASE_14_REFACTOR_ABASTECIMIENTO_REGIONAL.md` | implementada |
+| 15 | Devoluciones, bajas y transferencias IPRESS → UNGET | `docs/FASE_15_DEVOLUCIONES_BAJAS_IPRESS_UNGET.md` | implementada |
+| 16 | Cierre mensual: precierre IPRESS, cierre definitivo UNGET, reapertura con motivo, bloqueo por periodo, reporte mensual IPRESS PDF/Excel | `docs/FASE_16_CIERRE_MENSUAL_INMUNIZACIONES.md` | implementada |
+| 17 | **Reportes mensuales UNGET**: almacén y consolidado de red, PDF + Excel, dentro de Cierre Mensual | `docs/FASE_17_REPORTE_CONSOLIDADO_UNGET.md` | implementada y rediseñada el 2026-07-30 |
+| — | **Validación con datos reales** contra Supabase; destapó el defecto de `unget_id` nulo en registros de IPRESS | `docs/VALIDACION_DATOS_REALES_INMUNIZACIONES.md` | corregido; reparación de datos opcional pendiente |
+| 18 | **Reportes mensuales regionales DIRESA**: almacén regional y consolidado de región, con marcado preliminar/definitivo | `docs/FASE_18_REPORTE_CONSOLIDADO_DIRESA.md` | implementada |
+| 19 | **Tablero de avance operativo** en `Reportes Inmunizaciones`, con alcance por rol y descargas por UNGET | `docs/FASE_19_TABLERO_AVANCE_OPERATIVO.md` | implementada |
+| 20 | **Seguridad, UX y consolidación** (2026-08-01/02): RLS con token de sesión en las 15 tablas, kit de UI compartido, menú hamburguesa en móvil, URL propia por módulo, módulo `Consulta de Stock Biológico` de solo lectura, y auditoría de duplicados y código muerto | `docs/SEGURIDAD_AUDITORIA.md`, `docs/UX_PLAN_INMUNIZACIONES.md` | **implementada — último punto de trabajo** |
 
 **Los reportes se descargan desde dos sitios y es intencional.** `Cierre Mensual` los ofrece a quien opera su propio cierre (IPRESS y UNGET); `Reportes Inmunizaciones` los ofrece a DIRESA por fila de UNGET y para el ámbito completo, porque ahí es donde supervisa. Ambos usan las mismas funciones de descarga, así que el archivo es idéntico.
 
@@ -275,7 +331,7 @@ Con la Fase 19 la **Etapa 2 queda funcionalmente completa** y §20 del diseño f
 
 ### El sistema de reportes (Fases 16-18) — donde quedó el trabajo
 
-Cinco variantes, **un solo formato de 19 columnas**. Todas se arman con dos builders genéricos en `immunizationMonthlyReportService.ts`:
+Cinco variantes, **un solo formato de 19 columnas**. Todas se arman con dos builders genéricos en `services/immunizationMonthlyReportService.ts`:
 
 - `buildWarehouseReportRows(options, ownerType, isDistribution, isLoss)` — un almacén; la salida (e) es la distribución al nivel de abajo; las columnas de dosis van en `null`.
 - `buildNetworkReportRows(options, ownerTypes, isIncome, isLoss)` — un ámbito consolidado; los traslados internos se anulan.
@@ -322,13 +378,14 @@ Regla del reporte IPRESS que también aplica a los tres: si el inventario inicia
 
 ---
 
-## 10. Siguiente trabajo (Fase 18 propuesta)
+## 10. Siguiente trabajo
 
-**No queda construcción nueva pendiente en la Etapa 2.** Lo que sigue es consolidación, por orden de valor:
+**No queda construcción nueva pendiente en la Etapa 2, y la seguridad ya está aplicada** (los cuatro scripts `supabase/SUPABASE_SEGURIDAD_*.sql` corrieron en producción el 2026-08-01 y se verificó externamente que `anon` recibe 0 filas o 401). Lo que sigue, por orden de valor:
 
-1. **Validar un periodo real completo** con varias IPRESS y muchos lotes. Todo lo construido está probado con datos escasos (1 producto, 11 movimientos); es el mayor riesgo abierto.
-2. **Deuda UX** del `UX_PLAN_INMUNIZACIONES.md`: la capa de componentes comunes §4.1 nunca se creó, falta la revisión móvil §9 y los filtros territoriales avanzados para DIRESA.
-4. **Seguridad de acceso a datos — es ahora la prioridad real.** La auditoría (`SEGURIDAD_AUDITORIA.md`) confirmó escalada de privilegios explotable. Orden: (a) `SUPABASE_SECURITY_STAGE2_LOCKDOWN.sql` corta la escritura sobre `users` y `roles_config`; (b) reconstruir la administración de usuarios como funciones `SECURITY DEFINER` con reautenticación; (c) migrar a Supabase Auth, única vía para proteger el resto sin romper la app. La etapa 1 (`SEGURIDAD_ETAPA_1_LOGIN.md`) sigue pendiente de aplicar.
+1. **Validar un periodo real completo** con varias IPRESS y muchos lotes. Todo lo construido está probado con datos escasos (1 producto, 11 movimientos); es el mayor riesgo abierto y el usuario lo tiene pendiente.
+2. **Unificar `respaldo-inmunizaciones` con `main`** (ver sección 3).
+3. **Deuda UX restante:** faltan las vistas de tarjeta en móvil para los módulos supervisores, y los filtros territoriales avanzados para DIRESA (`docs/UX_PLAN_INMUNIZACIONES.md` §9).
+4. **Migrar a Supabase Auth** algún día. Es la única vía para retirar el modelo de token propio, pero hoy funciona y no es urgente.
 
 **Antes de empezar, corre el diagnóstico contra datos reales** (solo lectura, necesita `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`):
 
@@ -340,18 +397,19 @@ Compara el saldo que calculan los reportes con el stock realmente almacenado, ve
 
 Otros pendientes menores:
 
-- Exportación del tablero de avance a PDF/Excel, sugerida en `UX_PLAN_INMUNIZACIONES.md` §5.6. Se dejó fuera a propósito: el movimiento biológico ya se exporta desde Cierre Mensual.
-- La validación visual automatizada por navegador quedó bloqueada históricamente (ver `design-qa.md`), así que la verificación visual la hace el usuario manualmente.
+- Exportación del tablero de avance a PDF/Excel, sugerida en `docs/UX_PLAN_INMUNIZACIONES.md` §5.6. Se dejó fuera a propósito: el movimiento biológico ya se exporta desde Cierre Mensual.
+- La validación visual automatizada por navegador quedó bloqueada históricamente (ver `docs/design-qa.md`), así que la verificación visual la hace el usuario manualmente.
 - `scripts/generateUngetConsolidatedPdfPreview.mjs` y `reportes-ejemplo/MOVIMIENTO_BIOLOGICO_UNGET_EJEMPLO_A4.pdf` siguen ahí y están obsoletos.
 
 ---
 
 ## 11. Cómo trabajar aquí
 
-1. **Leer primero** el `FASE_NN_*.md` más reciente y la sección correspondiente de `INMUNIZACIONES_DISENO_FUNCIONAL.md` antes de tocar código.
+0. **Antes de escribir un componente o una utilidad, búscalo.** Sección 8 de este documento, `components/ui/immunization.tsx` y `services/immunizationDomain.ts`. Este proyecto ya pagó el precio de no hacerlo.
+1. **Leer primero** el `FASE_NN_*.md` más reciente en `docs/` y la sección correspondiente de `docs/INMUNIZACIONES_DISENO_FUNCIONAL.md` antes de tocar código.
 2. **Incrementos pequeños**, una fase por vez, con entregable verificable. No construir varias fases de golpe.
 3. **No romper farmacia/SISMED.** Los componentes de ese dominio (`SheetSearchModule`, `RedistributionModule`, `AdminOrganizationModule`, `IpressStockModule`…) son grandes y frágiles; no refactorizarlos de paso.
 4. Al agregar una operación de escritura: validar scope, validar periodo bloqueado, no permitir negativos, registrar movimiento auditable, e implementar la **ruta Supabase y la ruta localStorage**.
 5. Cerrar cada fase con `npm run lint` + `npm run build` y un documento `FASE_NN_*.md` con: alcance implementado, reglas funcionales, archivos modificados, migración a ejecutar, validación técnica y pendiente posterior.
-6. Actualizar `PLAN_IMPLEMENTACION_INMUNIZACIONES.md` (sección "Avance actual") en el mismo cierre.
+6. Actualizar `docs/PLAN_IMPLEMENTACION_INMUNIZACIONES.md` (sección "Avance actual") en el mismo cierre.
 7. Ante ambigüedad funcional (qué columna, qué regla de saldo, qué rol opera), **preguntar al usuario**: es quien conoce la operación real de la DIRESA y varias decisiones ya se revirtieron por asumir de más.

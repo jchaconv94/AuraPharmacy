@@ -191,11 +191,11 @@ const MultiSelectFilter = ({
     );
 };
 import * as XLSX from 'xlsx';
-import { calculateAdjustedCPM, calculateMedian } from '../services/auraService';
+import { calculateAdjustedCPM } from '../services/auraService';
 import { AvailabilityRecord, RedistributionItem } from '../types';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
-import { NumberFilter, NumberFilterState, defaultNumberFilterState } from './NumberFilter';
+import { NumberFilter, NumberFilterState } from './NumberFilter';
 
 interface RedistributionModuleProps {
     onBack?: () => void;

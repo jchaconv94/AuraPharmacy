@@ -41,7 +41,8 @@ import {
   ImmunizationStockLayer,
   Unget
 } from "../types";
-import { immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
+import { distributionDestinationUngetId, distributionOriginUngetId, distributionFlow } from "../services/immunizationDomain";
+import { immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, ImmunizationTableHeader as HeaderCell, ImmunizationField as Field, formatImmunizationDate as formatDate, ImmunizationKpiCard, immunizationSelectClass as selectClassName } from "./ui/immunization";
 
 type DistributionItemDraft = ImmunizationDistributionItem & { tempId: string };
 type AllocationMode = "FEFO" | "MANUAL";
@@ -54,9 +55,6 @@ interface StockProductGroup {
 }
 
 const currentPeriod = getCurrentImmunizationPeriod();
-const selectClassName = "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400";
-
-
 const statusLabel = (status: ImmunizationDistributionStatus) => {
   if (status === "SENT") return "Pendiente recepcion";
   if (status === "RECEIVED") return "Recibido";
@@ -74,19 +72,6 @@ const criterionLabel = (criterion?: ImmunizationDistributionCriterion) => {
 };
 
 const DEFAULT_REGIONAL_WAREHOUSE_ID = "DIRESA_SAN_MARTIN_REGIONAL";
-
-const distributionFlow = (distribution: ImmunizationDistributionBatch): ImmunizationDistributionFlow =>
-  distribution.flowType || (distribution.destinationOwnerType === "UNGET" || distribution.destinationUngetId ? "DIRESA_UNGET" : "UNGET_IPRESS");
-
-const distributionDestinationUngetId = (distribution: ImmunizationDistributionBatch) => {
-  const flow = distributionFlow(distribution);
-  return distribution.destinationUngetId || (flow === "DIRESA_UNGET" ? distribution.ungetId : undefined);
-};
-
-const distributionOriginUngetId = (distribution: ImmunizationDistributionBatch) => {
-  const flow = distributionFlow(distribution);
-  return distribution.originUngetId || (flow === "UNGET_IPRESS" ? distribution.ungetId : undefined);
-};
 
 export const ImmunizationDistributionsModule: React.FC = () => {
   const { user } = useAuth();
@@ -495,10 +480,10 @@ export const ImmunizationDistributionsModule: React.FC = () => {
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard label="Distribuciones" value={totals.total.toString()} icon={<ArrowRightLeft className="h-5 w-5" />} />
-        <SummaryCard label="Pendientes" value={totals.sent.toString()} icon={<Send className="h-5 w-5" />} />
-        <SummaryCard label="Conformes" value={totals.received.toString()} icon={<CheckCircle2 className="h-5 w-5" />} />
-        <SummaryCard label="Observadas" value={totals.observed.toString()} icon={<ShieldAlert className="h-5 w-5" />} />
+        <ImmunizationKpiCard tone="info" label="Distribuciones" value={totals.total.toString()} icon={<ArrowRightLeft className="h-5 w-5" />} />
+        <ImmunizationKpiCard tone="info" label="Pendientes" value={totals.sent.toString()} icon={<Send className="h-5 w-5" />} />
+        <ImmunizationKpiCard tone="info" label="Conformes" value={totals.received.toString()} icon={<CheckCircle2 className="h-5 w-5" />} />
+        <ImmunizationKpiCard tone="info" label="Observadas" value={totals.observed.toString()} icon={<ShieldAlert className="h-5 w-5" />} />
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
@@ -1626,10 +1611,6 @@ function DistributionDetail({ items, loading }: { items: ImmunizationDistributio
   );
 }
 
-function SummaryCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
-  return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><div className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</div><span className="text-sky-600">{icon}</span></div><div className="mt-1 text-2xl font-black text-slate-900">{value}</div></div>;
-}
-
 function StatusBadge({ status }: { status: ImmunizationDistributionStatus }) {
   const className = status === "RECEIVED"
     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -1643,14 +1624,6 @@ function StatusBadge({ status }: { status: ImmunizationDistributionStatus }) {
   return <span className={`inline-flex rounded-lg border px-2 py-1 text-[10px] font-black uppercase ${className}`}>{statusLabel(status)}</span>;
 }
 
-function HeaderCell({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
-  return <th className={`px-3 py-3 ${align === "right" ? "text-right" : "text-left"} text-[10px] font-black uppercase tracking-wide text-slate-500`}>{children}</th>;
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return <label className="block text-xs font-black text-slate-700"><span className="mb-1.5 block">{label} {required && <span className="text-red-500">*</span>}</span>{children}</label>;
-}
-
 function ungetName(ungetId: string | undefined, ungets: Unget[]) {
   if (!ungetId) return "-";
   return ungets.find(unget => unget.id === ungetId)?.name || `UNGET ${ungetId}`;
@@ -1662,11 +1635,3 @@ function facilityName(code: string | undefined, facilities: HealthFacility[]) {
   return facility ? `${facility.name}` : `IPRESS ${code}`;
 }
 
-function formatDate(value?: string) {
-  if (!value) return "-";
-  try {
-    return new Intl.DateTimeFormat("es-PE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
-  } catch {
-    return value;
-  }
-}

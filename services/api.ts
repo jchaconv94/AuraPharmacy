@@ -49,7 +49,7 @@ let usersCache: any[] | null = null;
  * Nunca debe incluir `password_hash`: la clave `anon` viaja en el bundle publicado, así
  * que cualquier columna legible aquí es legible por cualquiera. La verificación de
  * contraseña ocurre en el servidor mediante `app_verify_password`.
- * Ver `SUPABASE_SECURITY_STAGE1_LOGIN.sql`.
+ * Ver `supabase/SUPABASE_SEGURIDAD_APLICAR_ESTO.sql`.
  */
 const USER_SELECT = "username, role, personnel_id, is_active, created_at, personnel:personnel_id(*, facilities:facility_code(*), labor_regimes:labor_regime_id(*), professions:profession_id(*)), roles_config:role(*)";
 
@@ -58,7 +58,7 @@ const USER_SELECT = "username, role, personnel_id, is_active, created_at, person
  *
  * Es lo que autoriza las operaciones administrativas en el servidor. Sustituye al modelo
  * anterior, en el que el navegador escribía directamente sobre `users` con la clave
- * pública `anon`. Ver `SUPABASE_SEGURIDAD_APLICAR_ESTO.sql`.
+ * pública `anon`. Ver `supabase/SUPABASE_SEGURIDAD_APLICAR_ESTO.sql`.
  */
 export const getSessionToken = (): string | null => {
     try {
@@ -1149,6 +1149,9 @@ export const api = {
                     .select('id, facility_code')
                     .eq('facility_code', assignment.facilityCode)
                     .maybeSingle();
+                // Si la validación no se pudo consultar, se corta aquí: seguir sin
+                // respuesta permitiría crear el duplicado que esta comprobación evita.
+                if (errFac) throw errFac;
                 if (existingFacility) {
                     return { success: false, message: `El establecimiento solicitado ya tiene una hoja de cálculo vinculada.` };
                 }
@@ -1160,6 +1163,7 @@ export const api = {
                     .eq('sheet_url', assignment.sheetUrl)
                     .eq('sheet_name', assignment.sheetName)
                     .maybeSingle();
+                if (errSheet) throw errSheet;
                 if (existingSheet) {
                     return { success: false, message: `La hoja "${assignment.sheetName}" de esa conexión ya se encuentra vinculada a otro establecimiento (Código: ${existingSheet.facility_code}).` };
                 }
@@ -1190,6 +1194,7 @@ export const api = {
                     .eq('facility_code', assignment.facilityCode)
                     .neq('id', id)
                     .maybeSingle();
+                if (errFac) throw errFac;
                 if (existingFacility) {
                     return { success: false, message: `El establecimiento solicitado ya tiene otra hoja de cálculo vinculada.` };
                 }
@@ -1202,6 +1207,7 @@ export const api = {
                     .eq('sheet_name', assignment.sheetName)
                     .neq('id', id)
                     .maybeSingle();
+                if (errSheet) throw errSheet;
                 if (existingSheet) {
                     return { success: false, message: `La hoja "${assignment.sheetName}" de esa conexión ya se encuentra vinculada a otro establecimiento (Código: ${existingSheet.facility_code}).` };
                 }

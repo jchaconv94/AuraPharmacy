@@ -32,7 +32,7 @@ Archivos revisados:
 - `components/ImmunizationAdjustmentsModule.tsx`
 - `components/ImmunizationReportsModule.tsx`
 - `services/immunizationApi.ts`
-- `SUPABASE_MIGRATION_IMMUNIZATION_ADJUSTMENTS.sql`
+- `supabase/SUPABASE_MIGRATION_IMMUNIZATION_ADJUSTMENTS.sql`
 
 Validaciones confirmadas por codigo:
 

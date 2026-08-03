@@ -2,7 +2,7 @@
 
 ## Alcance implementado
 
-`Reportes Inmunizaciones` dejó de ser un placeholder y ahora es el tablero de avance mensual que pedía `INMUNIZACIONES_DISENO_FUNCIONAL.md` §20, complementando el consolidado biológico de la Fase 18.
+`Reportes Inmunizaciones` dejó de ser un placeholder y ahora es el tablero de avance mensual que pedía `docs/INMUNIZACIONES_DISENO_FUNCIONAL.md` §20, complementando el consolidado biológico de la Fase 18.
 
 Con esto queda cubierta la sección 20 completa: la vista de consolidado biológico vive en `Cierre Mensual`, y la vista de avance operativo en `Reportes Inmunizaciones`.
 
@@ -39,7 +39,7 @@ La cabecera lleva una insignia `PRELIMINAR` o `DEFINITIVO` con la misma regla de
 
 ## Alcance por rol
 
-Requisito de `UX_PLAN_INMUNIZACIONES.md` §5.6. El tablero lee el ámbito completo y luego recorta:
+Requisito de `docs/UX_PLAN_INMUNIZACIONES.md` §5.6. El tablero lee el ámbito completo y luego recorta:
 
 - **IPRESS**: solo su establecimiento.
 - **UNGET**: su red y sus IPRESS.
@@ -99,10 +99,10 @@ El stock del tablero coincide con la suma de las capas (`9 + 3 + 1 = 13`), y las
 
 ## Estado de la reparación de datos
 
-`SUPABASE_REPAIR_IMMUNIZATION_IPRESS_UNGET_LINK.sql` **ya fue ejecutado**. Verificado el 2026-07-30: 0 filas huérfanas en `immunization_stock_layers`, `immunization_stock_movements`, `immunization_initial_inventories` e `immunization_adjustments`.
+`supabase/SUPABASE_REPAIR_IMMUNIZATION_IPRESS_UNGET_LINK.sql` **ya fue ejecutado**. Verificado el 2026-07-30: 0 filas huérfanas en `immunization_stock_layers`, `immunization_stock_movements`, `immunization_initial_inventories` e `immunization_adjustments`.
 
 ## Pendiente posterior
 
 - Exportar el propio tablero de indicadores como resumen ejecutivo. Lo que ya se descarga desde aquí es el movimiento biológico, no el tablero.
 - Filtros territoriales avanzados para DIRESA (por OGESS o por provincia); hoy el filtro es por estado y texto.
-- Revisar el tablero en móvil: la tabla de avance usa `min-w-[900px]` con scroll horizontal, pendiente de convertir a tarjetas según `UX_PLAN_INMUNIZACIONES.md` §9.
+- Revisar el tablero en móvil: la tabla de avance usa `min-w-[900px]` con scroll horizontal, pendiente de convertir a tarjetas según `docs/UX_PLAN_INMUNIZACIONES.md` §9.

@@ -103,7 +103,7 @@ Implementado actualmente:
 - `components/Sidebar.tsx`
 - `components/MobileNav.tsx`
 - `services/api.ts`
-- `SUPABASE_MIGRATION_IMMUNIZATION_MONTHLY_CLOSURES.sql`
+- `supabase/SUPABASE_MIGRATION_IMMUNIZATION_MONTHLY_CLOSURES.sql`
 
 ## Bloqueo operativo agregado
 
@@ -122,7 +122,7 @@ Se agregaron validaciones de periodo cerrado/precerrado antes de:
 Ejecutar:
 
 ```sql
-SUPABASE_MIGRATION_IMMUNIZATION_MONTHLY_CLOSURES.sql
+supabase/SUPABASE_MIGRATION_IMMUNIZATION_MONTHLY_CLOSURES.sql
 ```
 
 La migración crea:

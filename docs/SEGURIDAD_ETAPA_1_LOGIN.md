@@ -30,7 +30,7 @@ Es importante: mientras la escritura siga abierta, alguien podría cambiar un `p
 
 ### En la base de datos
 
-`SUPABASE_SECURITY_STAGE1_LOGIN.sql` crea `public.app_verify_password(username, password)`, una función `SECURITY DEFINER` que compara la contraseña con `crypt()` de pgcrypto y devuelve solo `true` o `false`. Después revoca `SELECT (password_hash)` para `anon` y `authenticated`.
+`supabase/SUPABASE_SEGURIDAD_APLICAR_ESTO.sql` crea `public.app_verify_password(username, password)`, una función `SECURITY DEFINER` que compara la contraseña con `crypt()` de pgcrypto y devuelve solo `true` o `false`. Después revoca `SELECT (password_hash)` para `anon` y `authenticated`.
 
 ### En la aplicación
 
@@ -68,4 +68,4 @@ Lo que sigue abierto, por orden de riesgo:
 1. **Escritura anónima sobre `users`**: si el bloque 0 confirma que existe, es más grave que la lectura del hash. Cerrarla exige que el servidor sepa quién llama, es decir, identidad real.
 2. **Resto de tablas**: las políticas RLS del módulo de inmunizaciones son permisivas por diseño provisional. Cualquiera con la clave puede leer y probablemente escribir stock, movimientos y cierres.
 3. **Contraseña por defecto fija** en `services/api.ts`: conviene generar una aleatoria por usuario y obligar a cambiarla en el primer ingreso.
-4. **Migración a Supabase Auth o Edge Functions**, que es lo que `INMUNIZACIONES_DISENO_FUNCIONAL.md` §25 ya anticipaba como camino definitivo.
+4. **Migración a Supabase Auth o Edge Functions**, que es lo que `docs/INMUNIZACIONES_DISENO_FUNCIONAL.md` §25 ya anticipaba como camino definitivo.

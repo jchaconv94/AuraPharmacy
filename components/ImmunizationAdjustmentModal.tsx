@@ -16,7 +16,7 @@ import {
   X
 } from "lucide-react";
 import { ImmunizationAdjustmentItem, ImmunizationProduct, ImmunizationStockLayer } from "../types";
-import { immunizationInputClass as inputClassName } from "./ui/immunization";
+import { immunizationInputClass as inputClassName, ImmunizationField as Field, normalizeImmunizationText as normalizeSearchText } from "./ui/immunization";
 import { ConfirmationDialog } from "./ui/ConfirmationDialog";
 
 interface ImmunizationAdjustmentModalProps {
@@ -64,12 +64,6 @@ const emptyReclassification = {
   correctedPhysicalQuantity: ""
 };
 
-
-const normalizeSearchText = (value: string) => value
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase()
-  .trim();
 
 const normalizeLayerValue = (value: string) => value.trim().toUpperCase();
 const formatQuantity = (value: number) => value.toLocaleString("es-PE", { maximumFractionDigits: 2 });
@@ -560,10 +554,6 @@ function DraftItems({ items, onRemove }: { items: ImmunizationAdjustmentItem[]; 
 
 function DraftLayer({ item, label }: { item: ImmunizationAdjustmentItem; label: string }) {
   return <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><p className="text-[9px] font-black uppercase text-slate-400">{label}</p><p className="mt-1 text-xs font-black text-slate-900">{item.product?.codigoSismed} · {item.product?.descripcion || "Producto"}</p><p className="mt-1 text-xs text-slate-500">Lote {item.lote} · {item.expirationDate} · {item.fundingSource}/{item.supplyType}</p><div className="mt-2 flex items-center justify-between"><span className="font-mono text-xs font-black text-slate-700">{formatQuantity(item.physicalQuantity)}</span><DifferenceBadge value={item.differenceQuantity} /></div></div>;
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return <label className="block text-xs font-black text-slate-700"><span className="mb-1.5 block">{label} {required && <span className="text-red-500">*</span>}</span>{children}</label>;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

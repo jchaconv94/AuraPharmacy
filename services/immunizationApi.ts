@@ -14,7 +14,6 @@ import {
   ImmunizationMonthlyClosureOwnerType,
   ImmunizationOwnerType,
   ImmunizationProduct,
-  ImmunizationProductType,
   ImmunizationReceptionInput,
   ImmunizationReturnBatch,
   ImmunizationReturnItem,
@@ -1769,7 +1768,7 @@ export const immunizationApi = {
     } catch (e: any) {
       const rawMessage = `${e?.message || ""} ${e?.details || ""}`;
       if (rawMessage.includes("immunization_income_batches") || rawMessage.includes("immunization_income_items")) {
-        return { success: false, message: "Falta ejecutar SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql y SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql en Supabase." };
+        return { success: false, message: "Falta ejecutar supabase/SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql y supabase/SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql en Supabase." };
       }
       return { success: false, message: e.message || "Error al registrar el ingreso regional." };
     }
@@ -1788,7 +1787,7 @@ export const immunizationApi = {
         if (error) {
           const rawMessage = `${error.message || ""} ${error.details || ""}`;
           if (error.code === "PGRST202" || rawMessage.includes("apply_immunization_income")) {
-            return { success: false, message: "Falta ejecutar SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql y SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql en Supabase." };
+            return { success: false, message: "Falta ejecutar supabase/SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql y supabase/SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql en Supabase." };
           }
           if (rawMessage.includes("INCOME_ALREADY_APPLIED")) {
             return { success: false, message: "El ingreso ya fue aplicado al stock." };
@@ -2090,7 +2089,7 @@ export const immunizationApi = {
     } catch (e: any) {
       const rawMessage = `${e?.message || ""} ${e?.details || ""}`;
       if (rawMessage.includes("immunization_distribution_batches") || rawMessage.includes("immunization_distribution_items")) {
-        return { success: false, message: "Falta ejecutar SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql y SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql en Supabase." };
+        return { success: false, message: "Falta ejecutar supabase/SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql y supabase/SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql en Supabase." };
       }
       return { success: false, message: e.message || "Error al registrar la distribucion." };
     }
@@ -2130,7 +2129,7 @@ export const immunizationApi = {
         if (error) {
           const rawMessage = `${error.message || ""} ${error.details || ""}`;
           if (error.code === "PGRST202" || rawMessage.includes("send_immunization_distribution")) {
-            return { success: false, message: "Falta ejecutar SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql y SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql en Supabase." };
+            return { success: false, message: "Falta ejecutar supabase/SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql y supabase/SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql en Supabase." };
           }
           if (rawMessage.includes("DISTRIBUTION_NOT_DRAFT")) {
             return { success: false, message: "La distribucion ya fue enviada, recibida o anulada." };
@@ -2280,7 +2279,7 @@ export const immunizationApi = {
         if (error) {
           const rawMessage = `${error.message || ""} ${error.details || ""}`;
           if (error.code === "PGRST202" || rawMessage.includes("receive_immunization_distribution")) {
-            return { success: false, message: "Falta ejecutar SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql y SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql en Supabase." };
+            return { success: false, message: "Falta ejecutar supabase/SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql y supabase/SUPABASE_MIGRATION_IMMUNIZATION_REGIONAL_REFACTOR.sql en Supabase." };
           }
           if (rawMessage.includes("DISTRIBUTION_NOT_PENDING")) {
             return { success: false, message: "La distribucion no esta pendiente de recepcion." };
@@ -3219,7 +3218,7 @@ export const immunizationApi = {
     } catch (e: any) {
       const rawMessage = `${e?.message || ""} ${e?.details || ""}`;
       if (rawMessage.includes("immunization_return_batches") || rawMessage.includes("immunization_return_items")) {
-        return { success: false, message: "Falta ejecutar SUPABASE_MIGRATION_IMMUNIZATION_RETURNS.sql en Supabase." };
+        return { success: false, message: "Falta ejecutar supabase/SUPABASE_MIGRATION_IMMUNIZATION_RETURNS.sql en Supabase." };
       }
       return { success: false, message: e.message || "Error al registrar la baja o devolucion." };
     }
@@ -3502,7 +3501,7 @@ export const immunizationApi = {
     } catch (e: any) {
       const rawMessage = `${e?.message || ""} ${e?.details || ""}`;
       if (rawMessage.includes("immunization_return_batches") || rawMessage.includes("immunization_return_items")) {
-        return { success: false, message: "Falta ejecutar SUPABASE_MIGRATION_IMMUNIZATION_RETURNS.sql en Supabase." };
+        return { success: false, message: "Falta ejecutar supabase/SUPABASE_MIGRATION_IMMUNIZATION_RETURNS.sql en Supabase." };
       }
       return { success: false, message: e.message || "Error al aceptar la recepcion." };
     }
@@ -3651,7 +3650,7 @@ export const immunizationApi = {
         if (error) {
           const rawMessage = `${error.message || ""} ${error.details || ""}`;
           if (error.code === "PGRST202" || rawMessage.includes("apply_immunization_stock_adjustment")) {
-            return { success: false, message: "Falta ejecutar SUPABASE_MIGRATION_IMMUNIZATION_ADJUSTMENTS.sql en Supabase." };
+            return { success: false, message: "Falta ejecutar supabase/SUPABASE_MIGRATION_IMMUNIZATION_ADJUSTMENTS.sql en Supabase." };
           }
           if (rawMessage.includes("STOCK_CHANGED")) {
             return { success: false, message: "El stock cambió mientras realizaba el conteo. Actualice y vuelva a intentarlo." };

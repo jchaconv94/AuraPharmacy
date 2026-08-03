@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../services/api';
-import { User, RoleConfig, HealthFacility, AVAILABLE_MODULES, UserRole, LaborRegime, Profession } from '../types';
-import { Users, Shield, ShieldAlert, Settings, Check, X, Sliders, Save, Clock, Link2, AlertTriangle, RefreshCw, UserPlus, Edit, Power, KeyRound, Building2, Database, Briefcase, Plus, Trash2, ChevronRight, Search, Filter, Phone, Mail, Lock, ChevronDown, MapPin, Globe, Calendar } from 'lucide-react';
+import { RoleConfig, HealthFacility, AVAILABLE_MODULES, LaborRegime, Profession } from '../types';
+import { Users, Shield, X, Sliders, Save, Clock, Link2, AlertTriangle, RefreshCw, UserPlus, Edit, Power, Building2, Briefcase, Trash2, Search, Filter, Phone, Mail, Lock, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 

@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import {
   ArrowDownToLine,
   CalendarDays,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   FilterX,
@@ -36,7 +35,7 @@ import {
   ImmunizationProduct,
   Unget
 } from "../types";
-import { immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
+import { immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, ImmunizationTableHeader as HeaderCell, ImmunizationField as Field, formatImmunizationDate as formatDate, todayInputValue, ImmunizationKpiCard } from "./ui/immunization";
 
 type IncomeItemDraft = ImmunizationIncomeItem & { tempId: string };
 
@@ -57,8 +56,6 @@ const inferIncomeSourceType = (sourceName: string): ImmunizationIncomeSourceType
   if (normalized.includes("ogess")) return "OGESS";
   return "OTHER";
 };
-
-const todayInputValue = () => new Date().toISOString().slice(0, 10);
 
 const statusLabel = (status: ImmunizationIncomeBatch["status"]) => {
   if (status === "APPLIED") return "Aplicado";
@@ -353,10 +350,10 @@ export const ImmunizationIncomesModule: React.FC = () => {
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard label="Ingresos" value={totals.incomes.toString()} icon={<ArrowDownToLine className="h-5 w-5" />} />
-        <SummaryCard label="Aplicados" value={totals.applied.toString()} icon={<ShieldCheck className="h-5 w-5" />} />
-        <SummaryCard label="Borradores" value={totals.drafts.toString()} icon={<FileText className="h-5 w-5" />} />
-        <SummaryCard label="Periodo actual" value={totals.currentPeriod.toString()} icon={<CalendarDays className="h-5 w-5" />} />
+        <ImmunizationKpiCard tone="info" label="Ingresos" value={totals.incomes.toString()} icon={<ArrowDownToLine className="h-5 w-5" />} />
+        <ImmunizationKpiCard tone="info" label="Aplicados" value={totals.applied.toString()} icon={<ShieldCheck className="h-5 w-5" />} />
+        <ImmunizationKpiCard tone="info" label="Borradores" value={totals.drafts.toString()} icon={<FileText className="h-5 w-5" />} />
+        <ImmunizationKpiCard tone="info" label="Periodo actual" value={totals.currentPeriod.toString()} icon={<CalendarDays className="h-5 w-5" />} />
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
@@ -888,10 +885,6 @@ function IncomeDetail({ items, loading }: { items: ImmunizationIncomeItem[]; loa
   );
 }
 
-function SummaryCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
-  return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><div className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</div><span className="text-emerald-600">{icon}</span></div><div className="mt-1 text-2xl font-black text-slate-900">{value}</div></div>;
-}
-
 function StatusBadge({ status }: { status: ImmunizationIncomeBatch["status"] }) {
   const className = status === "APPLIED"
     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -899,23 +892,6 @@ function StatusBadge({ status }: { status: ImmunizationIncomeBatch["status"] }) 
       ? "border-red-200 bg-red-50 text-red-700"
       : "border-amber-200 bg-amber-50 text-amber-700";
   return <span className={`inline-flex rounded-lg border px-2 py-1 text-[10px] font-black uppercase ${className}`}>{statusLabel(status)}</span>;
-}
-
-function HeaderCell({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
-  return <th className={`px-3 py-3 text-${align} text-[10px] font-black uppercase tracking-wide text-slate-500`}>{children}</th>;
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return <label className="block text-xs font-black text-slate-700"><span className="mb-1.5 block">{label} {required && <span className="text-red-500">*</span>}</span>{children}</label>;
-}
-
-function formatDate(value?: string) {
-  if (!value) return "-";
-  try {
-    return new Intl.DateTimeFormat("es-PE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
-  } catch {
-    return value;
-  }
 }
 
 function formatIncomeDate(incomeDate?: string, fallback?: string) {

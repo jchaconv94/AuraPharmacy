@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays, CheckCircle2, PackagePlus, Save, Search, X } from "lucide-react";
 import { ImmunizationInitialInventoryItem, ImmunizationProduct } from "../types";
-import { immunizationInputClass as inputClassName } from "./ui/immunization";
+import { immunizationInputClass as inputClassName, ImmunizationField as Field, normalizeImmunizationText as normalizeSearchText } from "./ui/immunization";
 
 export interface InventoryItemFormData {
   productId: string;
@@ -35,12 +35,6 @@ const emptyForm = {
   observation: ""
 };
 
-
-const normalizeSearchText = (value: string) => value
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase()
-  .trim();
 
 export const ImmunizationInventoryItemModal: React.FC<ImmunizationInventoryItemModalProps> = ({
   isOpen,
@@ -334,9 +328,3 @@ export const ImmunizationInventoryItemModal: React.FC<ImmunizationInventoryItemM
   );
 };
 
-const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode }> = ({ label, required, children }) => (
-  <label className="block text-xs font-black text-slate-700">
-    <span className="mb-1.5 block">{label} {required && <span className="text-red-500">*</span>}</span>
-    {children}
-  </label>
-);

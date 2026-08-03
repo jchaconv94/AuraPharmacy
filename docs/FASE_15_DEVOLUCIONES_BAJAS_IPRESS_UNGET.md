@@ -28,7 +28,7 @@ Se implemento el modulo `Devoluciones y Bajas` para cubrir el flujo operativo de
 - `components/ImmunizationReturnsModule.tsx`
 - `services/immunizationApi.ts`
 - `types.ts`
-- `SUPABASE_MIGRATION_IMMUNIZATION_RETURNS.sql`
+- `supabase/SUPABASE_MIGRATION_IMMUNIZATION_RETURNS.sql`
 - `App.tsx`
 - `components/Sidebar.tsx`
 - `components/MobileNav.tsx`

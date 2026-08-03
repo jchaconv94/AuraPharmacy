@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
 import { supabase } from '../services/supabaseClient';
-import { Database, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle } from 'lucide-react';
 import bcrypt from 'bcryptjs';
 import { toast } from 'sonner';
 

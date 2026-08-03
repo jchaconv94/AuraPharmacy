@@ -1,10 +1,10 @@
 
-import React, { useState, useCallback, useEffect, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, Suspense } from 'react';
 import { InputSection } from './components/InputSection';
 import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppModule, QuickFilterOption } from './types';
 import { analyzeInventoryWithAura } from './services/auraService';
 import { generateFullReportPDF } from './services/pdfService';
-import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle, LogOut, Settings, BarChart2, LayoutGrid, ChevronDown, ArrowRightLeft, Building2, Hash, Calendar, Clock, Network } from 'lucide-react';
+import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, Building2, Calendar, Clock, Network } from 'lucide-react';
 
 // NEW IMPORTS
 import { AuthProvider, useAuth } from './contexts/AuthContext';

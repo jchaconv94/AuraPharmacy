@@ -15,7 +15,7 @@ Completar la recepcion de distribuciones UNGET -> IPRESS para que la IPRESS no s
   - `ImmunizationReceptionItemInput`.
   - `ImmunizationReceptionInput`.
 - Nueva migracion Supabase:
-  - `SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql`.
+  - `supabase/SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql`.
 
 ## Reglas implementadas
 
@@ -65,7 +65,7 @@ Completar la recepcion de distribuciones UNGET -> IPRESS para que la IPRESS no s
 Ejecutar en Supabase despues de la migracion de distribuciones:
 
 ```sql
-SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql
+supabase/SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql
 ```
 
 Esta migracion reemplaza el RPC `receive_immunization_distribution` para aceptar detalle por item, motivo y observacion de recepcion.
@@ -81,7 +81,7 @@ Observacion:
 
 ## Pendiente funcional
 
-- Ejecutar `SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql` en Supabase.
+- Ejecutar `supabase/SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql` en Supabase.
 - Probar con usuario `INMU_UNGET`:
   - enviar una distribucion.
 - Probar con usuario `INMU_IPRESS`:

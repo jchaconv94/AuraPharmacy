@@ -21,7 +21,7 @@ import {
  * Pantalla de supervisión, separada a propósito de `Stock Biológico`, que es operativa.
  * Aquí no se registra ni se modifica nada: solo se consulta el stock de otros ámbitos.
  * Por eso lleva su propio permiso, para que un perfil supervisor no termine operando
- * existencias por error (`INMUNIZACIONES_DISENO_FUNCIONAL.md`, sección 7.3).
+ * existencias por error (`docs/INMUNIZACIONES_DISENO_FUNCIONAL.md`, sección 7.3).
  */
 
 type Vista = "ESTABLECIMIENTO" | "UNGET" | "REGIONAL";

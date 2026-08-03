@@ -11,7 +11,7 @@ El servidor de Supabase devuelve `404` porque la función simplemente no ha sido
 
 Para que el Toolkit Desktop pueda consumir la URL `https://ujknopysvgqqvkmgrfhp.supabase.co/functions/v1/sync-stock` exitosamente, se debe subir la función usando el CLI oficial de Supabase.
 
-Ejecuta los siguientes comandos desde la terminal local donde tengas o puedas descargar el código fuente de tu app web (o desde cualquier terminal donde tengas instalado Node.js/NPX e inicies un proyecto supabase vacío copiando ese archivo `index.ts`):
+Ejecuta los siguientes comandos desde la terminal local donde tengas o puedas descargar el código fuente de tu app web (o desde cualquier terminal donde tengas instalado Node.js/NPX e inicies un proyecto supabase vacío copiando ese archivo `supabase/functions/sync-stock/index.ts`):
 
 ```bash
 # 1. Iniciar sesión en el CLI de Supabase (te pedirá un Access Token de tu cuenta de Supabase, que se saca de Database Settings -> Access Tokens)

@@ -4,13 +4,13 @@ Este plan organiza la implementacion del modulo de inmunizaciones por fases cort
 
 Documento funcional base:
 
-- `INMUNIZACIONES_DISENO_FUNCIONAL.md`
+- `docs/INMUNIZACIONES_DISENO_FUNCIONAL.md`
 
 ## Avance actual
 
 Primer corte implementado:
 
-- Creado `SUPABASE_SCHEMA_IMMUNIZATIONS_V1.sql`.
+- Creado `supabase/SUPABASE_SCHEMA_IMMUNIZATIONS_V1.sql`.
 - Agregados tipos y modulos internos de inmunizaciones en `types.ts`.
 - Creado `services/immunizationApi.ts`.
 - Creadas pantallas base: Catalogo Biologico, Inventario Inicial, Stock Biologico, Reajustes de Stock y Reportes Inmunizaciones.
@@ -23,29 +23,29 @@ Primer corte implementado:
 - Completada vista operativa de Stock Biologico: cada IPRESS ve exclusivamente su stock y cada UNGET el stock de su almacen, con busqueda, alertas de vencimiento y detalle por lote/capa.
 - Implementada Fase 8 de Reajustes de Stock: conteo fisico de lotes existentes o no registrados, calculo de diferencias, aplicacion atomica al stock, movimiento auditable, historial con detalle y constancia PDF A4.
 - Ejecutada Fase 9 de verificacion tecnica: `npm.cmd run lint`, `npm.cmd run build` y servidor local HTTP 200.
-- Registrado informe de verificacion en `FASE_9_VERIFICACION_INMUNIZACIONES.md`. La validacion visual automatizada quedo bloqueada por el conector de navegador, pero el flujo fue validado manualmente por el usuario durante la implementacion.
+- Registrado informe de verificacion en `docs/FASE_9_VERIFICACION_INMUNIZACIONES.md`. La validacion visual automatizada quedo bloqueada por el conector de navegador, pero el flujo fue validado manualmente por el usuario durante la implementacion.
 - Validado `npm run lint`.
 - Validado `npm run build`.
 - Verificado servidor local por HTTP en `http://127.0.0.1:3000/ToolkitSISMED/`.
-- Cerrada Fase 10 con handoff de etapa 1 en `FASE_10_HANDOFF_ETAPA_1_INMUNIZACIONES.md`.
-- Iniciada Etapa 2 con Fase 11: modulo `Ingresos UNGET`, permiso `IMMUNIZATION_INCOMES`, migracion `SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql`, servicio API, pantalla operativa e integracion al menu.
+- Cerrada Fase 10 con handoff de etapa 1 en `docs/FASE_10_HANDOFF_ETAPA_1_INMUNIZACIONES.md`.
+- Iniciada Etapa 2 con Fase 11: modulo `Ingresos UNGET`, permiso `IMMUNIZATION_INCOMES`, migracion `supabase/SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql`, servicio API, pantalla operativa e integracion al menu.
 - Validada Fase 11 tecnicamente con `npm.cmd run lint` y `npm.cmd run build`.
 - Corregida Fase 11: buscador y filtros de historial, alcance supervisor DIRESA/OGESS/ADMIN y formulario responsivo de nuevo ingreso.
 - Rediseñado panel de filtros de Ingresos UNGET para evitar descuadres visuales y mejorar lectura operativa.
 - Compactado panel de filtros de Ingresos UNGET: busqueda y filtros principales en una sola barra, fechas colapsables.
-- Implementada Fase 12: modulo `Distribuciones UNGET`, permiso `IMMUNIZATION_DISTRIBUTIONS`, migracion `SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`, distribucion UNGET -> IPRESS con FEFO automatico, seleccion manual de lote, validacion de stock, envio con descuento de stock UNGET y recepcion IPRESS basica.
+- Implementada Fase 12: modulo `Distribuciones UNGET`, permiso `IMMUNIZATION_DISTRIBUTIONS`, migracion `supabase/SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`, distribucion UNGET -> IPRESS con FEFO automatico, seleccion manual de lote, validacion de stock, envio con descuento de stock UNGET y recepcion IPRESS basica.
 - Validada Fase 12 tecnicamente con `npm.cmd run lint` y `npm.cmd run build`.
-- Creado plan UX/UI profesional de inmunizaciones en `UX_PLAN_INMUNIZACIONES.md`.
+- Creado plan UX/UI profesional de inmunizaciones en `docs/UX_PLAN_INMUNIZACIONES.md`.
 - Implementada Fase 13: recepcion IPRESS con confirmacion fisica por item/lote, motivo y observacion obligatoria cuando existe diferencia, estado `OBSERVED` y stock IPRESS incrementado solo por lo recibido fisicamente.
-- Creada migracion `SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql`.
+- Creada migracion `supabase/SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql`.
 - Validada Fase 13 tecnicamente con `npm.cmd run lint` y `npm.cmd run build`.
 - Cambio funcional 2026-07-27: el flujo ordinario de abastecimiento se replantea. DIRESA sera el responsable principal de digitacion de ingresos regionales y distribuira a UNGET; las UNGET aceptaran esas distribuciones y luego distribuiran a sus IPRESS.
 - Implementado refactor regional base: ingresos regionales DIRESA, stock regional, distribucion DIRESA -> UNGET, recepcion UNGET con incidencias, distribucion UNGET -> IPRESS y recepcion IPRESS.
 - Separada la administracion de `Origenes de Ingreso` en un submodulo propio, con crear/editar/desactivar/reactivar.
 - Iniciada fase de `Consumo IPRESS`: registro por lote existente, descuento inmediato de stock, dosis aplicadas, dosis perdidas y factor de perdida.
-- Implementada Fase 15: modulo `Devoluciones y Bajas`, permiso `IMMUNIZATION_RETURNS`, migracion `SUPABASE_MIGRATION_IMMUNIZATION_RETURNS.sql`, salida IPRESS con FEFO y seleccion manual de lote, recepcion UNGET con diferencias, y regla de no ingreso a stock para bajas no disponibles.
-- Implementada Fase 16: modulo `Cierre Mensual`, permiso `IMMUNIZATION_CLOSURES`, migracion `SUPABASE_MIGRATION_IMMUNIZATION_MONTHLY_CLOSURES.sql`, precierre IPRESS, cierre definitivo UNGET condicionado a todas sus IPRESS precerradas y bloqueo operativo por periodo cerrado.
-- Implementada Fase 17: reportes mensuales UNGET en PDF y Excel. Documento de fase: `FASE_17_REPORTE_CONSOLIDADO_UNGET.md`.
+- Implementada Fase 15: modulo `Devoluciones y Bajas`, permiso `IMMUNIZATION_RETURNS`, migracion `supabase/SUPABASE_MIGRATION_IMMUNIZATION_RETURNS.sql`, salida IPRESS con FEFO y seleccion manual de lote, recepcion UNGET con diferencias, y regla de no ingreso a stock para bajas no disponibles.
+- Implementada Fase 16: modulo `Cierre Mensual`, permiso `IMMUNIZATION_CLOSURES`, migracion `supabase/SUPABASE_MIGRATION_IMMUNIZATION_MONTHLY_CLOSURES.sql`, precierre IPRESS, cierre definitivo UNGET condicionado a todas sus IPRESS precerradas y bloqueo operativo por periodo cerrado.
+- Implementada Fase 17: reportes mensuales UNGET en PDF y Excel. Documento de fase: `docs/FASE_17_REPORTE_CONSOLIDADO_UNGET.md`.
 - Rediseño 2026-07-30 de la Fase 17: se retira la matriz que mezclaba almacen e IPRESS en la misma fila porque contaba dos veces los traslados internos. Se reemplaza por dos reportes que usan el mismo formato de 19 columnas del movimiento biologico IPRESS: `Movimiento biologico - Almacen UNGET` y `Movimiento biologico consolidado UNGET`.
 - Decision 2026-07-30: se descarta el anexo `Detalle por establecimiento` en el consolidado. Generaria cientos de filas por IPRESS, producto y lote, y esa informacion ya existe en el movimiento biologico que emite cada IPRESS. El saldo conjunto de las IPRESS se deduce restando el saldo del almacen al saldo total de la red.
 - Agregado `scripts/generateImmunizationReportPreviews.ts` para generar muestras PDF y `.xlsx` de las tres variantes con los mismos builders de la aplicacion.
@@ -53,17 +53,17 @@ Primer corte implementado:
 - Regla incorporada: en el consolidado, la distribucion UNGET -> IPRESS y las devoluciones IPRESS -> UNGET son traslados internos y se anulan. Solo cuentan el ingreso desde DIRESA y las salidas reales por consumo, baja no disponible o deterioro.
 - Agregada primera cobertura de pruebas del modulo: `services/immunizationMonthlyReportService.test.ts` y script `npm test`.
 
-- Validacion con datos reales 2026-07-30: verificado contra Supabase que las 15 tablas y las columnas de las migraciones tardias existen, y que los tres reportes cuadran con el stock real. Informe: `VALIDACION_DATOS_REALES_INMUNIZACIONES.md`.
+- Validacion con datos reales 2026-07-30: verificado contra Supabase que las 15 tablas y las columnas de las migraciones tardias existen, y que los tres reportes cuadran con el stock real. Informe: `docs/VALIDACION_DATOS_REALES_INMUNIZACIONES.md`.
 - Corregido defecto encontrado en esa validacion: los registros propiedad de una IPRESS se guardaban con `unget_id` nulo desde `closeInitialInventory` y `createAdjustment`, quedando invisibles para las consultas por UNGET. El consolidado mostraba un reajuste como saldo anterior en vez de ingreso del mes.
-- Creado `SUPABASE_REPAIR_IMMUNIZATION_IPRESS_UNGET_LINK.sql` para vincular las filas ya escritas. Pendiente de ejecutar por el usuario; no es urgente.
+- Creado `supabase/SUPABASE_REPAIR_IMMUNIZATION_IPRESS_UNGET_LINK.sql` para vincular las filas ya escritas. Pendiente de ejecutar por el usuario; no es urgente.
 
-- Implementada Fase 18: reportes mensuales regionales DIRESA, almacen regional y consolidado de toda la region, con marcado preliminar/definitivo. Documento de fase: `FASE_18_REPORTE_CONSOLIDADO_DIRESA.md`.
+- Implementada Fase 18: reportes mensuales regionales DIRESA, almacen regional y consolidado de toda la region, con marcado preliminar/definitivo. Documento de fase: `docs/FASE_18_REPORTE_CONSOLIDADO_DIRESA.md`.
 - Regla aplicada en la Fase 18: la distribucion DIRESA -> UNGET pasa a ser traslado interno del consolidado regional, igual que la distribucion UNGET -> IPRESS lo es del consolidado UNGET.
 - Refactorizados los cinco reportes sobre dos builders genericos (`buildWarehouseReportRows` y `buildNetworkReportRows`); agregar un nivel nuevo es declarar sus clasificadores.
 
-- Implementada Fase 19: `Reportes Inmunizaciones` deja de ser placeholder y pasa a ser el tablero de avance operativo mensual con alcance por rol. Documento de fase: `FASE_19_TABLERO_AVANCE_OPERATIVO.md`.
+- Implementada Fase 19: `Reportes Inmunizaciones` deja de ser placeholder y pasa a ser el tablero de avance operativo mensual con alcance por rol. Documento de fase: `docs/FASE_19_TABLERO_AVANCE_OPERATIVO.md`.
 - Creado `services/immunizationProgressService.ts` con funciones puras de avance; el modulo de cierre ahora comparte esas definiciones en vez de duplicarlas.
-- Ejecutada la reparacion `SUPABASE_REPAIR_IMMUNIZATION_IPRESS_UNGET_LINK.sql`. Verificado: 0 filas huerfanas.
+- Ejecutada la reparacion `supabase/SUPABASE_REPAIR_IMMUNIZATION_IPRESS_UNGET_LINK.sql`. Verificado: 0 filas huerfanas.
 - Con la Fase 19 queda cubierta la seccion 20 del diseno funcional: consolidado biologico en `Cierre Mensual` y avance operativo en `Reportes Inmunizaciones`.
 
 - Cerrada la deuda UX principal: capa de componentes compartidos en `components/ui/immunization.tsx`, vista de celular en Consumo IPRESS y Distribuciones, y menu movil con panel lateral al 90% y barra inferior sin saturar.
@@ -75,7 +75,7 @@ Siguiente corte recomendado:
 - Las migraciones de consumo, devoluciones y cierres mensuales YA estan ejecutadas en Supabase. Verificado el 2026-07-30.
 - La Etapa 2 queda funcionalmente completa. Lo que sigue es consolidacion, no construccion nueva:
   1. Validar un periodo real completo con varias IPRESS usando `scripts/validateImmunizationReportsAgainstSupabase.ts`.
-  2. Deuda UX pendiente del `UX_PLAN_INMUNIZACIONES.md`: capa de componentes comunes, revision movil y filtros territoriales avanzados.
+  2. Deuda UX pendiente del `docs/UX_PLAN_INMUNIZACIONES.md`: capa de componentes comunes, revision movil y filtros territoriales avanzados.
   4. RLS definitiva, que requiere Supabase Auth o Edge Functions/RPC.
 
 Seguridad, etapa 1 (2026-07-31):
@@ -83,7 +83,7 @@ Seguridad, etapa 1 (2026-07-31):
 - Detectado que la clave `anon`, publica en el bundle desplegado, permitia leer `public.users` completa incluido `password_hash` de los 64 usuarios.
 - Causa: el login comparaba la contrasena en el navegador, asi que necesitaba descargar el hash.
 - Corregido: verificacion en el servidor con la funcion `app_verify_password`, lista explicita de columnas `USER_SELECT` en `services/api.ts` y revocacion de la lectura de `password_hash`.
-- Script a ejecutar por el usuario, en orden: `SUPABASE_SECURITY_STAGE1_LOGIN.sql`. Informe: `SEGURIDAD_ETAPA_1_LOGIN.md`.
+- Scripts aplicados por el usuario, en orden: `supabase/SUPABASE_SEGURIDAD_APLICAR_ESTO.sql`, `..._PASO_2_DATOS.sql`, `..._PASO_3_AMBITO.sql`, `..._PASO_4_RESTO.sql`. Informe: `SEGURIDAD_ETAPA_1_LOGIN.md`.
 - Pendiente etapa 2: cerrar la escritura anonima sobre `users` y el resto de tablas; requiere identidad real en el servidor.
 
 ## Objetivo de la primera etapa
@@ -279,7 +279,7 @@ Validacion:
 
 Entregable:
 
-- Nuevo archivo `SUPABASE_SCHEMA_IMMUNIZATIONS_V1.sql`.
+- Nuevo archivo `supabase/SUPABASE_SCHEMA_IMMUNIZATIONS_V1.sql`.
 
 ### 1.2 Cargar catalogo inicial
 
@@ -692,7 +692,7 @@ Estado 2026-07-22:
 - `npm.cmd run lint`: aprobado.
 - `npm.cmd run build`: aprobado.
 - Servidor local: HTTP 200 en `http://127.0.0.1:3000/ToolkitSISMED/`.
-- Informe: `FASE_9_VERIFICACION_INMUNIZACIONES.md`.
+- Informe: `docs/FASE_9_VERIFICACION_INMUNIZACIONES.md`.
 - Validacion visual manual: aceptada por el usuario durante la implementacion. No esta 100% personalizada, pero funciona para el alcance necesario.
 - Limitacion: el conector automatizado de navegador no pudo iniciar.
 
@@ -701,7 +701,7 @@ Estado 2026-07-22:
 Estado 2026-07-22:
 
 - Fase cerrada.
-- Documento de entrega: `FASE_10_HANDOFF_ETAPA_1_INMUNIZACIONES.md`.
+- Documento de entrega: `docs/FASE_10_HANDOFF_ETAPA_1_INMUNIZACIONES.md`.
 - La Etapa 1 queda aceptada como base funcional para iniciar la Etapa 2.
 
 Entregables:
@@ -762,7 +762,7 @@ Estado 2026-07-22:
 
 - Implementado bajo el modelo anterior.
 - Estado 2026-07-27: requiere refactor para convertirse en `Ingresos Regionales DIRESA`.
-- Documento de fase: `FASE_11_INGRESOS_UNGET.md`.
+- Documento de fase: `docs/FASE_11_INGRESOS_UNGET.md`.
 - Validacion tecnica: `npm.cmd run lint` aprobado y `npm.cmd run build` aprobado.
 - Correccion de UI/consulta: buscador, filtros por periodo/fecha/estado/origen/UNGET, vista supervisora y formulario responsivo.
 
@@ -770,7 +770,7 @@ Entregables:
 
 - Permiso `IMMUNIZATION_INCOMES`.
 - Pantalla `components/ImmunizationIncomesModule.tsx`.
-- Migracion `SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql`.
+- Migracion `supabase/SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql`.
 - API en `services/immunizationApi.ts` para crear, listar, detallar y aplicar ingresos.
 - Integracion en `App.tsx`, `Sidebar.tsx` y `MobileNav.tsx`.
 
@@ -797,14 +797,14 @@ Estado 2026-07-22:
 
 - Implementado bajo el modelo anterior.
 - Estado 2026-07-27: requiere refactor para soportar distribucion jerarquica `DIRESA -> UNGET` y `UNGET -> IPRESS`.
-- Documento de fase: `FASE_12_DISTRIBUCION_UNGET_IPRESS.md`.
+- Documento de fase: `docs/FASE_12_DISTRIBUCION_UNGET_IPRESS.md`.
 - Validacion tecnica: `npm.cmd run lint` aprobado y `npm.cmd run build` aprobado.
 
 Entregables:
 
 - Permiso `IMMUNIZATION_DISTRIBUTIONS`.
 - Pantalla `components/ImmunizationDistributionsModule.tsx`.
-- Migracion `SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`.
+- Migracion `supabase/SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`.
 - API en `services/immunizationApi.ts` para crear, listar, detallar, enviar y aceptar recepcion basica.
 - Integracion en `App.tsx`, `Sidebar.tsx` y `MobileNav.tsx`.
 
@@ -824,7 +824,7 @@ Pendiente funcional:
 - No ejecutar esta migracion como flujo definitivo sin antes aplicar el refactor.
 - Asignar permisos a roles reales.
 - Validar con datos reales de una UNGET y una IPRESS.
-- Ejecutar tambien `SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql` para habilitar recepcion con incidencias en Supabase.
+- Ejecutar tambien `supabase/SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql` para habilitar recepcion con incidencias en Supabase.
 
 ## Fase 13 - Recepcion IPRESS con incidencias
 
@@ -832,7 +832,7 @@ Estado 2026-07-22:
 
 - Implementado bajo el modelo anterior.
 - Estado 2026-07-27: la logica debe generalizarse para que tambien sirva en recepcion UNGET desde DIRESA.
-- Documento de fase: `FASE_13_RECEPCION_IPRESS_INCIDENCIAS.md`.
+- Documento de fase: `docs/FASE_13_RECEPCION_IPRESS_INCIDENCIAS.md`.
 - Validacion tecnica: `npm.cmd run lint` aprobado y `npm.cmd run build` aprobado.
 
 Entregables:
@@ -840,7 +840,7 @@ Entregables:
 - Tipos `ImmunizationReceptionReason`, `ImmunizationReceptionItemInput` e `ImmunizationReceptionInput`.
 - Modal de recepcion IPRESS en `components/ImmunizationDistributionsModule.tsx`.
 - API `receiveDistributionBatch` ampliada para recibir detalle por item/lote.
-- Migracion `SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql`.
+- Migracion `supabase/SUPABASE_MIGRATION_IMMUNIZATION_RECEPTIONS.sql`.
 
 Reglas implementadas:
 
@@ -867,7 +867,7 @@ Estado 2026-07-27:
 
 - Planificada.
 - Debe ejecutarse antes de consumo IPRESS.
-- Documento de fase: `FASE_14_REFACTOR_ABASTECIMIENTO_REGIONAL.md`.
+- Documento de fase: `docs/FASE_14_REFACTOR_ABASTECIMIENTO_REGIONAL.md`.
 
 Objetivo:
 

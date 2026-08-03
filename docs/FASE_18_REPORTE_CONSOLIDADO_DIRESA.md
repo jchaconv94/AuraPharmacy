@@ -38,7 +38,7 @@ Sin anexo por UNGET, por el mismo motivo que en la Fase 17: cada UNGET ya emite 
 
 ## Preliminar vs definitivo
 
-Requisito de `INMUNIZACIONES_DISENO_FUNCIONAL.md` §20: el consolidado definitivo solo existe cuando **todas** las UNGET están cerradas.
+Requisito de `docs/INMUNIZACIONES_DISENO_FUNCIONAL.md` §20: el consolidado definitivo solo existe cuando **todas** las UNGET están cerradas.
 
 Implementado con `isPreliminary` y `preliminaryReason` en `ImmunizationMonthlyReportOptions`. Cuando falta alguna UNGET por cerrar:
 

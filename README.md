@@ -1,20 +1,62 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# ToolKit SISMED Web
 
-# Run and deploy your AI Studio app
+Aplicación web interna de la **DIRESA San Martín (Perú)** para logística de salud. Cubre dos dominios:
 
-This contains everything you need to run your app locally.
+- **Farmacia / SISMED** — análisis de stock, redistribución, catálogos y administración.
+- **Inmunizaciones** — control de biológicos por lote desde el almacén regional DIRESA hasta cada IPRESS, con cierre mensual y reportes de movimiento biológico. Es donde está el trabajo activo.
 
-View your app in AI Studio: https://ai.studio/apps/4d090e48-d714-4420-b6d7-f45199e91852
+React 19 + Vite 6 + TypeScript, con Supabase como backend.
 
-## Run Locally
+## Puesta en marcha
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+```
 
+Copia `.env.example` a `.env` y completa las dos variables del proyecto de Supabase:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```
+VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
+VITE_SUPABASE_ANON_KEY=TU_CLAVE_ANON
+```
+
+```bash
+npm run dev
+```
+
+La aplicación queda en `http://127.0.0.1:3000/ToolkitSISMED/` — la ruta base importa, está fijada en `vite.config.ts`.
+
+## Comandos
+
+| Comando | Qué hace |
+|---|---|
+| `npm run dev` | Servidor de desarrollo |
+| `npm run lint` | `tsc --noEmit`. No hay ESLint: esta es la única verificación estática |
+| `npm test` | `vitest run` |
+| `npm run build` | `tsc && vite build` |
+
+## Estructura
+
+| Carpeta | Contenido |
+|---|---|
+| `components/` | Un archivo por módulo. `components/ui/` es el kit compartido |
+| `services/` | Acceso a datos, reglas de dominio y generación de PDF/Excel |
+| `docs/` | Toda la documentación: fases, planes funcionales, auditorías |
+| `supabase/` | Scripts `.sql` que se ejecutan a mano en el panel de Supabase |
+| `scripts/` | Previews de reportes y diagnóstico contra datos reales |
+
+## Si vas a trabajar en el código
+
+**Lee [AGENTS.md](AGENTS.md) primero.** Explica el modelo de dominio de inmunizaciones, el modelo de seguridad, qué componentes y utilidades ya existen para reutilizar, y las trampas que este proyecto ya pagó una vez.
+
+## Despliegue
+
+El sitio se publica a la rama `gh-pages` con el `dist` compilado:
+
+```bash
+npm run build
+```
+
+```bash
+npx gh-pages -d dist -r https://github.com/jchaconv94/ToolkitSISMED.git
+```

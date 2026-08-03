@@ -136,7 +136,7 @@ const emptyMetrics = (): ImmunizationProgressMetrics => ({
  * Decide si una capa o movimiento pertenece al ámbito de una UNGET.
  *
  * Empareja por `ungetId` y también por código de IPRESS, porque hubo registros antiguos
- * guardados sin `unget_id` (ver `VALIDACION_DATOS_REALES_INMUNIZACIONES.md`).
+ * guardados sin `unget_id` (ver `docs/VALIDACION_DATOS_REALES_INMUNIZACIONES.md`).
  */
 export const belongsToUngetScope = (
   row: { ungetId?: string; facilityCode?: string },

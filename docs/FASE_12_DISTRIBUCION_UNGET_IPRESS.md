@@ -11,7 +11,7 @@ Implementar el flujo operativo para que una UNGET distribuya productos biologico
 - Nuevo permiso interno `IMMUNIZATION_DISTRIBUTIONS`.
 - Nuevo modulo de menu: `Distribucion`.
 - Nueva pantalla: `components/ImmunizationDistributionsModule.tsx`.
-- Nueva migracion: `SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`.
+- Nueva migracion: `supabase/SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql`.
 - Tipos nuevos en `types.ts`:
   - `ImmunizationDistributionBatch`.
   - `ImmunizationDistributionItem`.
@@ -72,7 +72,7 @@ Implementar el flujo operativo para que una UNGET distribuya productos biologico
 Ejecutar en Supabase:
 
 ```sql
-SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql
+supabase/SUPABASE_MIGRATION_IMMUNIZATION_DISTRIBUTIONS.sql
 ```
 
 La migracion crea:

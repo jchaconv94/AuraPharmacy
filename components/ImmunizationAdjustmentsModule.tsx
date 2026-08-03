@@ -32,9 +32,8 @@ import {
   ImmunizationStockLayer,
   Unget
 } from "../types";
+import { ImmunizationTableHeader as HeaderCell, formatImmunizationDate as formatDate, ImmunizationKpiCard, immunizationSelectClass as selectClassName } from "./ui/immunization";
 import { ImmunizationAdjustmentModal } from "./ImmunizationAdjustmentModal";
-
-const selectClassName = "h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100 disabled:text-slate-400";
 
 export function ImmunizationAdjustmentsModule() {
   const { user } = useAuth();
@@ -325,11 +324,11 @@ export function ImmunizationAdjustmentsModule() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <SummaryCard label="Reajustes registrados" value={visibleAdjustments.length.toString()} icon={<ClipboardCheck className="h-5 w-5" />} />
-        <SummaryCard label="Aplicados" value={visibleAdjustments.filter(item => item.status === "APPLIED").length.toString()} icon={<ShieldCheck className="h-5 w-5" />} />
+        <ImmunizationKpiCard tone="info" label="Reajustes registrados" value={visibleAdjustments.length.toString()} icon={<ClipboardCheck className="h-5 w-5" />} />
+        <ImmunizationKpiCard tone="info" label="Aplicados" value={visibleAdjustments.filter(item => item.status === "APPLIED").length.toString()} icon={<ShieldCheck className="h-5 w-5" />} />
         {showTerritorialFilters
-          ? <SummaryCard label="Ubicaciones auditadas" value={locationCount.toString()} icon={<Building2 className="h-5 w-5" />} />
-          : <SummaryCard label="Anulados" value={visibleAdjustments.filter(item => item.status === "VOIDED").length.toString()} icon={<FileText className="h-5 w-5" />} />}
+          ? <ImmunizationKpiCard tone="info" label="Ubicaciones auditadas" value={locationCount.toString()} icon={<Building2 className="h-5 w-5" />} />
+          : <ImmunizationKpiCard tone="info" label="Anulados" value={visibleAdjustments.filter(item => item.status === "VOIDED").length.toString()} icon={<FileText className="h-5 w-5" />} />}
       </div>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -379,14 +378,6 @@ export function ImmunizationAdjustmentsModule() {
   );
 }
 
-function SummaryCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
-  return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><div className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</div><span className="text-teal-600">{icon}</span></div><div className="mt-1 text-2xl font-black text-slate-900">{value}</div></div>;
-}
-
-function HeaderCell({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
-  return <th className={`px-4 py-3 text-[10px] font-black uppercase text-slate-500 ${align === "right" ? "text-right" : "text-left"}`}>{children}</th>;
-}
-
 function StatusBadge({ status }: { status: ImmunizationAdjustment["status"] }) {
   return <span className={`inline-flex rounded-lg border px-2 py-1 text-[10px] font-black uppercase ${status === "APPLIED" ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-500"}`}>{status === "APPLIED" ? "Aplicado" : "Anulado"}</span>;
 }
@@ -416,8 +407,3 @@ function DetailMetric({ label, value }: { label: string; value: number }) {
   return <div><p className="text-[9px] font-black uppercase text-slate-400">{label}</p><p className="mt-0.5 font-mono font-black text-slate-800">{value.toLocaleString("es-PE")}</p></div>;
 }
 
-function formatDate(value?: string) {
-  if (!value) return "-";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" });
-}

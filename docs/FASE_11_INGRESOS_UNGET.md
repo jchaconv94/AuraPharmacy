@@ -41,7 +41,7 @@ Esta fase inicia la Etapa 2 de operacion mensual del modulo de inmunizaciones.
 ## Archivos agregados
 
 - `components/ImmunizationIncomesModule.tsx`
-- `SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql`
+- `supabase/SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql`
 
 ## Archivos modificados
 
@@ -51,13 +51,13 @@ Esta fase inicia la Etapa 2 de operacion mensual del modulo de inmunizaciones.
 - `App.tsx`
 - `components/Sidebar.tsx`
 - `components/MobileNav.tsx`
-- `PLAN_IMPLEMENTACION_INMUNIZACIONES.md`
+- `docs/PLAN_IMPLEMENTACION_INMUNIZACIONES.md`
 
 ## Base de datos
 
 Nueva migracion requerida:
 
-- `SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql`
+- `supabase/SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql`
 
 Crea:
 
@@ -95,7 +95,7 @@ Observacion:
 
 ## Pendientes antes de probar con Supabase real
 
-- Ejecutar `SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql` en Supabase.
+- Ejecutar `supabase/SUPABASE_MIGRATION_IMMUNIZATION_INCOMES.sql` en Supabase.
 - Asignar el permiso `IMMUNIZATION_INCOMES` al rol `INMU_UNGET`.
 - Validar con usuario UNGET real que:
   - ve el modulo;
@@ -106,4 +106,4 @@ Observacion:
 
 ## Siguiente fase
 
-Fase 12 implementada en `FASE_12_DISTRIBUCIONES_UNGET_IPRESS.md`.
+Fase 12 implementada en `docs/FASE_12_DISTRIBUCIONES_UNGET_IPRESS.md`.

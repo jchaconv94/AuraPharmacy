@@ -58,11 +58,11 @@ La aplicación no usa Supabase Auth: valida usuarios contra su propia tabla `use
 
 Sin identidad en el servidor no se pueden escribir políticas RLS del tipo "solo un ADMIN puede modificar usuarios", porque la base no distingue un ADMIN de un anónimo. La única forma de que la aplicación funcione con este diseño es conceder todo a `anon`, que es exactamente lo que está configurado.
 
-Esto ya estaba anticipado como deuda en `INMUNIZACIONES_DISENO_FUNCIONAL.md` §25, que señalaba que las políticas eran provisionales y que la solución definitiva exigía Supabase Auth o Edge Functions. La auditoría confirma que esa deuda tiene consecuencias reales y explotables hoy.
+Esto ya estaba anticipado como deuda en `docs/INMUNIZACIONES_DISENO_FUNCIONAL.md` §25, que señalaba que las políticas eran provisionales y que la solución definitiva exigía Supabase Auth o Edge Functions. La auditoría confirma que esa deuda tiene consecuencias reales y explotables hoy.
 
 ## Qué se corrigió ya
 
-`SEGURIDAD_ETAPA_1_LOGIN.md` documenta la etapa 1: el hash de contraseña deja de salir de la base, con verificación en el servidor mediante `app_verify_password`. Sigue pendiente de aplicar el SQL.
+`docs/SEGURIDAD_ETAPA_1_LOGIN.md` documenta la etapa 1: el hash de contraseña deja de salir de la base, con verificación en el servidor mediante `app_verify_password`. Sigue pendiente de aplicar el SQL.
 
 **Esa corrección sigue siendo válida pero ya no es la prioridad.** Ocultar el hash no sirve de mucho si cualquiera puede fabricarse un ADMIN sin necesidad de contraseñas.
 
@@ -92,8 +92,8 @@ Sigue abierta la lectura del perfil (`username`, `role`, `personnel_id`, `is_act
 3. **Datos de inmunizaciones por sesión.** El cliente envía el token en la cabecera
    `x-session-token` y las 15 tablas del módulo tienen RLS con una política que lo exige.
 
-Scripts aplicados: `SUPABASE_SEGURIDAD_APLICAR_ESTO.sql` y
-`SUPABASE_SEGURIDAD_PASO_2_DATOS.sql`.
+Scripts aplicados: `supabase/SUPABASE_SEGURIDAD_APLICAR_ESTO.sql` y
+`supabase/SUPABASE_SEGURIDAD_PASO_2_DATOS.sql`.
 
 ### Dos tropiezos que conviene recordar
 

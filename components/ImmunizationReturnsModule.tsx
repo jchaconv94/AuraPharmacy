@@ -14,7 +14,6 @@ import {
   Search,
   Send,
   Trash2,
-  Undo2,
   X
 } from "lucide-react";
 import { toast } from "sonner";
@@ -36,7 +35,8 @@ import {
   ImmunizationReturnType,
   ImmunizationStockLayer
 } from "../types";
-import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
+import { sortLayersByFefo, periodFromDate } from "../services/immunizationDomain";
+import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, ImmunizationField as Field, formatImmunizationNumber as formatNumber, todayInputValue, ImmunizationTableHeader as HeaderCell, ImmunizationInfoPill as InfoPill } from "./ui/immunization";
 
 type ReturnItemDraft = ImmunizationReturnItem & {
   tempId: string;
@@ -53,14 +53,6 @@ interface ProductStockOption {
 }
 
 const currentPeriod = getCurrentImmunizationPeriod();
-
-const todayInputValue = () => new Date().toISOString().slice(0, 10);
-const periodFromDate = (value: string) => (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) ? value.slice(0, 7) : currentPeriod);
-const formatNumber = (value: number) => value.toLocaleString("es-PE", { maximumFractionDigits: 2 });
-const sortLayersByFefo = (a: ImmunizationStockLayer, b: ImmunizationStockLayer) => {
-  const expiration = (a.expirationDate || "").localeCompare(b.expirationDate || "");
-  return expiration !== 0 ? expiration : (a.lote || "").localeCompare(b.lote || "");
-};
 
 const typeLabel = (type: ImmunizationReturnType) => {
   if (type === "DISPOSAL") return "Baja no disponible";
@@ -1046,22 +1038,3 @@ function ReturnDetail({ items, loading }: { items: ImmunizationReturnItem[]; loa
 }
 
 
-const HeaderCell: React.FC<{ children: React.ReactNode; align?: "left" | "right" }> = ({ children, align = "left" }) => (
-  <th className={`px-4 py-3 ${align === "right" ? "text-right" : "text-left"} text-[11px] font-black uppercase tracking-wide text-slate-500`}>
-    {children}
-  </th>
-);
-
-const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode }> = ({ label, required, children }) => (
-  <label className="block">
-    <span className="mb-1.5 block text-xs font-black text-slate-700">{label} {required && <span className="text-red-500">*</span>}</span>
-    {children}
-  </label>
-);
-
-const InfoPill: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div>
-    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</p>
-    <p className="mt-1 font-black text-slate-900">{value}</p>
-  </div>
-);

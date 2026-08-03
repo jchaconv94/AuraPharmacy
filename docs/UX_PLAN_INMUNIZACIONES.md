@@ -8,10 +8,10 @@ Este plan define una guía visual y de experiencia para profesionalizar los mód
 
 Archivos revisados:
 
-- `INMUNIZACIONES_DISENO_FUNCIONAL.md`
-- `PLAN_IMPLEMENTACION_INMUNIZACIONES.md`
-- `FASE_11_INGRESOS_UNGET.md`
-- `design-qa.md`
+- `docs/INMUNIZACIONES_DISENO_FUNCIONAL.md`
+- `docs/PLAN_IMPLEMENTACION_INMUNIZACIONES.md`
+- `docs/FASE_11_INGRESOS_UNGET.md`
+- `docs/design-qa.md`
 - `components/ImmunizationCatalogModule.tsx`
 - `components/ImmunizationInitialInventoryModule.tsx`
 - `components/ImmunizationInventoryItemModal.tsx`

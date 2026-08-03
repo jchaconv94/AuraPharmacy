@@ -30,7 +30,8 @@ import {
   ImmunizationStockLayer,
   ImmunizationStockMovement
 } from "../types";
-import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText } from "./ui/immunization";
+import { sortLayersByFefo, periodFromDate } from "../services/immunizationDomain";
+import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, ImmunizationField as Field, formatImmunizationNumber as formatNumber, todayInputValue, ImmunizationTableHeader as HeaderCell, ImmunizationInfoPill as InfoPill } from "./ui/immunization";
 
 type ConsumptionItemDraft = ImmunizationConsumptionItemInput & {
   tempId: string;
@@ -63,8 +64,6 @@ interface ConsumptionGroup {
 }
 
 const currentPeriod = getCurrentImmunizationPeriod();
-const todayInputValue = () => new Date().toISOString().slice(0, 10);
-const periodFromDate = (value: string) => (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value) ? value.slice(0, 7) : currentPeriod);
 const activityOptions = [
   "Consumo regular",
   "Campaña/Jornada",
@@ -73,18 +72,6 @@ const activityOptions = [
   "Puesto fijo",
   "Otro"
 ];
-
-const sortLayersByFefo = (a: ImmunizationStockLayer, b: ImmunizationStockLayer) => {
-  const expiration = (a.expirationDate || "").localeCompare(b.expirationDate || "");
-  if (expiration !== 0) return expiration;
-  return (a.lote || "").localeCompare(b.lote || "");
-};
-
-
-const formatNumber = (value: number, decimals = 0) => value.toLocaleString("es-PE", {
-  minimumFractionDigits: decimals,
-  maximumFractionDigits: decimals
-});
 
 const parseMetric = (observation: string | undefined, label: string) => {
   if (!observation) return undefined;
@@ -991,22 +978,3 @@ function GroupDetail({
 }
 
 
-const HeaderCell: React.FC<{ children: React.ReactNode; align?: "left" | "right" }> = ({ children, align = "left" }) => (
-  <th className={`px-4 py-3 ${align === "right" ? "text-right" : "text-left"} text-[11px] font-black uppercase tracking-wide text-slate-500`}>
-    {children}
-  </th>
-);
-
-const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode }> = ({ label, required, children }) => (
-  <label className="block">
-    <span className="mb-1.5 block text-xs font-black text-slate-700">{label} {required && <span className="text-red-500">*</span>}</span>
-    {children}
-  </label>
-);
-
-const InfoPill: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div>
-    <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</p>
-    <p className="mt-1 font-black text-slate-900">{value}</p>
-  </div>
-);
