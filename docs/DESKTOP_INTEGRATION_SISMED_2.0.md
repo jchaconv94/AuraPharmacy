@@ -81,7 +81,8 @@ La contraparte web (la Edge Function) ya está configurada para:
 A partir de esta actualización, las siguientes aplicaciones web funcionarán como ecosistema híbrido:
 
 *   **`SheetSearchModule`** (Visor Global de DIRESA / OGESS / UNGET): El frontend buscará automáticamente en la base de datos `stock_actual` si ya hay información sincronizada bajo la cuenta vinculada con Supabase. **Si encuentra stock**, se salta los queries a `Apps Script` nativos. **Si no encuentra datos en PostgreSQL**, usará de forma transparente como método de respaldo a `Apps Script` (compatibilidad con la app heredada de Google Sheets).
-*   **`IpressStockModule`** (Módulo Privado IPRESS): Para cada usuario final de nivel `FARMACIA` / `IPRESS`, el panel web inspeccionará primeramente si el `facility_code` del usuario local tiene inyecciones vivas sobre la nueva tabla `stock_actual`. De poseer información nativa, mapeará cada `almcod` encontrado hacia "Vistas internas de almacén" dentro de la misma UI ya existente, sin romper los filtros visuales actuales de la App antigua de React.
+*   **`IPRESS_STOCK` / Stock SISMED** (Módulo Privado IPRESS): Para cada usuario final de nivel `FARMACIA` / `IPRESS`, el panel web consulta únicamente el `facility_code` del usuario. Primero utiliza los registros de `stock_actual`; si todavía no existe sincronización, usa como respaldo la hoja exacta configurada en `facility_stock_assignments` y aplica `visible_columns`. Es una vista de solo lectura y nunca muestra existencias de otra IPRESS.
+*   **`STOCK_MONITORING` / Monitoreo de Stock** (Módulo Supervisor): Conserva el directorio territorial, los estados de sincronización y el detalle de establecimientos. Tiene un permiso independiente y no se asigna al rol operativo FARMACIA.
 
 ## 4. Próximos pasos recomendados a la Inteligencia Artificial del Módulo Escritorio:
 

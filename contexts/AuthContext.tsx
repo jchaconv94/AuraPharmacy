@@ -117,14 +117,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    // Invalida el token en el servidor antes de olvidarlo aquí.
+    void api.endSession();
     sessionStorage.removeItem('aura_auth_user');
     sessionStorage.removeItem('aura_welcome_shown_session');
     setState(prev => ({ ...prev, user: null, isAuthenticated: false, isLoading: false }));
   };
 
   const hasPermission = useCallback((module: AppModule): boolean => {
-      if (!state.user || !state.user.permissions) return false;
+      if (!state.user) return false;
       try {
+          // El administrador total debe poder acceder a los modulos nuevos aun cuando
+          // su configuracion de rol en Supabase todavia no haya sido actualizada.
+          if (state.user.role === 'ADMIN' && (module.startsWith('IMMUNIZATION_') || module === 'STOCK_MONITORING')) return true;
           return Array.isArray(state.user.permissions) && state.user.permissions.includes(module);
       } catch (e) {
           console.error("Error checking permission:", e);

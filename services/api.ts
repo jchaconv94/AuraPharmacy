@@ -1,5 +1,5 @@
 import { User, UserRole, Personnel, HealthFacility, RoleConfig, SystemConfig, Unget, Diresa, Ogess, Microred } from "../types";
-import { supabase } from "./supabaseClient";
+import { SESSION_TOKEN_KEY, supabase } from "./supabaseClient";
 import bcrypt from "bcryptjs";
 
 // MOCK DATA (Respaldo en caso de error de conexión/sin supabase)
@@ -17,7 +17,7 @@ const MOCK_DB = {
         { code: '00002', name: 'C.S. MIRAFLORES', category: 'I-3' },
     ],
     roles: [
-        { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH', 'ADMIN_STOCK_ASSIGN', 'IPRESS_STOCK'], maxUrlsAllowed: 10 },
+        { role: 'ADMIN', label: 'Administrador Total', allowedModules: ['DASHBOARD', 'ANALYSIS', 'ADMIN_USERS', 'ADMIN_ROLES', 'PROFILE', 'REDISTRIBUTION', 'SIG_SEARCH', 'ADMIN_STOCK_ASSIGN', 'IPRESS_STOCK', 'STOCK_MONITORING', 'IMMUNIZATION_CATALOG', 'IMMUNIZATION_INITIAL_INVENTORY', 'IMMUNIZATION_STOCK', 'IMMUNIZATION_INCOMES', 'IMMUNIZATION_INCOME_ORIGINS', 'IMMUNIZATION_DISTRIBUTIONS', 'IMMUNIZATION_CONSUMPTION', 'IMMUNIZATION_RETURNS', 'IMMUNIZATION_ADJUSTMENTS', 'IMMUNIZATION_CLOSURES', 'IMMUNIZATION_REPORTS'], maxUrlsAllowed: 10 },
         { role: 'FARMACIA', label: 'Responsable Farmacia', allowedModules: ['DASHBOARD', 'ANALYSIS', 'PROFILE', 'REDISTRIBUTION', 'IPRESS_STOCK'], maxUrlsAllowed: 1 }
     ],
     laborRegimes: [
@@ -43,13 +43,92 @@ const MOCK_DB = {
 // Variable cache
 let usersCache: any[] | null = null;
 
+/**
+ * Columnas de `users` que puede pedir el cliente.
+ *
+ * Nunca debe incluir `password_hash`: la clave `anon` viaja en el bundle publicado, así
+ * que cualquier columna legible aquí es legible por cualquiera. La verificación de
+ * contraseña ocurre en el servidor mediante `app_verify_password`.
+ * Ver `supabase/SUPABASE_SEGURIDAD_APLICAR_ESTO.sql`.
+ */
+const USER_SELECT = "username, role, personnel_id, is_active, created_at, personnel:personnel_id(*, facilities:facility_code(*), labor_regimes:labor_regime_id(*), professions:profession_id(*)), roles_config:role(*)";
+
+/**
+ * Token de sesión emitido por `app_login`.
+ *
+ * Es lo que autoriza las operaciones administrativas en el servidor. Sustituye al modelo
+ * anterior, en el que el navegador escribía directamente sobre `users` con la clave
+ * pública `anon`. Ver `supabase/SUPABASE_SEGURIDAD_APLICAR_ESTO.sql`.
+ */
+export const getSessionToken = (): string | null => {
+    try {
+        return sessionStorage.getItem(SESSION_TOKEN_KEY);
+    } catch {
+        return null;
+    }
+};
+
+const setSessionToken = (token: string | null) => {
+    try {
+        if (token) sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+        else sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    } catch {
+        // Sin sessionStorage no hay sesión persistente; las operaciones admin pedirán reingreso.
+    }
+};
+
+const requireSessionToken = (): string => {
+    const token = getSessionToken();
+    if (!token) throw new Error("Su sesión expiró. Vuelva a iniciar sesión para realizar esta operación.");
+    return token;
+};
+
+/**
+ * Inicia sesión en el servidor y guarda el token.
+ *
+ * Devuelve `null` si la función todavía no existe en la base, para que la aplicación se
+ * pueda desplegar antes o después de aplicar el SQL sin dejar a nadie fuera.
+ */
+const loginOnServer = async (username: string, password: string): Promise<boolean | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase.rpc("app_login", {
+        p_username: username,
+        p_password: password
+    });
+    if (error) {
+        console.warn("app_login no disponible; se usa la verificación heredada en el cliente.", error.message);
+        return null;
+    }
+    if (!data) {
+        setSessionToken(null);
+        return false;
+    }
+    setSessionToken(String(data));
+    return true;
+};
+
 export const api = {
+    /** Cierra la sesión en el servidor y borra el token local. */
+    endSession: async (): Promise<void> => {
+        const token = getSessionToken();
+        setSessionToken(null);
+        if (!supabase || !token) return;
+        try {
+            await supabase.rpc("app_logout", { p_token: token });
+        } catch {
+            // Si falla, el token caduca solo a las 12 horas.
+        }
+    },
+
     login: async (username: string, password: string): Promise<{ success: boolean; user?: User; message?: string }> => {
         try {
             if (supabase) {
+                const serverVerification = await loginOnServer(username, password);
+                if (serverVerification === false) return { success: false, message: "Usuario o contraseña incorrectos." };
+
                 const { data: userRecord, error } = await supabase
                     .from("users")
-                    .select("*, personnel:personnel_id(*, facilities:facility_code(*), labor_regimes:labor_regime_id(*), professions:profession_id(*)), roles_config:role(*)")
+                    .select(USER_SELECT)
                     .eq("username", username)
                     .single();
 
@@ -59,8 +138,16 @@ export const api = {
                     return { success: false, message: "Su cuenta ha sido desactivada. Contacte al administrador." };
                 }
 
-                const isValid = bcrypt.compareSync(password, userRecord.password_hash);
-                if (!isValid) return { success: false, message: "Usuario o contraseña incorrectos." };
+                if (serverVerification === null) {
+                    // Camino heredado, mientras la migración no esté aplicada.
+                    const { data: secret } = await supabase
+                        .from("users")
+                        .select("password_hash")
+                        .eq("username", username)
+                        .single();
+                    const isValid = Boolean(secret?.password_hash) && bcrypt.compareSync(password, secret!.password_hash);
+                    if (!isValid) return { success: false, message: "Usuario o contraseña incorrectos." };
+                }
 
                 const personnelData = Array.isArray(userRecord.personnel) ? userRecord.personnel[0] : userRecord.personnel;
                 const roleConfig = Array.isArray(userRecord.roles_config) ? userRecord.roles_config[0] : userRecord.roles_config;
@@ -138,7 +225,7 @@ export const api = {
             if (supabase) {
                 const { data: userRecord, error } = await supabase
                     .from("users")
-                    .select("*, personnel:personnel_id(*, facilities:facility_code(*), labor_regimes:labor_regime_id(*), professions:profession_id(*)), roles_config:role(*)")
+                    .select(USER_SELECT)
                     .eq("username", username)
                     .single();
 
@@ -207,18 +294,16 @@ export const api = {
                     profession_id: data.professionId || null
                 }).eq('id', personnelId);
                 
-                const userUpdateData: any = {};
-                if (data.username) {
-                    userUpdateData.username = data.username;
-                }
-                if (data.password) {
-                    const salt = bcrypt.genSaltSync(10);
-                    const pt = typeof data.password === 'string' ? data.password : String(data.password);
-                    userUpdateData.password_hash = bcrypt.hashSync(pt, salt);
-                }
-                
-                if (Object.keys(userUpdateData).length > 0) {
-                    await supabase.from('users').update(userUpdateData).eq('personnel_id', personnelId);
+                // Usuario y contraseña se cambian en el servidor, que comprueba que la
+                // sesión sea la dueña de esa cuenta (o un ADMIN).
+                if (data.username || data.password) {
+                    const { error: uError } = await supabase.rpc('app_update_own_account', {
+                        p_token: requireSessionToken(),
+                        p_personnel_id: personnelId,
+                        p_new_username: data.username || null,
+                        p_new_password: data.password ? String(data.password) : null
+                    });
+                    if (uError) throw uError;
                 }
                 
                 if (!pError) return { success: true };
@@ -235,7 +320,7 @@ export const api = {
             if (supabase) {
                 const { data, error } = await supabase
                     .from("users")
-                    .select("*, personnel:personnel_id(*, facilities:facility_code(*), labor_regimes:labor_regime_id(*), professions:profession_id(*)), roles_config:role(*)");
+                    .select(USER_SELECT);
                 if (!error && data) {
                     const normalized = data.map(u => {
                         const p = Array.isArray(u.personnel) ? u.personnel[0] : u.personnel;
@@ -313,34 +398,20 @@ export const api = {
 
                 if (pError) throw pError;
 
-                let pwUpdate = {};
-                if (userData.password) {
-                    const salt = bcrypt.genSaltSync(10);
-                    const pt = typeof userData.password === 'string' ? userData.password : String(userData.password);
-                    pwUpdate = { password_hash: bcrypt.hashSync(pt, salt) };
-                } else if (userData.isNew) {
-                    const salt = bcrypt.genSaltSync(10);
-                    pwUpdate = { password_hash: bcrypt.hashSync('Temporal2026*', salt) };
-                }
-
-                if (userData.isNew) {
-                    const { error: uError } = await supabase.from('users').insert({
-                        username: userData.username,
-                        role: userData.role,
-                        personnel_id: targetPersonnelId,
-                        is_active: userData.isActive !== undefined ? userData.isActive : true,
-                        ...pwUpdate
-                    });
-                    if (uError) throw uError;
-                } else {
-                    const { error: uError } = await supabase.from('users').update({
-                        role: userData.role,
-                        personnel_id: targetPersonnelId,
-                        is_active: userData.isActive !== undefined ? userData.isActive : true,
-                        ...pwUpdate
-                    }).eq('username', userData.username);
-                    if (uError) throw uError;
-                }
+                // La contraseña se envía en claro por HTTPS y se cifra en el servidor: el
+                // navegador ya no genera hashes ni los escribe en la tabla.
+                // La escritura sobre `users` se hace en el servidor: verifica que quien
+                // llama sea un ADMIN con sesión válida antes de tocar nada.
+                const { error: uError } = await supabase.rpc('app_admin_save_user', {
+                    p_token: requireSessionToken(),
+                    p_username: userData.username,
+                    p_role: userData.role,
+                    p_personnel_id: targetPersonnelId,
+                    p_is_active: userData.isActive !== undefined ? userData.isActive : true,
+                    p_password: userData.password ? String(userData.password) : null,
+                    p_is_new: Boolean(userData.isNew)
+                });
+                if (uError) throw uError;
                 return { success: true };
             }
             return { success: false, message: "No Supabase connected" };
@@ -353,7 +424,11 @@ export const api = {
         try {
             usersCache = null;
             if (supabase) {
-                const { error } = await supabase.from('users').update({ is_active: status }).eq('username', username);
+                const { error } = await supabase.rpc('app_admin_toggle_user', {
+                    p_token: requireSessionToken(),
+                    p_username: username,
+                    p_status: status
+                });
                 if (error) throw error;
                 return { success: true };
             }
@@ -365,15 +440,13 @@ export const api = {
         try {
             usersCache = null;
             if (supabase) {
-                const { error: uError } = await supabase.from('users').delete().eq('username', username);
+                // La función borra el usuario y, si puede, su ficha de personal.
+                const { error: uError } = await supabase.rpc('app_admin_delete_user', {
+                    p_token: requireSessionToken(),
+                    p_username: username,
+                    p_personnel_id: personnelId
+                });
                 if (uError) throw uError;
-                
-                if (personnelId) {
-                    const { error: pError } = await supabase.from('personnel').delete().eq('id', personnelId);
-                    if (pError) {
-                        console.warn('Could not delete personnel, but successfully deleted user account:', pError);
-                    }
-                }
                 return { success: true };
             }
             return { success: false, message: "No Supabase connected" };
@@ -714,13 +787,22 @@ export const api = {
             if (supabase) {
                 const { data, error } = await supabase.from('roles_config').select('*');
                 if (!error && data) {
-                    return data.map(r => ({
-                        role: r.role,
-                        label: r.label,
-                        allowedModules: r.allowed_modules,
-                        maxUrlsAllowed: r.max_urls_allowed,
-                        jurisdictionLevel: r.jurisdiction_level
-                    }));
+                    return data.map(r => {
+                        const allowedModules = Array.isArray(r.allowed_modules) ? [...r.allowed_modules] : [];
+                        if (r.role === 'ADMIN' && !allowedModules.includes('STOCK_MONITORING')) {
+                            allowedModules.push('STOCK_MONITORING');
+                        }
+                        if (r.role === 'ADMIN' && !allowedModules.includes('IMMUNIZATION_CLOSURES')) {
+                            allowedModules.push('IMMUNIZATION_CLOSURES');
+                        }
+                        return {
+                            role: r.role,
+                            label: r.label,
+                            allowedModules,
+                            maxUrlsAllowed: r.max_urls_allowed,
+                            jurisdictionLevel: r.jurisdiction_level
+                        };
+                    });
                 }
             }
         } catch(e) {}
@@ -730,27 +812,16 @@ export const api = {
     updateRoleConfig: async (roleConfig: RoleConfig): Promise<{ success: boolean; message?: string }> => {
         try {
             if (supabase) {
-                // If the role was renamed, try to update the primary key first
-                if (roleConfig.oldRole && roleConfig.oldRole !== roleConfig.role) {
-                    const { error: renameError } = await supabase
-                        .from('roles_config')
-                        .update({ role: roleConfig.role })
-                        .eq('role', roleConfig.oldRole);
-                        
-                    if (renameError) {
-                        console.error('Error renaming role:', renameError);
-                        // Optional fallback: maybe we have users attached resulting in a constraint error.
-                        // We will just throw the error to be handled by the UI.
-                        throw renameError;
-                    }
-                }
-
-                const { error } = await supabase.from('roles_config').upsert({
-                    role: roleConfig.role,
-                    label: roleConfig.label,
-                    allowed_modules: roleConfig.allowedModules,
-                    max_urls_allowed: roleConfig.maxUrlsAllowed,
-                    jurisdiction_level: roleConfig.jurisdictionLevel
+                // El renombrado y el guardado ocurren en el servidor, dentro de la misma
+                // función, que exige sesión de ADMIN.
+                const { error } = await supabase.rpc('app_admin_save_role_config', {
+                    p_token: requireSessionToken(),
+                    p_role: roleConfig.role,
+                    p_old_role: roleConfig.oldRole || null,
+                    p_label: roleConfig.label,
+                    p_allowed_modules: roleConfig.allowedModules,
+                    p_max_urls_allowed: roleConfig.maxUrlsAllowed,
+                    p_jurisdiction_level: roleConfig.jurisdictionLevel || null
                 });
                 if (error) throw error;
                 return { success: true };
@@ -1078,6 +1149,9 @@ export const api = {
                     .select('id, facility_code')
                     .eq('facility_code', assignment.facilityCode)
                     .maybeSingle();
+                // Si la validación no se pudo consultar, se corta aquí: seguir sin
+                // respuesta permitiría crear el duplicado que esta comprobación evita.
+                if (errFac) throw errFac;
                 if (existingFacility) {
                     return { success: false, message: `El establecimiento solicitado ya tiene una hoja de cálculo vinculada.` };
                 }
@@ -1089,6 +1163,7 @@ export const api = {
                     .eq('sheet_url', assignment.sheetUrl)
                     .eq('sheet_name', assignment.sheetName)
                     .maybeSingle();
+                if (errSheet) throw errSheet;
                 if (existingSheet) {
                     return { success: false, message: `La hoja "${assignment.sheetName}" de esa conexión ya se encuentra vinculada a otro establecimiento (Código: ${existingSheet.facility_code}).` };
                 }
@@ -1119,6 +1194,7 @@ export const api = {
                     .eq('facility_code', assignment.facilityCode)
                     .neq('id', id)
                     .maybeSingle();
+                if (errFac) throw errFac;
                 if (existingFacility) {
                     return { success: false, message: `El establecimiento solicitado ya tiene otra hoja de cálculo vinculada.` };
                 }
@@ -1131,6 +1207,7 @@ export const api = {
                     .eq('sheet_name', assignment.sheetName)
                     .neq('id', id)
                     .maybeSingle();
+                if (errSheet) throw errSheet;
                 if (existingSheet) {
                     return { success: false, message: `La hoja "${assignment.sheetName}" de esa conexión ya se encuentra vinculada a otro establecimiento (Código: ${existingSheet.facility_code}).` };
                 }

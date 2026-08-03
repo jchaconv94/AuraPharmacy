@@ -3,7 +3,6 @@ import {
   Search, 
   Loader2, 
   FileSpreadsheet, 
-  Box, 
   Clock, 
   Filter, 
   ChevronRight, 
@@ -12,18 +11,13 @@ import {
   RefreshCw, 
   Hospital, 
   Table, 
-  Grid, 
-  TrendingUp, 
   Layers, 
   ArrowLeft, 
   AlertCircle,
-  TrendingDown,
-  Info,
   Trash2,
   Monitor,
   FileClock,
   Database,
-  Package,
   CheckCircle2,
   ChevronDown,
   Wifi,
@@ -33,7 +27,7 @@ import { api } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
 import { supabase, supabaseService, StockSyncRecord } from "../services/supabaseClient";
-import { HealthFacility } from "../types";
+import { HealthFacility, StockAssignment } from "../types";
 
 export interface CalculatedItem {
   id: string;
@@ -55,6 +49,145 @@ export interface CalculatedItem {
   preciocab: number;
   last_update: string;
 }
+
+type RawStockRecord = Record<string, any>;
+type SheetStockRow = Record<string, unknown>;
+
+const normalizeSheetKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const readSheetValue = (row: SheetStockRow, aliases: string[]) => {
+  for (const alias of aliases) {
+    if (row[alias] !== undefined && row[alias] !== null) return row[alias];
+  }
+
+  const keys = Object.keys(row);
+  for (const alias of aliases) {
+    const normalizedAlias = normalizeSheetKey(alias);
+    const matchingKey = keys.find(key => normalizeSheetKey(key) === normalizedAlias);
+    if (matchingKey && row[matchingKey] !== undefined && row[matchingKey] !== null) return row[matchingKey];
+  }
+
+  return "";
+};
+
+const parseSheetNumber = (value: unknown) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const normalized = String(value ?? "")
+    .trim()
+    .replace(/\s/g, "")
+    .replace(/,(?=\d{1,2}$)/, ".")
+    .replace(/,/g, "");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getAssignmentFetchUrl = (url: string) => {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("action");
+    parsed.searchParams.set("t", String(Date.now()));
+    return parsed.toString();
+  } catch {
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}t=${Date.now()}`;
+  }
+};
+
+const findAssignedSheetRows = (payload: unknown, sheetName: string): SheetStockRow[] => {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const candidates = Array.isArray(payload)
+    ? payload
+    : Array.isArray(root.sheets)
+      ? root.sheets
+      : [];
+
+  if (candidates.length > 0) {
+    const sheets = candidates.filter(item => item && typeof item === "object") as Array<Record<string, unknown>>;
+    const targetName = sheetName.trim().toLocaleLowerCase("es");
+    const selected = sheets.find(sheet => String(sheet.name ?? "").trim().toLocaleLowerCase("es") === targetName)
+      || sheets.find(sheet => String(sheet.id ?? "").trim().toLocaleLowerCase("es") === targetName);
+    if (selected && Array.isArray(selected.data)) return selected.data as SheetStockRow[];
+
+    const looksLikeRows = !sheets.some(sheet => Array.isArray(sheet.data));
+    if (looksLikeRows) return sheets as SheetStockRow[];
+  }
+
+  if (Array.isArray(root.data)) return root.data as SheetStockRow[];
+  return [];
+};
+
+const normalizeAssignmentStockRow = (
+  row: SheetStockRow,
+  assignment: StockAssignment,
+  facility?: HealthFacility,
+  index = 0
+): RawStockRecord | null => {
+  const medcod = String(readSheetValue(row, ["Id_Producto", "ID_Producto", "id_producto", "medcod", "MEDCOD"]) || "").trim();
+  const name = String(readSheetValue(row, ["Nombre", "NOMBRE", "xnom", "descripcion", "DESCRIPCION"]) || "").trim();
+  const lote = String(readSheetValue(row, ["Lote", "LOTE", "lote"]) || "").trim();
+
+  if (!medcod && !name && !lote) return null;
+
+  const updateValue = String(readSheetValue(row, ["ULTIMA_ACTUALIZACION", "Ultima_Actualizacion", "FECHA_DEL_EQUIPO", "fecha_equipo"]) || "").trim();
+
+  return {
+    id: `${assignment.id || assignment.facilityCode}-${index}`,
+    facility_code: assignment.facilityCode,
+    almcod: String(readSheetValue(row, ["ALMCOD", "almcod"]) || assignment.facilityCode).trim(),
+    desc_alm: String(readSheetValue(row, ["DESC_ALM", "desc_alm"]) || facility?.name || assignment.sheetName || "Hoja asignada").trim(),
+    medcod: medcod || "S/C",
+    codigo_sig: String(readSheetValue(row, ["CODIGO_SIG", "codigo_sig"]) || medcod || "").trim(),
+    xnom: name || "Descripcion no disponible",
+    lote: lote || "S/L",
+    fecha: String(readSheetValue(row, ["Fec_Vencim", "FEC_VENCIM", "fecha", "vencimiento"]) || "-").trim(),
+    medregsan: String(readSheetValue(row, ["Reg_Sanitario", "REG_SANITARIO", "medregsan"]) || "S/N").trim(),
+    tipsum: String(readSheetValue(row, ["TIPSUM", "tipsum"]) || readSheetValue(row, ["DESC_TIPSUM", "tipsum_des"]) || "N/A").trim(),
+    tipsum_des: String(readSheetValue(row, ["DESC_TIPSUM", "tipsum_des"]) || readSheetValue(row, ["TIPSUM", "tipsum"]) || "Otros Suministros").trim(),
+    ffinan: String(readSheetValue(row, ["FFINAN", "ffinan"]) || readSheetValue(row, ["DESC_FFINAN", "ffinan_des"]) || "N/A").trim(),
+    ffinan_des: String(readSheetValue(row, ["DESC_FFINAN", "ffinan_des"]) || readSheetValue(row, ["FFINAN", "ffinan"]) || "Fuentes Diversas").trim(),
+    saldo: parseSheetNumber(readSheetValue(row, ["Saldo", "SALDO", "saldo"])),
+    precio_det: parseSheetNumber(readSheetValue(row, ["Precio_Det", "PRECIO_DET", "precio_det"])),
+    preciocab: parseSheetNumber(readSheetValue(row, ["Precio_Cab", "PRECIO_CAB", "preciocab"])),
+    ultima_actualizacion: updateValue || assignment.createdAt || "",
+    fecha_equipo: updateValue || "",
+    _source: "SHEET",
+    _assignment_id: assignment.id,
+    _sheet_name: assignment.sheetName
+  };
+};
+
+const getCurrentJurisdictionLevel = (user: any): string => {
+  if (!user) return "IPRESS";
+  const role = String(user.role || "").toUpperCase();
+  if (role === "ADMIN" || role === "GLOBAL" || role.includes("SUPER") || role.includes("GENERAL") || role === "ADMINISTRADOR") return "GLOBAL";
+  if (role.includes("DIRESA")) return "DIRESA";
+  if (role.includes("OGESS")) return "OGESS";
+  if (role.includes("UNGET")) return "UNGET";
+  if (role.includes("MICRORED")) return "MICRORED";
+  return "IPRESS";
+};
+
+const getUserScope = (user: any) => ({
+  diresaId: user?.personnelData?.diresaId || user?.facilityData?.diresaId || user?.diresaId,
+  ogessId: user?.personnelData?.ogessId || user?.facilityData?.ogessId || user?.ogessId,
+  ungetId: user?.personnelData?.ungetId || user?.facilityData?.ungetId || user?.ungetId,
+  microredId: user?.personnelData?.microredId || user?.facilityData?.microredId || user?.microredId,
+  facilityCode: user?.personnelData?.facilityCode || user?.facilityData?.code || user?.facilityCode
+});
+
+const isFacilityInUserScope = (facility: HealthFacility | undefined, user: any) => {
+  const scope = getUserScope(user);
+  const currentLevel = getCurrentJurisdictionLevel(user);
+  if (!facility) return currentLevel === "GLOBAL";
+  if (currentLevel === "GLOBAL") return true;
+  if (currentLevel === "IPRESS") return Boolean(scope.facilityCode && facility.code === scope.facilityCode);
+  if (currentLevel === "MICRORED" && scope.microredId) return facility.microredId === scope.microredId;
+  if (currentLevel === "UNGET" && scope.ungetId) return facility.ungetId === scope.ungetId;
+  if (currentLevel === "OGESS" && scope.ogessId) return facility.ogessId === scope.ogessId;
+  if (currentLevel === "DIRESA" && scope.diresaId) return facility.diresaId === scope.diresaId;
+  return false;
+};
 
 const datesMatch = (ts1?: number | null, ts2?: number | null): boolean => {
   if (!ts1 || !ts2) return true;
@@ -225,12 +358,14 @@ const renderSyncStatusPill = (timestamp?: number | null) => {
   );
 };
 
-export const IpressStockModule: React.FC = () => {
+export const StockMonitoringModule: React.FC = () => {
   const { user: currentUser } = useAuth();
+  const canDeleteSyncedStock = (currentUser?.role || "").toUpperCase() === "ADMIN";
   
   // State
   const [facilities, setFacilities] = useState<HealthFacility[]>([]);
-  const [stockRecords, setStockRecords] = useState<any[]>([]);
+  const [stockRecords, setStockRecords] = useState<RawStockRecord[]>([]);
+  const [stockAssignments, setStockAssignments] = useState<StockAssignment[]>([]);
   const [supabaseSyncs, setSupabaseSyncs] = useState<Record<string, StockSyncRecord>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -292,56 +427,139 @@ export const IpressStockModule: React.FC = () => {
   };
 
   useEffect(() => {
-    loadBaseData();
-  }, []);
+    void loadBaseData();
+  }, [currentUser?.username]);
 
-  const loadBaseData = async () => {
+  const loadBaseData = async (isRefresh = false) => {
     try {
-      setLoading(true);
-      const [allFacilities, allStock] = await Promise.all([
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      const scope = getUserScope(currentUser);
+      const currentLevel = getCurrentJurisdictionLevel(currentUser);
+
+      const [allFacilities, allAssignmentsRaw, ownAssignmentsRaw] = await Promise.all([
         api.getFacilities(),
-        api.getStockActual() // Get all stock records (up to 5000 range)
+        api.getAllStockAssignments(),
+        scope.facilityCode ? api.getMyStockAssignments(scope.facilityCode) : Promise.resolve([])
       ]);
-      setFacilities(allFacilities);
-      setStockRecords(allStock);
+
+      const assignmentMap = new Map<string, StockAssignment>();
+      [...allAssignmentsRaw, ...ownAssignmentsRaw].forEach((assignment: StockAssignment) => {
+        const key = assignment.id || `${assignment.facilityCode}-${assignment.sheetUrl}-${assignment.sheetName}`;
+        assignmentMap.set(key, assignment);
+      });
+
+      const allAssignments = Array.from(assignmentMap.values());
+      const facilityByCode = new Map<string, HealthFacility>(allFacilities.map(f => [f.code, f]));
+      const scopedAssignments = allAssignments.filter(assignment => {
+        const facility = facilityByCode.get(assignment.facilityCode);
+        if (currentLevel === "IPRESS") return scope.facilityCode === assignment.facilityCode;
+        return isFacilityInUserScope(facility, currentUser);
+      });
+
+      const effectiveFacilitiesMap = new Map<string, HealthFacility>();
+      allFacilities.forEach(f => effectiveFacilitiesMap.set(f.code, f));
+
+      if (scope.facilityCode && !effectiveFacilitiesMap.has(scope.facilityCode) && currentUser?.facilityData) {
+        effectiveFacilitiesMap.set(scope.facilityCode, {
+          code: scope.facilityCode,
+          name: currentUser.facilityData.name || scope.facilityCode,
+          category: currentUser.facilityData.category || "IPRESS",
+          type: currentUser.facilityData.type,
+          microredId: currentUser.facilityData.microredId || scope.microredId,
+          ungetId: currentUser.facilityData.ungetId || scope.ungetId,
+          ogessId: currentUser.facilityData.ogessId || scope.ogessId,
+          diresaId: currentUser.facilityData.diresaId || scope.diresaId,
+          department: currentUser.facilityData.department,
+          province: currentUser.facilityData.province,
+          district: currentUser.facilityData.district
+        });
+      }
+
+      scopedAssignments.forEach(assignment => {
+        if (!effectiveFacilitiesMap.has(assignment.facilityCode)) {
+          const isOwnFacility = scope.facilityCode === assignment.facilityCode;
+          effectiveFacilitiesMap.set(assignment.facilityCode, {
+            code: assignment.facilityCode,
+            name: isOwnFacility ? currentUser?.facilityData?.name || assignment.sheetName : assignment.sheetName,
+            category: isOwnFacility ? currentUser?.facilityData?.category || "IPRESS" : "IPRESS",
+            microredId: isOwnFacility ? scope.microredId : undefined,
+            ungetId: isOwnFacility ? scope.ungetId : undefined,
+            ogessId: isOwnFacility ? scope.ogessId : undefined,
+            diresaId: isOwnFacility ? scope.diresaId : undefined
+          });
+        }
+      });
+
+      const effectiveFacilities = Array.from(effectiveFacilitiesMap.values());
+      setFacilities(effectiveFacilities);
+      setStockAssignments(scopedAssignments);
+
+      const scopedFacilityCodes = effectiveFacilities
+        .filter(f => isFacilityInUserScope(f, currentUser) || scopedAssignments.some(a => a.facilityCode === f.code))
+        .map(f => f.code);
+
+      const shouldLoadAllStock = currentLevel !== "IPRESS" || scopedFacilityCodes.length === 0;
+      const nativeStock = await api.getStockActual(shouldLoadAllStock ? undefined : scopedFacilityCodes);
+
+      const hasNativeStock = (facilityCode: string) => nativeStock.some(r =>
+        r.facility_code === facilityCode ||
+        String(r.facility_code || "").startsWith(facilityCode)
+      );
+
+      const assignmentsNeedingSheet = scopedAssignments.filter(assignment => !hasNativeStock(assignment.facilityCode));
+      const assignedSheetResults = await Promise.allSettled(assignmentsNeedingSheet.map(async assignment => {
+        const response = await fetch(getAssignmentFetchUrl(assignment.sheetUrl));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload: unknown = await response.json();
+        const rows = findAssignedSheetRows(payload, assignment.sheetName);
+        const facility = effectiveFacilitiesMap.get(assignment.facilityCode);
+        return rows
+          .map((row, index) => normalizeAssignmentStockRow(row, assignment, facility, index))
+          .filter((row): row is RawStockRecord => Boolean(row));
+      }));
+
+      const assignedStock = assignedSheetResults.flatMap(result => result.status === "fulfilled" ? result.value : []);
+      const failedAssignedSheets = assignedSheetResults.filter(result => result.status === "rejected").length;
+      if (failedAssignedSheets > 0 && isRefresh) {
+        toast.warning(`${failedAssignedSheets} hoja(s) asignada(s) no pudieron leerse.`);
+      }
+
+      setStockRecords([...nativeStock, ...assignedStock]);
       
-      if (allFacilities.length > 0) {
-        const activeIds = allFacilities.map(f => f.code);
+      if (effectiveFacilities.length > 0) {
+        const activeIds = effectiveFacilities.map(f => f.code);
         const syncs = await supabaseService.getLatestSyncs(activeIds);
         setSupabaseSyncs(syncs);
       }
       
-      // If user is at IPRESS level, auto-select their facility
-      const userFacility = currentUser?.personnelData?.facilityCode || currentUser?.facilityData?.code || (currentUser as any)?.facilityCode;
-      if (userFacility) {
-        setSelectedFacilityCode(userFacility);
+      if (currentLevel === "IPRESS" && scope.facilityCode) {
+        setSelectedFacilityCode(scope.facilityCode);
+      } else if (selectedFacilityCode && !effectiveFacilitiesMap.has(selectedFacilityCode)) {
+        setSelectedFacilityCode(null);
+      }
+
+      if (isRefresh) {
+        toast.success("Informacion de stock actualizada");
       }
     } catch (e) {
       console.error(e);
       toast.error("Error al cargar la información de Stock");
     } finally {
-      setLoading(false);
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
   const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      const allStock = await api.getStockActual();
-      setStockRecords(allStock);
-      
-      if (facilities.length > 0) {
-        const activeIds = facilities.map(f => f.code);
-        const syncs = await supabaseService.getLatestSyncs(activeIds);
-        setSupabaseSyncs(syncs);
-      }
-      
-      toast.success("Información de stock sincronizada");
-    } catch (err) {
-      toast.error("Error de conexión al refrescar stock");
-    } finally {
-      setRefreshing(false);
-    }
+    await loadBaseData(true);
   };
 
   const requestDeleteWarehouse = (almcod: string, almName: string) => {
@@ -349,6 +567,11 @@ export const IpressStockModule: React.FC = () => {
   };
 
   const confirmDeleteWarehouse = async () => {
+    if (!canDeleteSyncedStock) {
+      setDeleteConfirmData(null);
+      toast.error("Solo el administrador total puede eliminar stock sincronizado");
+      return;
+    }
     if (!deleteConfirmData) return;
     const { almcod, almName } = deleteConfirmData;
     
@@ -392,19 +615,31 @@ export const IpressStockModule: React.FC = () => {
 
   // Filter facilities listing based on user's territory limit
   const activeJurisdictionFacilities = useMemo(() => {
-    return facilities.filter(f => {
-      if (isGlobalUser) return true;
-      if (userFacilityCode) return f.code === userFacilityCode;
-      if (userMicroredId) return f.microredId === userMicroredId;
-      if (userUngetId) return f.ungetId === userUngetId;
-      if (userOgessId) return f.ogessId === userOgessId;
-      if (userDiresaId) return f.diresaId === userDiresaId;
-      return false;
+    const assignedFacilityCodes = new Set(stockAssignments.map(assignment => assignment.facilityCode));
+    const visibleFacilities = new Map<string, HealthFacility>();
+
+    facilities.forEach(f => {
+      const isAssigned = assignedFacilityCodes.has(f.code);
+      let isInScope = isGlobalUser;
+
+      if (userFacilityCode) isInScope = f.code === userFacilityCode;
+      else if (userMicroredId) isInScope = f.microredId === userMicroredId;
+      else if (userUngetId) isInScope = f.ungetId === userUngetId;
+      else if (userOgessId) isInScope = f.ogessId === userOgessId;
+      else if (userDiresaId) isInScope = f.diresaId === userDiresaId;
+
+      if (isGlobalUser || isInScope || isAssigned) {
+        visibleFacilities.set(f.code, f);
+      }
     });
-  }, [facilities, isGlobalUser, userFacilityCode, userMicroredId, userUngetId, userOgessId, userDiresaId]);
+
+    return Array.from(visibleFacilities.values());
+  }, [facilities, stockAssignments, isGlobalUser, userFacilityCode, userMicroredId, userUngetId, userOgessId, userDiresaId]);
 
   // Establishments that actually contain registered stock in stock_actual and matches jurisdiction
   const stockFacilitiesList = useMemo(() => {
+    const assignmentsByFacility = new Map(stockAssignments.map(assignment => [assignment.facilityCode, assignment]));
+
     // Only use base IPRESS (filter out sub-facilities if their parent is present or their code length is > 5)
     // Most standard IPRESS codes are 5 digits. "030S05" technically is 6 chars maybe? So let's filter if there's any strictly shorter prefix in the list.
     const baseFacilities = activeJurisdictionFacilities.filter(f => {
@@ -415,10 +650,17 @@ export const IpressStockModule: React.FC = () => {
 
     return baseFacilities.map(f => {
       // Find all stock records synced under this parent facility (this includes its own and its children's stock)
-      const fStock = stockRecords.filter(r => r.facility_code === f.code || r.facility_code.startsWith(f.code));
+      const fStock = stockRecords.filter(r => {
+        const recordFacilityCode = String(r.facility_code || "");
+        return recordFacilityCode === f.code || recordFacilityCode.startsWith(f.code);
+      });
+      const assignment = assignmentsByFacility.get(f.code);
+      const hasSheetStock = fStock.some(r => r._source === "SHEET");
 
       const uniqueWarehouses = new Set(fStock.map(r => r.almcod).filter(Boolean));
-      const lastUpdateTimes = fStock.map(r => new Date(r.ultima_actualizacion).getTime()).filter(Boolean);
+      const lastUpdateTimes = fStock
+        .map(r => parseDataDate(r.ultima_actualizacion || r.updated_at || r.fecha_equipo))
+        .filter(Boolean);
       const lastUpdateTime = lastUpdateTimes.length > 0 ? Math.max(...lastUpdateTimes) : null;
       
       const syncRecord = supabaseSyncs[f.code];
@@ -483,6 +725,9 @@ export const IpressStockModule: React.FC = () => {
         fechaEquipoDateTime,
         expiredCount,
         expiringThisMonthCount,
+        hasAssignment: Boolean(assignment),
+        assignmentSheetName: assignment?.sheetName,
+        hasSheetStock,
       };
     }).sort((a, b) => {
       if (b.hasStock !== a.hasStock) {
@@ -490,17 +735,17 @@ export const IpressStockModule: React.FC = () => {
       }
       return a.name.localeCompare(b.name);
     });
-  }, [activeJurisdictionFacilities, stockRecords, supabaseSyncs]);
+  }, [activeJurisdictionFacilities, stockRecords, stockAssignments, supabaseSyncs]);
 
   // Get stock records belonging to the selected facility
   const calculatedStockItems = useMemo<CalculatedItem[]>(() => {
     if (!selectedFacilityCode) return [];
     
     // selectedFacilityCode is the parent facility code
-    const records = stockRecords.filter(r => 
-      r.facility_code === selectedFacilityCode || 
-      r.facility_code.startsWith(selectedFacilityCode)
-    );
+    const records = stockRecords.filter(r => {
+      const recordFacilityCode = String(r.facility_code || "");
+      return recordFacilityCode === selectedFacilityCode || recordFacilityCode.startsWith(selectedFacilityCode);
+    });
 
     return records.map(r => {
       const saldo = Number(r.saldo) || 0;
@@ -709,7 +954,10 @@ export const IpressStockModule: React.FC = () => {
 
   const expirationRecords = useMemo(() => {
     if (!expirationFacilityCode || !expirationModalType) return [];
-    const facilityRecords = stockRecords.filter(r => (r.facility_code === expirationFacilityCode || r.facility_code.startsWith(expirationFacilityCode)) && Number(r.saldo) > 0 && r.fecha);
+    const facilityRecords = stockRecords.filter(r => {
+      const recordFacilityCode = String(r.facility_code || "");
+      return (recordFacilityCode === expirationFacilityCode || recordFacilityCode.startsWith(expirationFacilityCode)) && Number(r.saldo) > 0 && r.fecha;
+    });
     
     return facilityRecords.filter(r => {
       const expStatus = getItemExpirationStatus(r.fecha, Number(r.saldo));
@@ -790,7 +1038,7 @@ export const IpressStockModule: React.FC = () => {
                 <span className="w-1.5 h-6 bg-teal-500 rounded-full"></span>
                 <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2.5">
                   <Database className="h-5 w-5 text-teal-600 shrink-0" />
-                  <span>Directorio de Stock Territorial SISMED</span>
+                  <span>Monitoreo Territorial de Stock SISMED</span>
                 </h2>
                 <span className="text-[10px] whitespace-nowrap font-black bg-teal-50 text-teal-850 px-2.5 py-0.5 rounded-full border border-teal-100/70 shadow-xs uppercase tracking-wide">
                   {stockFacilitiesList.length} {stockFacilitiesList.length === 1 ? "establecimiento" : "establecimientos"}
@@ -962,6 +1210,12 @@ export const IpressStockModule: React.FC = () => {
                             {renderSyncStatusPill(f.lastUpdateTime)}
                           </div>
                         )}
+                        {f.hasSheetStock && (
+                          <span className="inline-flex items-center gap-1 rounded-md border border-violet-100 bg-violet-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-violet-700">
+                            <FileSpreadsheet className="h-3 w-3" />
+                            Hoja asignada
+                          </span>
+                        )}
                         {f.hasStock && f.expiredCount > 0 && (
                           <div
                             onClick={(e) => { e.stopPropagation(); handleShowExpirations(f.code, "expired"); }}
@@ -1004,7 +1258,7 @@ export const IpressStockModule: React.FC = () => {
                           <div className="flex items-center gap-2 min-w-0">
                             <FileClock className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors shrink-0" />
                             <span className="text-xs font-bold text-slate-600 group-hover:text-slate-900 transition-colors truncate">
-                              Últimos movimientos
+                              {f.hasSheetStock ? `Hoja: ${f.assignmentSheetName || "asignada"}` : "Ultimos movimientos"}
                             </span>
                           </div>
                           <div className="flex items-center shrink-0">
@@ -1015,7 +1269,11 @@ export const IpressStockModule: React.FC = () => {
                     ) : (
                       <div className="bg-slate-50 p-3 rounded-xl border border-dashed border-slate-200 text-slate-500 text-[11px] flex gap-2 items-start mt-auto">
                         <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 opacity-60" />
-                        <p className="font-medium leading-relaxed">No se ha recibido stock de Sync. Autorice un dispositivo.</p>
+                        <p className="font-medium leading-relaxed">
+                          {f.hasAssignment
+                            ? "La IPRESS tiene hoja asignada, pero aun no devuelve registros legibles. Revise la conexion o la hoja vinculada."
+                            : "No se ha recibido stock de Sync. Autorice un dispositivo."}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -1076,7 +1334,7 @@ export const IpressStockModule: React.FC = () => {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 {/* Only show back button if user can see more than one facility (admin role) */}
-                {activeJurisdictionFacilities.length > 1 && (
+                {stockFacilitiesList.length > 1 && (
                   <button
                     onClick={() => {
                       setSelectedFacilityCode(null);
@@ -1089,7 +1347,9 @@ export const IpressStockModule: React.FC = () => {
                   </button>
                 )}
                 <div>
-                  <span className="text-[10px] text-teal-600 font-bold uppercase tracking-wide">Visor de Stock Directo</span>
+                  <span className="text-[10px] text-teal-600 font-bold uppercase tracking-wide">
+                    {activeStockFacilityObj?.hasSheetStock ? "Detalle de hoja asignada" : "Detalle de stock sincronizado"}
+                  </span>
                   <h2 className="text-base font-bold text-gray-800 leading-none mt-0.5">{activeFacilityObj?.name || 'Establecimiento Seleccionado'}</h2>
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className="text-[11px] text-gray-500 font-mono">IPRESS: <strong className="font-bold">{selectedFacilityCode}</strong></span>
@@ -1186,16 +1446,15 @@ export const IpressStockModule: React.FC = () => {
                   {facilitySummaryMetrics.warehouses.map(wh => {
                     const isSelected = activeAlmTab === wh.code;
                     return (
-                      <button
+                      <div
                         key={wh.code}
-                        onClick={() => setActiveAlmTab(isSelected ? "ALL" : wh.code)}
-                        className={`text-left p-3.5 rounded-lg border transition-all flex flex-col justify-between gap-2 group ${
+                        className={`p-3.5 rounded-lg border transition-all flex flex-col justify-between gap-2 group ${
                           isSelected 
                             ? 'bg-teal-50/40 border-teal-500 ring-2 ring-teal-500/20 shadow-sm' 
                             : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 hover:border-gray-300'
                         }`}
                       >
-                        <div>
+                        <button type="button" onClick={() => setActiveAlmTab(isSelected ? "ALL" : wh.code)} className="text-left">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-bold text-xs text-slate-800 line-clamp-1 group-hover:text-teal-600 transition-colors">
                               {wh.name}
@@ -1219,24 +1478,28 @@ export const IpressStockModule: React.FC = () => {
                               <span className="font-black text-teal-600">{wh.totalUnits.toLocaleString()}</span>
                             </div>
                           </div>
-                        </div>
+                        </button>
 
                         <div className="flex items-center justify-between mt-1 text-[9px] text-slate-500 font-mono">
                           <span>Estimado: <strong>S/.{wh.estimatedValue.toLocaleString(undefined, { maximumFractionDigits: 1 })}</strong></span>
                           <div className="flex items-center gap-2">
-                             <button
-                               onClick={(e) => { e.stopPropagation(); requestDeleteWarehouse(wh.code, wh.name); }}
-                               className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1 rounded transition-colors"
-                               title="Eliminar todos los datos de este almacén"
-                             >
-                               <Trash2 className="h-3 w-3" />
+                             {canDeleteSyncedStock && (
+                               <button
+                                 type="button"
+                                 onClick={() => requestDeleteWarehouse(wh.code, wh.name)}
+                                 className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1 rounded transition-colors"
+                                 title="Eliminar todos los datos de este almacén"
+                                 aria-label={`Eliminar stock sincronizado de ${wh.name}`}
+                               >
+                                 <Trash2 className="h-3 w-3" />
+                               </button>
+                             )}
+                             <button type="button" onClick={() => setActiveAlmTab(isSelected ? "ALL" : wh.code)} className="text-teal-600 font-bold group-hover:underline flex items-center gap-0.5">
+                               {isSelected ? 'Ver Todos' : 'Filtrar Almacén →'}
                              </button>
-                             <span className="text-teal-600 font-bold group-hover:underline flex items-center gap-0.5">
-                               {isSelected ? 'Ver Todos' : 'Filtrar Almacen →'}
-                             </span>
                           </div>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>

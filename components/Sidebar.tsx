@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
+  PackageSearch, 
   BarChart2, 
   ArrowRightLeft, 
   Settings, 
@@ -11,12 +12,23 @@ import {
   LogOut,
   Layers,
   Database,
+  FileSpreadsheet,
   Users,
   Shield,
   Building2,
   Sliders,
   Briefcase,
-  RefreshCw
+  RefreshCw,
+  Syringe,
+  ClipboardList,
+  ArrowDownToLine,
+  Boxes,
+  Truck,
+  Scale,
+  BarChart3,
+  Activity,
+  ArchiveX,
+  CalendarCheck
 } from 'lucide-react';
 import { AppModule, User } from '../types';
 
@@ -40,10 +52,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   hasPermission
 }) => {
   const [isAdminExpanded, setIsAdminExpanded] = useState(false);
+  const [isImmunizationExpanded, setIsImmunizationExpanded] = useState(false);
   
   useEffect(() => {
     if (currentView.startsWith('ADMIN') && !isCollapsed) {
       setIsAdminExpanded(true);
+    }
+    if (currentView.startsWith('IMMUNIZATION') && !isCollapsed) {
+      setIsImmunizationExpanded(true);
     }
   }, [currentView, isCollapsed]);
 
@@ -55,6 +71,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setIsAdminExpanded(true);
     } else {
       setIsAdminExpanded(!isAdminExpanded);
+    }
+  };
+
+  const toggleImmunization = () => {
+    if (isCollapsed) {
+      setIsCollapsed(false);
+      setIsImmunizationExpanded(true);
+    } else {
+      setIsImmunizationExpanded(!isImmunizationExpanded);
     }
   };
 
@@ -158,11 +183,191 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
                 : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
             } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
-            title={isCollapsed ? "Stock IPRESS" : ""}
+            title={isCollapsed ? "Stock SISMED" : ""}
           >
-            <Database className={`h-5 w-5 shrink-0 ${currentView === 'IPRESS_STOCK' ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
-            {!isCollapsed && <span className="font-semibold text-sm">Stock IPRESS</span>}
+            <FileSpreadsheet className={`h-5 w-5 shrink-0 ${currentView === 'IPRESS_STOCK' ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
+            {!isCollapsed && <span className="font-semibold text-sm">Stock SISMED</span>}
           </button>
+        )}
+
+        {hasPermission('STOCK_MONITORING') && (
+          <button
+            onClick={() => setCurrentView('STOCK_MONITORING')}
+            className={`w-full flex items-center gap-3 py-3 rounded-xl transition-all duration-300 group ${
+              currentView === 'STOCK_MONITORING'
+                ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
+                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+            } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
+            title={isCollapsed ? "Monitoreo de Stock" : ""}
+          >
+            <Layers className={`h-5 w-5 shrink-0 ${currentView === 'STOCK_MONITORING' ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
+            {!isCollapsed && <span className="font-semibold text-sm">Monitoreo de Stock</span>}
+          </button>
+        )}
+
+        {(hasPermission('IMMUNIZATION_CATALOG') || hasPermission('IMMUNIZATION_INITIAL_INVENTORY') || hasPermission('IMMUNIZATION_STOCK') || hasPermission('IMMUNIZATION_STOCK_QUERY') || hasPermission('IMMUNIZATION_INCOMES') || hasPermission('IMMUNIZATION_INCOME_ORIGINS') || hasPermission('IMMUNIZATION_DISTRIBUTIONS') || hasPermission('IMMUNIZATION_CONSUMPTION') || hasPermission('IMMUNIZATION_RETURNS') || hasPermission('IMMUNIZATION_ADJUSTMENTS') || hasPermission('IMMUNIZATION_CLOSURES') || hasPermission('IMMUNIZATION_REPORTS')) && (
+          <div className="flex flex-col gap-1">
+            <button
+              onClick={toggleImmunization}
+              className={`w-full flex items-center py-3 rounded-xl transition-all duration-300 group ${
+                currentView.startsWith('IMMUNIZATION')
+                  ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+              } ${isCollapsed ? 'justify-center px-0' : 'justify-between px-3'}`}
+              title={isCollapsed ? "Inmunizaciones" : ""}
+            >
+              {isCollapsed ? (
+                <Syringe className={`h-5 w-5 shrink-0 ${currentView.startsWith('IMMUNIZATION') ? 'text-cyan-400' : 'group-hover:text-cyan-400 transition-colors'}`} />
+              ) : (
+                <>
+                  <div className="flex items-center gap-3">
+                    <Syringe className={`h-5 w-5 shrink-0 ${currentView.startsWith('IMMUNIZATION') ? 'text-cyan-400' : 'group-hover:text-cyan-400 transition-colors'}`} />
+                    <span className="font-semibold text-sm">Inmunizaciones</span>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isImmunizationExpanded ? 'rotate-180 text-cyan-400' : 'text-gray-500 group-hover:text-gray-400'}`} />
+                </>
+              )}
+            </button>
+
+            {!isCollapsed && isImmunizationExpanded && (
+              <div className="flex flex-col gap-1 pl-4 mt-1 animate-in slide-in-from-top-2 fade-in duration-200">
+                <div className="pl-3 border-l-2 border-white/10 flex flex-col gap-1">
+                  {hasPermission('IMMUNIZATION_CATALOG') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_CATALOG')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_CATALOG' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <ShieldCheck className="h-4 w-4 shrink-0" />
+                      Catálogo Biológico
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_INITIAL_INVENTORY') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_INITIAL_INVENTORY')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_INITIAL_INVENTORY' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <ClipboardList className="h-4 w-4 shrink-0" />
+                      Inventario Inicial
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_STOCK') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_STOCK')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_STOCK' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Boxes className="h-4 w-4 shrink-0" />
+                      Stock Biológico
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_STOCK_QUERY') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_STOCK_QUERY')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_STOCK_QUERY' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <PackageSearch className="h-4 w-4 shrink-0" />
+                      Consulta de Stock
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_INCOMES') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_INCOMES')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_INCOMES' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <ArrowDownToLine className="h-4 w-4 shrink-0" />
+                      Ingresos Regionales
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_INCOME_ORIGINS') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_INCOME_ORIGINS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_INCOME_ORIGINS' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Sliders className="h-4 w-4 shrink-0" />
+                      Orígenes de Ingreso
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_DISTRIBUTIONS') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_DISTRIBUTIONS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_DISTRIBUTIONS' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Truck className="h-4 w-4 shrink-0" />
+                      Distribuciones
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_CONSUMPTION') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_CONSUMPTION')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_CONSUMPTION' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Activity className="h-4 w-4 shrink-0" />
+                      Consumo IPRESS
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_RETURNS') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_RETURNS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_RETURNS' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <ArchiveX className="h-4 w-4 shrink-0" />
+                      Devoluciones y Bajas
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_ADJUSTMENTS') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_ADJUSTMENTS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_ADJUSTMENTS' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Scale className="h-4 w-4 shrink-0" />
+                      Reajustes
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_CLOSURES') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_CLOSURES')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_CLOSURES' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <CalendarCheck className="h-4 w-4 shrink-0" />
+                      Cierre Mensual
+                    </button>
+                  )}
+                  {hasPermission('IMMUNIZATION_REPORTS') && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_REPORTS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_REPORTS' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <BarChart3 className="h-4 w-4 shrink-0" />
+                      Reportes
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {(hasPermission('ADMIN_USERS') || hasPermission('ADMIN_ROLES') || hasPermission('ADMIN_FACILITIES') || hasPermission('ADMIN_PARAMS') || hasPermission('ADMIN_MIGRATION') || hasPermission('ADMIN_CATALOGS')) && (

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
 import { supabase } from '../services/supabaseClient';
-import { Database, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle } from 'lucide-react';
 import bcrypt from 'bcryptjs';
 import { toast } from 'sonner';
 
@@ -15,7 +15,8 @@ export const AdminMigrationModule: React.FC = () => {
     const checkExistingData = async () => {
         if (!supabase) throw new Error("Supabase is not configured.");
         try {
-            const { count, error } = await supabase.from('users').select('*', { count: 'exact', head: true });
+            // Columna explícita: `*` incluiría `password_hash`, cuya lectura está revocada.
+            const { count, error } = await supabase.from('users').select('username', { count: 'exact', head: true });
             if (error) throw error;
             if ((count || 0) > 0) {
                 return true; // Already data

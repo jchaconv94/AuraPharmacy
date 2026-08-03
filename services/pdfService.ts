@@ -1,6 +1,7 @@
 
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { ensurePdfUnicodeFont, PDF_UNICODE_FONT } from "./pdfUnicodeFont";
 import { AuraAnalysisResult, StockStatus, AnalyzedMedication, AdditionalItem } from "../types";
 
 // --- COLORS PALETTE (PREMIUM UI MATCH) ---
@@ -144,16 +145,17 @@ const formatDateToMonthYear = (dateStr?: string) => {
     }
 };
 
-export const generateFullReportPDF = (
+export const generateFullReportPDF = async (
     result: AuraAnalysisResult, 
     filteredTableItems?: AnalyzedMedication[],
     additionalItems?: AdditionalItem[],
     establishmentName: string = 'ESTABLECIMIENTO DE SALUD',
     responsibleName: string = ''
-) => {
+): Promise<void> => {
   try {
       // 1. Initialize Landscape PDF (A4 Landscape: 297mm x 210mm)
       const doc = new jsPDF('l', 'mm', 'a4');
+      await ensurePdfUnicodeFont(doc);
       const pageWidth = doc.internal.pageSize.width; 
       
       // ==========================================
@@ -164,14 +166,14 @@ export const generateFullReportPDF = (
       doc.rect(0, 0, pageWidth, 24, "F");
       
       doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(PDF_UNICODE_FONT, "bold");
       doc.setFontSize(20);
       doc.text("DISPONIBILIDAD DE MEDICAMENTOS ESENCIALES", 15, 14);
 
       // Date subtitle on left
       const formattedDate = formatDateToMonthYear(result.referenceDate);
       doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
+      doc.setFont(PDF_UNICODE_FONT, "normal");
       doc.setTextColor(240, 240, 240);
       doc.text(`CORTE: ${formattedDate}`, 15, 20);
       
@@ -184,14 +186,14 @@ export const generateFullReportPDF = (
       const hasMicrored = !!result.microred;
 
       doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(PDF_UNICODE_FONT, "bold");
       doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
       doc.text(facilityText, pageWidth - 15, hasMicrored ? 12 : 15, { align: "right" });
 
       // Microred Info
       if (hasMicrored) {
         doc.setFontSize(10);
-        doc.setFont("helvetica", "bold");
+        doc.setFont(PDF_UNICODE_FONT, "bold");
         doc.setTextColor(220, 245, 235); // Slight minty white highlight for microred
         doc.text(`MICRORED: ${result.microred!.toUpperCase()}`, pageWidth - 15, 18, { align: "right" });
       }
@@ -277,17 +279,17 @@ export const generateFullReportPDF = (
           doc.rect(currentBarX, chartBaseY - barHeight, barWidth, barHeight, "F");
 
           doc.setFontSize(11);
-          doc.setFont("helvetica", "bold");
+          doc.setFont(PDF_UNICODE_FONT, "bold");
           doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
           doc.text(stat.val.toString(), currentBarX + (barWidth / 2), chartBaseY - barHeight - 7, { align: "center" });
 
           doc.setFontSize(7.5);
-          doc.setFont("helvetica", "normal");
+          doc.setFont(PDF_UNICODE_FONT, "normal");
           doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
           doc.text(percentage, currentBarX + (barWidth / 2), chartBaseY - barHeight - 2, { align: "center" });
 
           doc.setFontSize(7.5); 
-          doc.setFont("helvetica", "bold"); 
+          doc.setFont(PDF_UNICODE_FONT, "bold"); 
           doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
           doc.text(stat.label, currentBarX + (barWidth / 2), chartBaseY + 5, { align: "center" });
 
@@ -332,12 +334,12 @@ export const generateFullReportPDF = (
 
       doc.setFontSize(9);
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(PDF_UNICODE_FONT, "bold");
       doc.text("INDICADOR DME", rightX + (rightColW/2), dmeY + 13, { align: "center" });
 
       doc.setFontSize(32);
       doc.setTextColor(cardText[0], cardText[1], cardText[2]);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(PDF_UNICODE_FONT, "bold");
       doc.text(`${dmeScore.toFixed(1)}%`, rightX + (rightColW/2), dmeY + 33, { align: "center" });
 
       doc.setFillColor(badgeBg[0], badgeBg[1], badgeBg[2]);
@@ -345,19 +347,19 @@ export const generateFullReportPDF = (
       doc.roundedRect(rightX + (rightColW/2) - (badgeW/2), dmeY + 39, badgeW, 6, 3, 3, "F");
       doc.setFontSize(7.5);
       doc.setTextColor(cardText[0], cardText[1], cardText[2]);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(PDF_UNICODE_FONT, "bold");
       doc.text(indicatorStatus, rightX + (rightColW/2), dmeY + 43.2, { align: "center" });
 
       doc.setFontSize(7.5);
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-      doc.setFont("helvetica", "normal");
+      doc.setFont(PDF_UNICODE_FONT, "normal");
       doc.text("Porcentaje de medicamentos esenciales", rightX + (rightColW/2), dmeY + 53, { align: "center" });
       doc.text("con stock disponible (Normo + Sobre).", rightX + (rightColW/2), dmeY + 57, { align: "center" });
 
       doc.setDrawColor(200, 200, 200);
       doc.line(rightX + 8, dmeY + 65, rightX + rightColW - 8, dmeY + 65);
       doc.setFontSize(7.5);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(PDF_UNICODE_FONT, "bold");
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
       doc.text("META: >90%", rightX + 10, dmeY + 73);
       doc.text(`Solo medicamentos esenciales: ${availableItemsCount}/${recalculatedTotal}`, rightX + rightColW - 10, dmeY + 73, { align: "right" });
@@ -369,7 +371,7 @@ export const generateFullReportPDF = (
 
       doc.setFontSize(9);
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(PDF_UNICODE_FONT, "bold");
       doc.text("DISTRIBUCIÓN DE ÍTEMS", rightX + 10, distY + 12);
 
       const typeStats = result.medications.reduce((acc, item) => {
@@ -391,7 +393,7 @@ export const generateFullReportPDF = (
       itemsData.forEach(item => {
           doc.setFontSize(7.5);
           doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-          doc.setFont("helvetica", "bold");
+          doc.setFont(PDF_UNICODE_FONT, "bold");
           doc.text(item.label, rightX + 10, barY - 1.5);
 
           const maxBarW = rightColW - 55;
@@ -411,7 +413,7 @@ export const generateFullReportPDF = (
 
           doc.setFontSize(7.5);
           doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
-          doc.setFont("helvetica", "normal");
+          doc.setFont(PDF_UNICODE_FONT, "normal");
           doc.text(formatCurrency(item.money), rightX + 10, barY + 7.5);
           barY += 16; 
       });
@@ -419,7 +421,7 @@ export const generateFullReportPDF = (
       doc.setDrawColor(240, 240, 240);
       doc.line(rightX + 10, distY + 52, rightX + rightColW - 10, distY + 52);
       doc.setFontSize(7.5);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(PDF_UNICODE_FONT, "bold");
       doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
       doc.text("TOTAL ÍTEMS", rightX + 10, distY + 59);
       doc.setFontSize(9);
@@ -446,7 +448,7 @@ export const generateFullReportPDF = (
 
       // COLUMN 1: SITUACIÓN DE STOCK (Left Column, below bar chart)
       doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(PDF_UNICODE_FONT, "bold");
       doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
       doc.text("SITUACIÓN DE STOCK", 15, currentY + 5);
 
@@ -457,14 +459,14 @@ export const generateFullReportPDF = (
          doc.circle(18, y - 1, 2, "F");
          
          doc.setFontSize(10);
-         doc.setFont("helvetica", "bold");
+         doc.setFont(PDF_UNICODE_FONT, "bold");
          doc.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
          doc.text(`${count.toString()}`, 30, y, { align: 'right' });
          
          doc.text(label, 38, y);
 
          doc.setFontSize(9);
-         doc.setFont("helvetica", "normal");
+         doc.setFont(PDF_UNICODE_FONT, "normal");
          doc.setTextColor(COLORS.TEXT_GRAY[0], COLORS.TEXT_GRAY[1], COLORS.TEXT_GRAY[2]);
          doc.text(`- ${description}`, 68, y);
       };
@@ -478,7 +480,7 @@ export const generateFullReportPDF = (
       // Footer Page 1
       const pageHeight = doc.internal.pageSize.height;
       doc.setFontSize(8);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(PDF_UNICODE_FONT, "bold");
       doc.setTextColor(150, 150, 150);
       doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, pageHeight - 10, { align: "right" });
 
@@ -573,6 +575,7 @@ export const generateFullReportPDF = (
         theme: 'grid',
         margin: { top: 15, left: 4, right: 4 },
         styles: { 
+            font: PDF_UNICODE_FONT,
             fontSize: 6, 
             cellPadding: 1, 
             valign: 'middle', 
@@ -604,13 +607,13 @@ export const generateFullReportPDF = (
 
                 doc.setTextColor(255, 255, 255);
                 doc.setFontSize(14);
-                doc.setFont("helvetica", "bold");
+                doc.setFont(PDF_UNICODE_FONT, "bold");
                 doc.text("MATRIZ DE REQUERIMIENTO DETALLADA", 15, 12);
                 
                 // Subtitle
                 const formattedDate = formatDateToMonthYear(result.referenceDate);
                 doc.setFontSize(10);
-                doc.setFont("helvetica", "normal");
+                doc.setFont(PDF_UNICODE_FONT, "normal");
                 doc.setTextColor(240, 240, 240);
                 doc.text(`CORTE: ${formattedDate}`, 15, 18);
 
@@ -622,14 +625,14 @@ export const generateFullReportPDF = (
 
                 const hasMicrored = !!result.microred;
                 doc.setFontSize(12);
-                doc.setFont("helvetica", "bold");
+                doc.setFont(PDF_UNICODE_FONT, "bold");
                 doc.setTextColor(COLORS.WHITE[0], COLORS.WHITE[1], COLORS.WHITE[2]);
                 doc.text(facilityText, pageWidth - 15, hasMicrored ? 12 : 15, { align: "right" });
 
                 // Microred Info
                 if (hasMicrored) {
                   doc.setFontSize(10);
-                  doc.setFont("helvetica", "bold");
+                  doc.setFont(PDF_UNICODE_FONT, "bold");
                   doc.setTextColor(220, 245, 235); // Slight minty highlight
                   doc.text(`MICRORED: ${result.microred!.toUpperCase()}`, pageWidth - 15, 18, { align: "right" });
                 }
@@ -638,7 +641,7 @@ export const generateFullReportPDF = (
             // Footer Page 3+
             const pageHeight = doc.internal.pageSize.height;
             doc.setFontSize(8);
-            doc.setFont("helvetica", "bold");
+            doc.setFont(PDF_UNICODE_FONT, "bold");
             doc.setTextColor(150, 150, 150);
             doc.text(`RESPONSABLE: ${responsibleName.toUpperCase()}`, pageWidth - 15, pageHeight - 10, { align: "right" });
         },
@@ -774,11 +777,11 @@ export const generateFullReportPDF = (
 
           doc.setTextColor(255, 255, 255);
           doc.setFontSize(16);
-          doc.setFont("helvetica", "bold");
+          doc.setFont(PDF_UNICODE_FONT, "bold");
           doc.text("REQUERIMIENTOS ADICIONALES", 15, 16);
           
           doc.setFontSize(10);
-          doc.setFont("helvetica", "normal");
+          doc.setFont(PDF_UNICODE_FONT, "normal");
           // FIX: Align Right to prevent overlap
           doc.text("ÍTEMS AGREGADOS MANUALMENTE", pageWidth - 15, 16, { align: "right" });
 
@@ -804,7 +807,7 @@ export const generateFullReportPDF = (
               ],
               body: addTableData,
               headStyles: { fillColor: COLORS.PURPLE, textColor: 255, fontSize: 10, fontStyle: 'bold', halign: 'center' },
-              styles: { fontSize: 10, cellPadding: 3, valign: 'middle' },
+              styles: { font: PDF_UNICODE_FONT, fontSize: 10, cellPadding: 3, valign: 'middle' },
               columnStyles: {
                   idx: { cellWidth: 15, halign: 'center' },
                   code: { cellWidth: 25, halign: 'center' },

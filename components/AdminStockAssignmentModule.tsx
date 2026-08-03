@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Search, Plus, Trash2, Shield, User, FileSpreadsheet, CheckCircle2, ChevronRight, Check, Edit2, Save, X, ChevronDown, AlertTriangle } from "lucide-react";
+import { Search, Plus, Trash2, Shield, FileSpreadsheet, Check, Edit2, Save, X, ChevronDown, AlertTriangle } from "lucide-react";
 import { api } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
@@ -433,8 +433,8 @@ export const AdminStockAssignmentModule: React.FC = () => {
             <Shield className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Asignar Stock a Usuarios (IPRESS)</h2>
-            <p className="text-sm text-gray-500">Permita que otros usuarios visualicen únicamente las hojas y datos que usted configure.</p>
+            <h2 className="text-xl font-bold text-gray-900">Asignar hoja de stock a IPRESS</h2>
+            <p className="text-sm text-gray-500">Vincule una hoja con un establecimiento y defina las columnas que podrá consultar en “Stock SISMED”.</p>
           </div>
         </div>
 
@@ -509,7 +509,7 @@ export const AdminStockAssignmentModule: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">4. Restrinja Columnas Visibles para este usuario</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">4. Columnas visibles para el establecimiento</label>
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   {AVAILABLE_COLUMNS.map(col => (
                     <div 
@@ -661,4 +661,3 @@ export const AdminStockAssignmentModule: React.FC = () => {
     </div>
   );
 };
-

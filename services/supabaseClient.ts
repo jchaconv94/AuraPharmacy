@@ -7,9 +7,33 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
 // @ts-ignore
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
+/** Clave donde vive el token de sesión emitido por `app_login`. */
+export const SESSION_TOKEN_KEY = "aura_session_token";
+
+/**
+ * Adjunta el token de sesión a todas las peticiones.
+ *
+ * Las políticas RLS lo leen desde la cabecera `x-session-token` para distinguir a un
+ * usuario con sesión iniciada de un visitante cualquiera de internet. Sin esto, la clave
+ * `anon` —que viaja en el bundle publicado— bastaría para leer y escribir los datos.
+ *
+ * Se hace con un `fetch` propio y no con `global.headers` porque el token cambia al
+ * iniciar y cerrar sesión, y las cabeceras fijas se congelan al crear el cliente.
+ */
+const fetchWithSessionToken: typeof fetch = (input, init) => {
+  const headers = new Headers(init?.headers);
+  try {
+    const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    if (token) headers.set("x-session-token", token);
+  } catch {
+    // Sin sessionStorage la petición sale sin token y las políticas la rechazarán.
+  }
+  return fetch(input, { ...init, headers });
+};
+
 export const supabase =
   supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
+    ? createClient(supabaseUrl, supabaseAnonKey, { global: { fetch: fetchWithSessionToken } })
     : null;
 
 /**

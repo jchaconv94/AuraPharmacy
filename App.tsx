@@ -1,10 +1,10 @@
 
-import React, { useState, useCallback, useEffect, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, Suspense } from 'react';
 import { InputSection } from './components/InputSection';
 import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppModule, QuickFilterOption } from './types';
 import { analyzeInventoryWithAura } from './services/auraService';
 import { generateFullReportPDF } from './services/pdfService';
-import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, UserCircle, LogOut, Settings, BarChart2, LayoutGrid, ChevronDown, ArrowRightLeft, Building2, Hash, Calendar, Clock, Network } from 'lucide-react';
+import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, Building2, Calendar, Clock, Network } from 'lucide-react';
 
 // NEW IMPORTS
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -27,7 +27,21 @@ import { WelcomeModal } from './components/WelcomeModal';
 import { RedistributionModule } from './components/RedistributionModule';
 import { SheetSearchModule } from './components/SheetSearchModule';
 import { AdminStockAssignmentModule } from './components/AdminStockAssignmentModule';
-import { IpressStockModule } from './components/IpressStockModule';
+import { AssignedIpressStockModule } from './components/AssignedIpressStockModule';
+import { StockMonitoringModule } from './components/IpressStockModule';
+import { ImmunizationAdjustmentsModule } from './components/ImmunizationAdjustmentsModule';
+import { ImmunizationCatalogModule } from './components/ImmunizationCatalogModule';
+import { ImmunizationClosuresModule } from './components/ImmunizationClosuresModule';
+import { ImmunizationConsumptionModule } from './components/ImmunizationConsumptionModule';
+import { ImmunizationDistributionsModule } from './components/ImmunizationDistributionsModule';
+import { ImmunizationIncomesModule } from './components/ImmunizationIncomesModule';
+import { ImmunizationIncomeOriginsModule } from './components/ImmunizationIncomeOriginsModule';
+import { ImmunizationInitialInventoryModule } from './components/ImmunizationInitialInventoryModule';
+import { ImmunizationReportsModule } from './components/ImmunizationReportsModule';
+import { ImmunizationReturnsModule } from './components/ImmunizationReturnsModule';
+import { ImmunizationStockModule } from './components/ImmunizationStockModule';
+import { ImmunizationStockQueryModule } from './components/ImmunizationStockQueryModule';
+import { APP_BASE, moduleForPath, pathForModule } from './services/appRoutes';
 
 const SuspenseFallback = () => (
     <div className="flex-1 flex h-full w-full items-center justify-center p-8 bg-gray-50/50">
@@ -75,7 +89,39 @@ const App: React.FC = () => {
 // --- AUTHENTICATED LOGIC WRAPPER ---
 const AuthenticatedApp: React.FC = () => {
     const { isAuthenticated, isLoading, user, logout, hasPermission } = useAuth();
-    const [currentView, setCurrentView] = useState<AppModule>('DASHBOARD');
+    // La vista inicial sale de la direccion, para que un enlace compartido abra donde debe.
+    const [currentView, setCurrentView] = useState<AppModule>(
+        () => moduleForPath(window.location.pathname) || 'DASHBOARD'
+    );
+
+    // La direccion del navegador sigue a la vista, sin agregar una entrada por render.
+    // Solo con sesion iniciada: sin ella la direccion debe ser la raiz.
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        const destino = pathForModule(currentView);
+        if (window.location.pathname === destino) return;
+        window.history.pushState({ view: currentView }, '', destino);
+    }, [currentView, isAuthenticated]);
+
+    // Al cerrar sesion, la direccion vuelve a la raiz y la vista al inicio.
+    //
+    // Este componente no se desmonta al salir: solo cambia lo que muestra. Sin esto la
+    // ruta del ultimo modulo quedaba en la barra del navegador, y el siguiente usuario
+    // entraba directo a la pantalla del anterior.
+    useEffect(() => {
+        if (isAuthenticated || isLoading) return;
+        setCurrentView('DASHBOARD');
+        if (window.location.pathname !== APP_BASE) {
+            window.history.replaceState({}, '', APP_BASE);
+        }
+    }, [isAuthenticated, isLoading]);
+
+    // Botones de atras y adelante del navegador.
+    useEffect(() => {
+        const alNavegar = () => setCurrentView(moduleForPath(window.location.pathname) || 'DASHBOARD');
+        window.addEventListener('popstate', alNavegar);
+        return () => window.removeEventListener('popstate', alNavegar);
+    }, []);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     
     const wasSidebarCollapsedRef = React.useRef(false);
@@ -115,7 +161,19 @@ const AuthenticatedApp: React.FC = () => {
     useEffect(() => {
         if (isAuthenticated && !isLoading && user && !hasPermission(currentView)) {
             if (hasPermission('DASHBOARD')) setCurrentView('DASHBOARD');
+            else if (hasPermission('IMMUNIZATION_STOCK')) setCurrentView('IMMUNIZATION_STOCK');
+                            else if (hasPermission('IMMUNIZATION_STOCK_QUERY')) setCurrentView('IMMUNIZATION_STOCK_QUERY');
+            else if (hasPermission('IMMUNIZATION_INCOMES')) setCurrentView('IMMUNIZATION_INCOMES');
+            else if (hasPermission('IMMUNIZATION_INCOME_ORIGINS')) setCurrentView('IMMUNIZATION_INCOME_ORIGINS');
+            else if (hasPermission('IMMUNIZATION_DISTRIBUTIONS')) setCurrentView('IMMUNIZATION_DISTRIBUTIONS');
+            else if (hasPermission('IMMUNIZATION_CONSUMPTION')) setCurrentView('IMMUNIZATION_CONSUMPTION');
+            else if (hasPermission('IMMUNIZATION_INITIAL_INVENTORY')) setCurrentView('IMMUNIZATION_INITIAL_INVENTORY');
+            else if (hasPermission('IMMUNIZATION_CATALOG')) setCurrentView('IMMUNIZATION_CATALOG');
+            else if (hasPermission('IMMUNIZATION_ADJUSTMENTS')) setCurrentView('IMMUNIZATION_ADJUSTMENTS');
+            else if (hasPermission('IMMUNIZATION_CLOSURES')) setCurrentView('IMMUNIZATION_CLOSURES');
+            else if (hasPermission('IMMUNIZATION_REPORTS')) setCurrentView('IMMUNIZATION_REPORTS');
             else if (hasPermission('IPRESS_STOCK')) setCurrentView('IPRESS_STOCK');
+            else if (hasPermission('STOCK_MONITORING')) setCurrentView('STOCK_MONITORING');
             else if (hasPermission('REDISTRIBUTION')) setCurrentView('REDISTRIBUTION');
             else if (hasPermission('SIG_SEARCH')) setCurrentView('SIG_SEARCH');
             else if (hasPermission('ADMIN_STOCK_ASSIGN')) setCurrentView('ADMIN_STOCK_ASSIGN');
@@ -174,7 +232,20 @@ const AuthenticatedApp: React.FC = () => {
                            {currentView === 'DASHBOARD' && 'Análisis de Requerimiento'}
                            {currentView === 'REDISTRIBUTION' && 'Módulo de Redistribución'}
                            {currentView === 'SIG_SEARCH' && 'Consulta Stock'}
-                           {currentView === 'IPRESS_STOCK' && 'Visor de Stock IPRESS'}
+                           {currentView === 'IPRESS_STOCK' && 'Stock SISMED'}
+                           {currentView === 'STOCK_MONITORING' && 'Monitoreo de Stock SISMED'}
+                           {currentView === 'IMMUNIZATION_CATALOG' && 'Catálogo Biológico'}
+                           {currentView === 'IMMUNIZATION_INITIAL_INVENTORY' && 'Inventario Inicial'}
+                           {currentView === 'IMMUNIZATION_STOCK' && 'Stock Biológico'}
+                           {currentView === 'IMMUNIZATION_STOCK_QUERY' && 'Consulta de Stock Biológico'}
+	                           {currentView === 'IMMUNIZATION_INCOMES' && 'Ingresos Regionales'}
+	                           {currentView === 'IMMUNIZATION_INCOME_ORIGINS' && 'Orígenes de Ingreso'}
+                           {currentView === 'IMMUNIZATION_DISTRIBUTIONS' && 'Distribuciones'}
+                           {currentView === 'IMMUNIZATION_CONSUMPTION' && 'Consumo IPRESS'}
+                           {currentView === 'IMMUNIZATION_RETURNS' && 'Devoluciones y Bajas'}
+                           {currentView === 'IMMUNIZATION_ADJUSTMENTS' && 'Reajustes de Stock'}
+                           {currentView === 'IMMUNIZATION_CLOSURES' && 'Cierre Mensual'}
+                           {currentView === 'IMMUNIZATION_REPORTS' && 'Reportes Inmunizaciones'}
                            {currentView === 'ADMIN_STOCK_ASSIGN' && 'Asignar Stock a IPRESS'}
                            {currentView.startsWith('ADMIN') && currentView !== 'ADMIN_STOCK_ASSIGN' && 'Panel de Administración'}
                            {currentView === 'PROFILE' && 'Perfil de Usuario'}
@@ -194,7 +265,20 @@ const AuthenticatedApp: React.FC = () => {
                                 {currentView === 'DASHBOARD' && <AnalysisModule />}
                                 {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
                                 {currentView === 'SIG_SEARCH' && <SheetSearchModule />}
-                                {currentView === 'IPRESS_STOCK' && <IpressStockModule />}
+                                {currentView === 'IPRESS_STOCK' && <AssignedIpressStockModule />}
+                                {currentView === 'STOCK_MONITORING' && <StockMonitoringModule />}
+                                {currentView === 'IMMUNIZATION_CATALOG' && <ImmunizationCatalogModule />}
+                                {currentView === 'IMMUNIZATION_INITIAL_INVENTORY' && <ImmunizationInitialInventoryModule />}
+                                {currentView === 'IMMUNIZATION_STOCK' && <ImmunizationStockModule />}
+                                {currentView === 'IMMUNIZATION_STOCK_QUERY' && <ImmunizationStockQueryModule />}
+	                                {currentView === 'IMMUNIZATION_INCOMES' && <ImmunizationIncomesModule />}
+	                                {currentView === 'IMMUNIZATION_INCOME_ORIGINS' && <ImmunizationIncomeOriginsModule />}
+                                {currentView === 'IMMUNIZATION_DISTRIBUTIONS' && <ImmunizationDistributionsModule />}
+                                {currentView === 'IMMUNIZATION_CONSUMPTION' && <ImmunizationConsumptionModule />}
+                                {currentView === 'IMMUNIZATION_RETURNS' && <ImmunizationReturnsModule />}
+                                {currentView === 'IMMUNIZATION_ADJUSTMENTS' && <ImmunizationAdjustmentsModule />}
+                                {currentView === 'IMMUNIZATION_CLOSURES' && <ImmunizationClosuresModule />}
+                                {currentView === 'IMMUNIZATION_REPORTS' && <ImmunizationReportsModule />}
                                 {currentView === 'ADMIN_STOCK_ASSIGN' && <AdminStockAssignmentModule />}
                                 {currentView.startsWith('ADMIN') && currentView !== 'ADMIN_STOCK_ASSIGN' && <AdminPanel currentView={currentView} />}
                                 {currentView === 'PROFILE' && <UserProfile />}
@@ -599,7 +683,7 @@ const AnalysisModule: React.FC = () => {
       }
   };
 
-  const handleGenerateReport = (excludeVaccines: boolean, excludeNoSupply: boolean) => {
+  const handleGenerateReport = async (excludeVaccines: boolean, excludeNoSupply: boolean) => {
     if (!dashboardResult) return;
     let finalMedications = [...dashboardResult.medications];
     if (excludeVaccines) {
@@ -614,7 +698,7 @@ const AnalysisModule: React.FC = () => {
     
     const establishmentName = user?.facilityData?.name || 'ESTABLECIMIENTO DE SALUD';
     const responsibleName = user?.personnelData ? `${user.personnelData.firstName} ${user.personnelData.lastName}` : (user?.username || '');
-    generateFullReportPDF(dashboardResult, finalMedications, additionalItems, establishmentName, responsibleName);
+    await generateFullReportPDF(dashboardResult, finalMedications, additionalItems, establishmentName, responsibleName);
     
     setIsReportModalOpen(false);
   };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
-import { Briefcase, Plus, Trash2, Edit, Save, X, Search, FileText } from 'lucide-react';
+import { Plus, Trash2, Edit, Save, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 

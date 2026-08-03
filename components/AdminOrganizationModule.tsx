@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../services/api';
 import { HealthFacility, Unget, Diresa, Ogess, Microred } from '../types';
-import { Building2, Plus, Edit, Trash2, MapPin, Search, ChevronLeft, ChevronRight, Save, X, Network, Globe, Filter, FilterX, Eye, Info, ChevronDown, ChevronUp, Copy, Check, Hash, Phone, Mail, Activity, ArrowRight, ShieldAlert, ShieldCheck, FileSpreadsheet } from 'lucide-react';
+import { Building2, Plus, Edit, Trash2, MapPin, Search, ChevronLeft, ChevronRight, Save, X, Network, Globe, Filter, FilterX, Info, Copy, Check, Hash, Phone, Mail, Activity, ShieldAlert, ShieldCheck, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { CustomSelect } from './ui/CustomSelect';

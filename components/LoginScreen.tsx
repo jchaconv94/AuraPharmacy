@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Activity, Lock, User, ArrowRight, Phone, ShieldCheck, Layers, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, ArrowRight, Phone, ShieldCheck, Layers, Eye, EyeOff } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
   const { login } = useAuth();
