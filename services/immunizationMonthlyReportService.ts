@@ -960,7 +960,7 @@ const resolveAutoTable = () => {
   return autoTable;
 };
 
-const stampPdfFooter = (doc: jsPDF, margin: number) => {
+const stampPdfFooter = (doc: jsPDF, margin: number, pdfFont: string = PDF_UNICODE_FONT) => {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const pageCount = doc.getNumberOfPages();
@@ -968,7 +968,7 @@ const stampPdfFooter = (doc: jsPDF, margin: number) => {
     doc.setPage(pageNumber);
     doc.setDrawColor(226, 232, 240);
     doc.line(margin, pageHeight - 9, pageWidth - margin, pageHeight - 9);
-    doc.setFont(PDF_UNICODE_FONT, "normal");
+    doc.setFont(pdfFont, "normal");
     doc.setFontSize(6);
     doc.setTextColor(100, 116, 139);
     doc.text("ToolKit SISMED Web - Módulo Inmunizaciones", margin, pageHeight - 5);
@@ -984,7 +984,7 @@ export const buildMonthlyReportPdfDoc = async (
   const config = REPORT_VARIANTS[variant];
   const rows = buildRowsForVariant(options, variant);
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  await ensurePdfUnicodeFont(doc);
+  const pdfFont = await ensurePdfUnicodeFont(doc);
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 3;
   const tableWidth = pageWidth - margin * 2;
@@ -995,10 +995,10 @@ export const buildMonthlyReportPdfDoc = async (
   doc.setFillColor(15, 118, 110);
   doc.rect(0, 0, pageWidth, headerHeight, "F");
   doc.setTextColor(255, 255, 255);
-  doc.setFont(PDF_UNICODE_FONT, "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(11);
   doc.text(reportTitle(options, variant), margin, 9);
-  doc.setFont(PDF_UNICODE_FONT, "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(7.3);
   doc.text(`Periodo: ${options.period}  |  Ámbito: ${options.scopeLabel}  |  ${options.ownerName}`, margin, 15);
   doc.text(`Generado por: ${options.generatedBy || "-"}  |  ${config.closureLabel(options.closure)}`, pageWidth - margin, 15, { align: "right" });
@@ -1062,7 +1062,7 @@ export const buildMonthlyReportPdfDoc = async (
     ]),
     theme: "grid",
     styles: {
-      font: PDF_UNICODE_FONT,
+      font: pdfFont,
       fontSize: 5.1,
       cellPadding: 0.85,
       textColor: [30, 41, 59],
@@ -1097,7 +1097,7 @@ export const buildMonthlyReportPdfDoc = async (
     }
   });
 
-  stampPdfFooter(doc, margin);
+  stampPdfFooter(doc, margin, pdfFont);
   return doc;
 };
 

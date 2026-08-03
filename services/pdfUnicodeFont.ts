@@ -1,12 +1,11 @@
 import { jsPDF } from "jspdf";
+import fontRegularUrl from "../assets/fonts/NotoSans-Regular.ttf?url";
+import fontBoldUrl from "../assets/fonts/NotoSans-Bold.ttf?url";
 
 export const PDF_UNICODE_FONT = "NotoSans";
 
 const FONT_REGULAR_FILE = "NotoSans-Regular.ttf";
 const FONT_BOLD_FILE = "NotoSans-Bold.ttf";
-
-const fontRegularUrl = new URL("../assets/fonts/NotoSans-Regular.ttf", import.meta.url).href;
-const fontBoldUrl = new URL("../assets/fonts/NotoSans-Bold.ttf", import.meta.url).href;
 
 type FontData = {
   regular: string;
@@ -37,9 +36,25 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
 const fetchFontBase64 = async (url: string): Promise<string> => {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`No se pudo cargar la fuente PDF: ${url}`);
+    throw new Error(`No se pudo cargar la fuente PDF: ${url} (status ${response.status})`);
   }
-  return arrayBufferToBase64(await response.arrayBuffer());
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  if (bytes.length < 12) {
+    throw new Error(`Fuente no válida (tamaño insuficiente): ${url}`);
+  }
+
+  // Check magic bytes for TrueType font: 0x00, 0x01, 0x00, 0x00 or "true" or "OTTO"
+  const isTtfHeader = (bytes[0] === 0x00 && bytes[1] === 0x01 && bytes[2] === 0x00 && bytes[3] === 0x00);
+  const isTrueHeader = (bytes[0] === 0x74 && bytes[1] === 0x72 && bytes[2] === 0x75 && bytes[3] === 0x65);
+  const isOttoHeader = (bytes[0] === 0x4F && bytes[1] === 0x54 && bytes[2] === 0x54 && bytes[3] === 0x4F);
+
+  if (!isTtfHeader && !isTrueHeader && !isOttoHeader) {
+    throw new Error(`La URL ${url} no devolvió una fuente TTF válida.`);
+  }
+
+  return arrayBufferToBase64(buffer);
 };
 
 const loadPdfFontData = (): Promise<FontData> => {
@@ -53,17 +68,34 @@ const loadPdfFontData = (): Promise<FontData> => {
   return fontDataPromise;
 };
 
-export const ensurePdfUnicodeFont = async (doc: jsPDF): Promise<void> => {
-  const fontData = await loadPdfFontData();
-  const pdfDoc = doc as JsPdfWithVfs;
-  const registeredFonts = pdfDoc.getFontList();
+export const ensurePdfUnicodeFont = async (doc: jsPDF): Promise<string> => {
+  try {
+    const fontData = await loadPdfFontData();
+    const pdfDoc = doc as JsPdfWithVfs;
+    const registeredFonts = pdfDoc.getFontList();
 
-  if (!registeredFonts[PDF_UNICODE_FONT]) {
-    pdfDoc.addFileToVFS(FONT_REGULAR_FILE, fontData.regular);
-    pdfDoc.addFont(FONT_REGULAR_FILE, PDF_UNICODE_FONT, "normal");
-    pdfDoc.addFileToVFS(FONT_BOLD_FILE, fontData.bold);
-    pdfDoc.addFont(FONT_BOLD_FILE, PDF_UNICODE_FONT, "bold");
+    if (!registeredFonts[PDF_UNICODE_FONT]) {
+      pdfDoc.addFileToVFS(FONT_REGULAR_FILE, fontData.regular);
+      pdfDoc.addFont(FONT_REGULAR_FILE, PDF_UNICODE_FONT, "normal");
+      pdfDoc.addFileToVFS(FONT_BOLD_FILE, fontData.bold);
+      pdfDoc.addFont(FONT_BOLD_FILE, PDF_UNICODE_FONT, "bold");
+    }
+
+    const fontObj = (pdfDoc as any).internal?.getFont?.(PDF_UNICODE_FONT, "normal");
+    if (!fontObj || !fontObj.metadata || !fontObj.metadata.Unicode || !fontObj.metadata.Unicode.widths) {
+      throw new Error("Invalid font metadata for NotoSans");
+    }
+
+    doc.setFont(PDF_UNICODE_FONT, "normal");
+    return PDF_UNICODE_FONT;
+  } catch (err) {
+    console.warn("Could not load or register NotoSans font, falling back to helvetica:", err);
+    try {
+      doc.setFont("helvetica", "normal");
+    } catch {
+      // ignore fallback error
+    }
+    return "helvetica";
   }
-
-  doc.setFont(PDF_UNICODE_FONT, "normal");
 };
+

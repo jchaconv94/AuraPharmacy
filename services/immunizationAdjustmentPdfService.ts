@@ -24,7 +24,7 @@ const operationLabel = (item: ImmunizationAdjustmentItem) => {
 
 export const createImmunizationAdjustmentPdf = async ({ adjustment, items, ownerName }: AdjustmentPdfOptions): Promise<jsPDF> => {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  await ensurePdfUnicodeFont(doc);
+  const pdfFont = await ensurePdfUnicodeFont(doc);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
@@ -33,10 +33,10 @@ export const createImmunizationAdjustmentPdf = async ({ adjustment, items, owner
   doc.setFillColor(15, 118, 110);
   doc.rect(0, 0, pageWidth, 28, "F");
   doc.setTextColor(255, 255, 255);
-  doc.setFont(PDF_UNICODE_FONT, "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(15);
   doc.text("CONSTANCIA DE REAJUSTE DE STOCK BIOLÓGICO", margin, 12);
-  doc.setFont(PDF_UNICODE_FONT, "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(8.5);
   doc.text("ToolKit SISMED Web - DIRESA San Martín - Módulo Inmunizaciones", margin, 18);
   doc.text(`ID: ${adjustmentCode}`, pageWidth - margin, 18, { align: "right" });
@@ -44,10 +44,10 @@ export const createImmunizationAdjustmentPdf = async ({ adjustment, items, owner
   doc.setTextColor(30, 41, 59);
   doc.setFillColor(248, 250, 252);
   doc.roundedRect(margin, 34, pageWidth - margin * 2, 32, 3, 3, "F");
-  doc.setFont(PDF_UNICODE_FONT, "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(8);
   doc.text("DATOS GENERALES", margin + 4, 40);
-  doc.setFont(PDF_UNICODE_FONT, "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(8.5);
   doc.text(`Periodo: ${adjustment.period}`, margin + 4, 47);
   doc.text(`Ámbito: ${adjustment.ownerType}`, margin + 4, 53);
@@ -78,7 +78,7 @@ export const createImmunizationAdjustmentPdf = async ({ adjustment, items, owner
       operationLabel(item)
     ]),
     theme: "grid",
-    styles: { font: PDF_UNICODE_FONT, fontSize: 6.8, cellPadding: 2, textColor: [51, 65, 85], lineColor: [226, 232, 240], lineWidth: 0.15, valign: "middle" },
+    styles: { font: pdfFont, fontSize: 6.8, cellPadding: 2, textColor: [51, 65, 85], lineColor: [226, 232, 240], lineWidth: 0.15, valign: "middle" },
     headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 6.5 },
     columnStyles: {
       0: { cellWidth: 38 },
@@ -113,19 +113,19 @@ export const createImmunizationAdjustmentPdf = async ({ adjustment, items, owner
     detailY = 20;
   }
 
-  doc.setFont(PDF_UNICODE_FONT, "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(8);
   doc.setTextColor(30, 41, 59);
   doc.text("MOTIVO", margin, detailY);
-  doc.setFont(PDF_UNICODE_FONT, "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(8.5);
   const reasonLines = doc.splitTextToSize(adjustment.reason, pageWidth - margin * 2);
   doc.text(reasonLines, margin, detailY + 5);
   detailY += 8 + reasonLines.length * 4;
 
-  doc.setFont(PDF_UNICODE_FONT, "bold");
+  doc.setFont(pdfFont, "bold");
   doc.text("OBSERVACION / SUSTENTO", margin, detailY);
-  doc.setFont(PDF_UNICODE_FONT, "normal");
+  doc.setFont(pdfFont, "normal");
   const observationLines = doc.splitTextToSize(adjustment.observation, pageWidth - margin * 2);
   doc.text(observationLines, margin, detailY + 5);
   detailY += 18 + observationLines.length * 4;
@@ -145,7 +145,7 @@ export const createImmunizationAdjustmentPdf = async ({ adjustment, items, owner
     doc.setPage(pageNumber);
     doc.setDrawColor(226, 232, 240);
     doc.line(margin, pageHeight - 14, pageWidth - margin, pageHeight - 14);
-    doc.setFont(PDF_UNICODE_FONT, "normal");
+    doc.setFont(pdfFont, "normal");
     doc.setFontSize(7);
     doc.setTextColor(100, 116, 139);
     doc.text("Documento generado automáticamente. El reajuste modifica el stock y permanece en la auditoría del sistema.", margin, pageHeight - 9);
