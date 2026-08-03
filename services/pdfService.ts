@@ -252,7 +252,7 @@ export const generateFullReportPDF = async (
         { label: "Sin Rotación", val: recalculatedMedications.filter(m => m.status === StockStatus.SIN_ROTACION).length, color: COLORS.GRAY },
       ];
       const maxVal = Math.max(...stats.map(s => s.val), 1);
-      const totalItems = result.indicators.totalItems || 1; // Keep original total or recalculate? Recalculate is safer.
+      const totalItems = result.indicators?.totalItems || 1; // Keep original total or recalculate? Recalculate is safer.
       const recalculatedTotal = recalculatedMedications.length || 1;
 
       // Chart Dimensions
