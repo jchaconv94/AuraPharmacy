@@ -57,9 +57,15 @@ npm run build
 
 ## 3. Repositorio y despliegue
 
-El repositorio se inicializó el 2026-08-01. El trabajo vive en la rama **`respaldo-inmunizaciones`**, no en `main`.
+El repositorio se inicializó el 2026-08-01. El trabajo vive en la rama **`respaldo-inmunizaciones`**, que es la rama de desarrollo.
 
-`main` en GitHub sigue con el código del 16 de julio, anterior a todo el módulo de inmunizaciones. **No las unifiques sin acordarlo con el usuario**: reconciliarlas es un paso aparte y delicado.
+`main` se unificó con ella el 2026-08-02. Las dos historias eran **independientes** (sin ancestro común: `main` venía del proyecto subido desde Google AI Studio y la rama de trabajo se inicializó aparte), así que un `merge` normal habría dado conflicto en todos los archivos. Se resolvió con una confirmación de unión de dos padres construida con `git commit-tree`, tomando el árbol de la rama de trabajo:
+
+```bash
+git commit-tree "HEAD^{tree}" -p origin/main -p HEAD -m "merge: ..."
+```
+
+Conserva ambas historias y deja como contenido el proyecto vigente. **Si vuelve a divergir por subir el proyecto desde AI Studio, esta es la receta.** Verifica siempre que `git diff main respaldo-inmunizaciones` quede vacío antes de publicar.
 
 El sitio publicado no se despliega desde `main`. Se publica el `dist` compilado directamente a la rama `gh-pages`:
 
