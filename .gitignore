@@ -124,9 +124,3 @@ dist-ssr
 # OS
 .DS_Store
 Thumbs.db
-
-# Archivos de trabajo locales, no forman parte del proyecto
-tmp/
-toolkit-sismed-web.zip
-vite.stdout.log
-vite.stderr.log
