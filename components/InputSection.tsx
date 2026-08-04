@@ -124,14 +124,14 @@ export const InputSection: React.FC<InputSectionProps> = ({
     }
   }, [analysisResult]);
 
-  // Collapsed state synchronization
+  // Collapsed state synchronization: collapse as soon as there are items loaded
   React.useEffect(() => {
-    if (hasAnalyzedData) {
+    if (items.length > 0) {
       setIsUploadSectionCollapsed(true);
     } else {
       setIsUploadSectionCollapsed(false);
     }
-  }, [hasAnalyzedData]);
+  }, [items.length]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -656,6 +656,24 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
   return (
     <>
+    <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileUpload} 
+        onClick={(e) => e.stopPropagation()}
+        className="hidden" 
+        accept=".xlsx, .xls, .csv"
+    />
+    
+    <input 
+        type="file" 
+        ref={importInputRef} 
+        onChange={handleImportSession} 
+        onClick={(e) => e.stopPropagation()}
+        className="hidden" 
+        accept=".json"
+    />
+
     <div className={`bg-white rounded-xl shadow-sm border border-gray-200 transition-all relative ${isUploadSectionCollapsed && items.length > 0 ? 'p-4' : 'p-4 sm:p-6'} mb-6`}>
       
       {items.length > 0 && !isProcessingFile && (
@@ -694,25 +712,16 @@ export const InputSection: React.FC<InputSectionProps> = ({
                   </div>
               </div>
               <div className="flex items-center gap-2 sm:mr-10">
-                  {!hasAnalyzedData && (
+                  {/* Exportar Avance */}
+                  {hasAnalyzedData && (
                       <button 
-                          onClick={handleExecuteClick}
-                          disabled={isAnalyzing}
-                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold text-xs rounded-lg shadow-sm transition-all animate-pulse"
-                          title="Comenzar análisis"
+                          onClick={handleExportSession}
+                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Exportar Avance"
                       >
-                          <Play className="h-3 w-3 fill-current" />
-                          <span>Analizar Datos</span>
+                          <Download className="w-4 h-4" />
                       </button>
                   )}
-                  {/* Exportar Avance */}
-                  <button 
-                      onClick={handleExportSession}
-                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                      title="Exportar Avance"
-                  >
-                      <Download className="w-4 h-4" />
-                  </button>
                   {/* Importar Avance */}
                   <button 
                       onClick={(e) => {
@@ -773,24 +782,6 @@ export const InputSection: React.FC<InputSectionProps> = ({
                     }}
                     onClick={triggerFileUpload}
                 >
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleFileUpload} 
-                        onClick={(e) => e.stopPropagation()}
-                        className="hidden" 
-                        accept=".xlsx, .xls, .csv"
-                    />
-                    
-                    <input 
-                        type="file" 
-                        ref={importInputRef} 
-                        onChange={handleImportSession} 
-                        onClick={(e) => e.stopPropagation()}
-                        className="hidden" 
-                        accept=".json"
-                    />
-                    
                     <div className="flex flex-col items-center gap-4 group-hover:scale-105 transition-transform duration-300">
                         <div className="bg-white p-4 rounded-full shadow-md group-hover:shadow-lg transition-shadow">
                             <FileSpreadsheet className="h-10 w-10 text-teal-600" />
@@ -825,7 +816,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
                                 Subir Archivo
                             </button>
 
-                            {(items.length > 0 || hasAnalyzedData) && (
+                            {hasAnalyzedData && (
                                 <button 
                                     onClick={handleExportSession}
                                     className="bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 w-full sm:w-auto justify-center px-4 py-2 font-bold text-sm rounded-lg transition-all flex items-center gap-2 shadow-sm"
@@ -862,7 +853,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
       )}
 
       {/* Item Preview */}
-      {items.length > 0 && !isUploadSectionCollapsed && (
+      {items.length > 0 && !hasAnalyzedData && (
         <div className="space-y-4 mt-12 sm:mt-16 pt-6 border-t border-dashed border-gray-200 animate-in fade-in duration-500">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center max-w-5xl mx-auto px-1 gap-4">
             <div className="space-y-1.5 text-left">
