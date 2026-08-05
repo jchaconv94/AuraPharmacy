@@ -1,4 +1,6 @@
 
+export type DashboardViewMode = 'INITIAL' | 'PROJECTED_SIMPLE' | 'PROJECTED_ADJUSTED';
+
 export enum StockStatus {
   DESABASTECIDO = "DESABASTECIDO", // Stock = 0
   SUBSTOCK = "SUBSTOCK", // MED > 0 y < 2 (Alerta de Pedido)
@@ -38,6 +40,7 @@ export interface AnalyzedMedication {
   cpmExcludingLows?: number; // Consumo Promedio AJUSTADO (Sin picos Y sin bajos)
   rawCpm: number; // Consumo Promedio SIMPLE (Con picos, para referencia)
   monthsOfProvision: number; // MED (Meses de Existencia Disponible)
+  displayCpm?: number; // Active CPA for current horizon mode
   status: StockStatus; 
   expirationRisk: string; 
   quantityToOrder: number; 

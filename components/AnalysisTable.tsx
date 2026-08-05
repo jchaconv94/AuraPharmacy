@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { AnalyzedMedication, StockStatus, QuickFilterOption } from '../types';
+import { AnalyzedMedication, StockStatus, QuickFilterOption, DashboardViewMode } from '../types';
 import { 
   Zap, 
   TrendingUp, 
@@ -61,10 +61,13 @@ interface AnalysisTableProps {
   // Additional Items Props
   additionalItemsCount?: number;
   onOpenAdditionalModal?: () => void;
+
+  // View Mode / Horizon Prop
+  viewMode?: DashboardViewMode;
 }
 
 // Columns that can be filtered
-type FilterKey = 'ff' | 'medtip' | 'medpet' | 'medest' | 'status' | 'currentStock' | 'cpm' | 'monthsOfProvision' | 'anomalyDetails' | 'quantityToOrder' | 'isSporadic';
+type FilterKey = 'ff' | 'medtip' | 'medpet' | 'medest' | 'status' | 'currentStock' | 'cpm' | 'rawCpm' | 'monthsOfProvision' | 'anomalyDetails' | 'quantityToOrder' | 'isSporadic';
 
 // --- HELPER: Recalculate Status Dynamically ---
 const calculateDynamicMetrics = (item: AnalyzedMedication) => {
@@ -161,7 +164,8 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
   quickFilter,
   onQuickFilterChange,
   additionalItemsCount = 0,
-  onOpenAdditionalModal
+  onOpenAdditionalModal,
+  viewMode = 'PROJECTED_ADJUSTED'
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedMedicationId, setSelectedMedicationId] = useState<string | null>(null);
@@ -242,9 +246,14 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
 
   const handleStartAnalysis = () => {
     const pendingMedication = filteredItems.find(item => {
+        const rawCpm = item.rawCpm || 0;
+        const rawStock = item.currentStock || 0;
+        const rawMonths = rawCpm > 0 ? rawStock / rawCpm : (rawStock > 0 ? Infinity : 0);
+        const isRawOverstock = rawMonths > 6 || (rawCpm === 0 && rawStock > 0);
+
         const isOverstock = item.status === StockStatus.SOBRESTOCK;
         const isNoRotation = item.status === StockStatus.SIN_ROTACION;
-        const needsReview = !isOverstock && !isNoRotation;
+        const needsReview = (!isOverstock && !isNoRotation) || !isRawOverstock || item.quantityToOrder > 0;
         const isReviewed = reviewedIds.has(item.id);
         return needsReview && !isReviewed;
     });
@@ -297,14 +306,20 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
       ? filteredItems[currentIndex + 1].id 
       : null;
 
-  // 2. Smart "Next To Review" (Skip to next item that is NOT Sobrestock AND NOT Sin Rotacion AND NOT Reviewed)
+  // 2. Smart "Next To Review" (Skip to next item that needs review and is NOT Reviewed)
   // Look ahead from current index
   const nextReviewItem = currentIndex >= 0 
-      ? filteredItems.slice(currentIndex + 1).find(m => 
-          m.status !== StockStatus.SOBRESTOCK && 
-          m.status !== StockStatus.SIN_ROTACION &&
-          !reviewedIds.has(m.id)
-        )
+      ? filteredItems.slice(currentIndex + 1).find(m => {
+          const rawCpm = m.rawCpm || 0;
+          const rawStock = m.currentStock || 0;
+          const rawMonths = rawCpm > 0 ? rawStock / rawCpm : (rawStock > 0 ? Infinity : 0);
+          const isRawOverstock = rawMonths > 6 || (rawCpm === 0 && rawStock > 0);
+
+          const isOverstock = m.status === StockStatus.SOBRESTOCK;
+          const isNoRotation = m.status === StockStatus.SIN_ROTACION;
+          const itemNeedsReview = (!isOverstock && !isNoRotation) || !isRawOverstock || m.quantityToOrder > 0;
+          return itemNeedsReview && !reviewedIds.has(m.id);
+        })
       : null;
 
   const selectedMedication = selectedMedicationId 
@@ -320,7 +335,9 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
 
   const handleExportExcel = () => {
     const exportData = filteredItems.map(m => {
-      const { activeCpm, activeMonths, activeStatus } = calculateDynamicMetrics(m);
+      const activeCpm = m.cpm;
+      const activeMonths = m.monthsOfProvision;
+      const activeStatus = m.status;
       const totalConsumption = m.originalHistory ? m.originalHistory.reduce((a, b) => a + b, 0) : 0;
       
       const row: any = {
@@ -817,11 +834,11 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
               <RenderHeader label="Stock" field="currentStock" align="right" />
               
               <RenderHeader 
-                label="CPA (Ajust.)" 
-                field="cpm" 
+                label={(viewMode === 'INITIAL' || viewMode === 'PROJECTED_SIMPLE') ? 'CPA (Simple)' : 'CPA (Ajust.)'} 
+                field={(viewMode === 'INITIAL' || viewMode === 'PROJECTED_SIMPLE') ? 'rawCpm' : 'cpm'} 
                 align="right" 
-                className="border-b-2 border-teal-500 whitespace-nowrap" 
-                textColor="text-teal-600" 
+                className={`border-b-2 whitespace-nowrap ${(viewMode === 'INITIAL' || viewMode === 'PROJECTED_SIMPLE') ? 'border-blue-500' : 'border-teal-500'}`} 
+                textColor={(viewMode === 'INITIAL' || viewMode === 'PROJECTED_SIMPLE') ? 'text-blue-600' : 'text-teal-600'} 
               />
               
               <RenderHeader label="Meses Prov." field="monthsOfProvision" align="right" />
@@ -833,16 +850,18 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
           <tbody className="bg-white divide-y divide-gray-200 relative z-0">
             {currentItems.length > 0 ? (
               currentItems.map((item) => {
-                // CALCULATE DYNAMIC METRICS FOR DISPLAY
-                const { activeMonths, activeStatus } = calculateDynamicMetrics(item);
+                const activeMonths = item.monthsOfProvision ?? 0;
+                const activeStatus = item.status;
 
                 const isOverstock = activeStatus === StockStatus.SOBRESTOCK;
                 const isNoRotation = activeStatus === StockStatus.SIN_ROTACION;
-                // Use original status for review logic to ensure stability, or dynamic?
-                // Logic: Reviews should persist. Display relies on dynamic.
                 
-                // MODIFIED: If item has a manual quantity > 0, it ALWAYS needs review/display, regardless of status
-                const needsReview = (!isOverstock && !isNoRotation) || item.quantityToOrder > 0;
+                const rawCpm = item.rawCpm || 0;
+                const rawStock = item.currentStock || 0;
+                const rawMonths = rawCpm > 0 ? rawStock / rawCpm : (rawStock > 0 ? Infinity : 0);
+                const isRawOverstock = rawMonths > 6 || (rawCpm === 0 && rawStock > 0);
+
+                const needsReview = (!isOverstock && !isNoRotation) || !isRawOverstock || item.quantityToOrder > 0;
                 const isReviewed = reviewedIds.has(item.id);
                 const showReviewedState = isReviewed && needsReview;
                 
@@ -905,8 +924,18 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
                   {/* CPA Column */}
                   <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-right">
                     <div className="flex flex-col items-end">
-                        {/* Logic: Show the Active CPA bigger */}
-                        {item.selectedCpaMode === 'SIMPLE' ? (
+                        {(viewMode === 'INITIAL' || viewMode === 'PROJECTED_SIMPLE') ? (
+                             <>
+                                <span className="text-base font-bold text-blue-700 font-mono">
+                                    {(item.displayCpm ?? item.rawCpm ?? 0).toFixed(1)}
+                                </span>
+                                {item.hasSpikes && (
+                                     <span className="text-xs text-gray-400" title="CPA Ajustado (Automático)">
+                                        Ajust: {(item.cpm || 0).toFixed(1)}
+                                     </span>
+                                )}
+                             </>
+                        ) : item.selectedCpaMode === 'SIMPLE' ? (
                              <>
                                 <span className="text-base font-bold text-blue-700 font-mono">
                                     {(item.rawCpm || 0).toFixed(1)}
@@ -918,7 +947,7 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
                         ) : (
                              <>
                                 <span className="text-base font-bold text-teal-700 font-mono">
-                                    {(item.cpm || 0).toFixed(1)}
+                                    {(item.displayCpm ?? item.cpm ?? 0).toFixed(1)}
                                 </span>
                                 {item.hasSpikes && (
                                      <span className="text-xs text-gray-400 line-through decoration-red-400" title={`Promedio Simple (con picos): ${(item.rawCpm || 0).toFixed(1)}`}>
@@ -940,7 +969,9 @@ export const AnalysisTable: React.FC<AnalysisTableProps> = React.memo(({
                   </td>
 
                   <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap text-center">
-                    {getStatusBadge(activeStatus)}
+                    <div className="flex items-center justify-center">
+                      {getStatusBadge(item.status)}
+                    </div>
                   </td>
                   
                   <td className="px-2 py-2 2xl:px-3 2xl:py-3 whitespace-nowrap">

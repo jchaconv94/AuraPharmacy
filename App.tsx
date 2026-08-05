@@ -1,7 +1,7 @@
 
-import React, { useState, useCallback, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef, Suspense } from 'react';
 import { InputSection } from './components/InputSection';
-import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppModule, QuickFilterOption } from './types';
+import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppModule, QuickFilterOption, AnalyzedMedication, DashboardViewMode } from './types';
 import { analyzeInventoryWithAura } from './services/auraService';
 import { generateFullReportPDF } from './services/pdfService';
 import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, Building2, Calendar, Clock, Network } from 'lucide-react';
@@ -372,6 +372,11 @@ const AnalysisModule: React.FC = () => {
 
   // --- FULL SCREEN STATE & NATIVE API LOGIC ---
   const [isFullScreen, setIsFullScreen] = useState(false);
+  
+  // --- DASHBOARD VIEW MODE PERSPECTIVE (INITIAL vs PROJECTED_SIMPLE vs PROJECTED_ADJUSTED) ---
+  const [dashboardViewMode, setDashboardViewMode] = useState<DashboardViewMode>('INITIAL');
+  // --- DASHBOARD SCOPE FILTER (ALL vs DME) ---
+  const [dashboardScopeFilter, setDashboardScopeFilter] = useState<'ALL' | 'DME'>('ALL');
 
   // Handler to toggle NATIVE Fullscreen
   const handleToggleFullScreen = useCallback((targetState: boolean) => {
@@ -563,9 +568,61 @@ const AnalysisModule: React.FC = () => {
       setAdditionalItems(prev => prev.filter(i => i.id !== id));
   };
 
+  const calculateHorizonMetrics = useCallback((item: AnalyzedMedication, mode: DashboardViewMode) => {
+    const rawCpm = item.rawCpm || 0;
+    const activeCpm = (mode === 'INITIAL' || mode === 'PROJECTED_SIMPLE') 
+      ? rawCpm 
+      : (item.selectedCpaMode === 'SIMPLE' ? rawCpm : (item.cpm || 0));
+
+    let evalStock = item.currentStock || 0;
+
+    if (mode === 'PROJECTED_SIMPLE' || mode === 'PROJECTED_ADJUSTED') {
+      const isValidated = reviewedIds.has(item.id);
+      const reqVal = (isValidated && item.quantityToOrder > 0) ? item.quantityToOrder : 0;
+      evalStock += reqVal;
+    }
+
+    const months = activeCpm > 0 ? evalStock / activeCpm : (evalStock > 0 ? Infinity : 0);
+
+    let status = StockStatus.NORMOSTOCK;
+    if (evalStock === 0) {
+      status = StockStatus.DESABASTECIDO;
+    } else if (activeCpm === 0 && evalStock > 0) {
+      status = StockStatus.SIN_ROTACION;
+    } else if (months > 6) {
+      status = StockStatus.SOBRESTOCK;
+    } else if (months >= 2 && months <= 6) {
+      status = StockStatus.NORMOSTOCK;
+    } else {
+      status = StockStatus.SUBSTOCK;
+    }
+
+    return { activeCpm, evalStock, months, status };
+  }, [reviewedIds]);
+
   const filteredMedications = useMemo(() => {
     if (!result) return [];
-    let items = result.medications;
+    
+    // Recalculate status, months of provision, and display CPA dynamically for all medications based on active horizon mode
+    let items = result.medications.map(m => {
+        const { activeCpm, months, status } = calculateHorizonMetrics(m, dashboardViewMode);
+        return {
+            ...m,
+            displayCpm: activeCpm,
+            status,
+            monthsOfProvision: months
+        };
+    });
+
+    // Scope filter (DME vs ALL) from Diagnóstico de Disponibilidad
+    if (dashboardScopeFilter === 'DME') {
+        items = items.filter(m => {
+            const isMed = (m.medtip || '').toUpperCase().trim() === 'M';
+            const isPet = (m.medpet || '').toUpperCase().trim() === 'P';
+            const est = (m.medest || '').toUpperCase().trim();
+            return isMed && isPet && (est === '_' || est === 'S');
+        });
+    }
 
     // QUICK FILTER LOGIC
     if (quickFilter === 'PENDING') {
@@ -605,14 +662,76 @@ const AnalysisModule: React.FC = () => {
     
     // Sort items alphabetically by name
     return [...items].sort((a, b) => (a.name || '').trim().localeCompare((b.name || '').trim(), 'es', { sensitivity: 'base' }));
-  }, [result, searchTerm, activeFilters, quickFilter, reviewedIds]);
+  }, [result, searchTerm, activeFilters, quickFilter, reviewedIds, dashboardViewMode, dashboardScopeFilter, calculateHorizonMetrics]);
 
-  // UPDATE: Now depends on filteredMedications to update charts dynamically
+  const dashboardMedications = useMemo(() => {
+    if (!result) return [];
+    
+    let items = result.medications.map(m => {
+        const { activeCpm, months, status } = calculateHorizonMetrics(m, dashboardViewMode);
+        return {
+            ...m,
+            displayCpm: activeCpm,
+            status,
+            monthsOfProvision: months
+        };
+    });
+
+    if (quickFilter === 'PENDING') {
+        items = items.filter(m => 
+            m.status !== StockStatus.SOBRESTOCK && 
+            m.status !== StockStatus.SIN_ROTACION &&
+            !reviewedIds.has(m.id)
+        );
+    } else if (quickFilter === 'REQ_POSITIVE') {
+        items = items.filter(m => m.quantityToOrder > 0);
+    } else if (quickFilter === 'REQ_ZERO') {
+        items = items.filter(m => m.quantityToOrder === 0);
+    }
+
+    if (searchTerm) {
+        const lower = searchTerm.toLowerCase();
+        items = items.filter(item => 
+            item.name.toLowerCase().includes(lower) ||
+            item.id.toLowerCase().includes(lower) ||
+            (item.code && item.code.toLowerCase().includes(lower))
+        );
+    }
+
+    if (Object.keys(activeFilters).length > 0) {
+        items = items.filter(item => {
+            return Object.entries(activeFilters).every(([key, values]) => {
+                if (key === 'status') return true; // Ignore status filter for dashboard chart calculations
+                const filterValues = values as string[];
+                if (!filterValues || filterValues.length === 0) return true;
+                let itemValue = String((item as any)[key] || '-');
+                if (key === 'isSporadic') {
+                    itemValue = item.isSporadic ? "Baja Rotación" : "Rotación Normal";
+                }
+                return filterValues.includes(itemValue);
+            });
+        });
+    }
+
+    return items;
+  }, [result, searchTerm, activeFilters, quickFilter, reviewedIds, dashboardViewMode, calculateHorizonMetrics]);
+
+  // UPDATE: Calculates dashboard metrics according to horizon (INITIAL vs PROJECTED) and scope (ALL vs DME)
   const dashboardResult = useMemo(() => {
     if (!result) return null;
 
-    // Use filtered data for dashboard statistics
-    const currentItems = filteredMedications;
+    // Use dashboardMedications which keeps status distribution intact even when status filter is active
+    let currentItems = dashboardMedications;
+
+    // Apply Scope Filter (DME)
+    if (dashboardScopeFilter === 'DME') {
+      currentItems = currentItems.filter(m => {
+        const isMed = (m.medtip || '').toUpperCase().trim() === 'M';
+        const isPet = (m.medpet || '').toUpperCase().trim() === 'P';
+        const est = (m.medest || '').toUpperCase().trim();
+        return isMed && isPet && (est === '_' || est === 'S');
+      });
+    }
     
     // Filter essential medications for DME indicator in UI
     const essentialMedications = currentItems.filter(m => {
@@ -639,19 +758,27 @@ const AnalysisModule: React.FC = () => {
 
     return {
         ...result,
-        medications: currentItems, // Pass filtered items to dashboard components
+        medications: currentItems,
         indicators: {
             dmeScore,
             status: indicatorStatus,
-            totalItems: totalEssentialItems, // Use essential items for DME fraction
-            availableItems: availableEssentialItems // Use essential items for DME fraction
+            totalItems: totalEssentialItems,
+            availableItems: availableEssentialItems
         }
     };
-  }, [result, filteredMedications]);
+  }, [result, dashboardMedications, dashboardScopeFilter]);
 
   const { reviewProgress, isReviewComplete, reviewedCount, totalToReview } = useMemo(() => {
       if (!result) return { reviewProgress: 0, isReviewComplete: false, reviewedCount: 0, totalToReview: 0 };
-      const itemsRequiringReview = result.medications.filter(m => 
+      const itemsWithStatus = result.medications.map(m => {
+          const { months, status } = calculateHorizonMetrics(m, dashboardViewMode);
+          return {
+              ...m,
+              status,
+              monthsOfProvision: months
+          };
+      });
+      const itemsRequiringReview = itemsWithStatus.filter(m => 
           m.status !== StockStatus.SOBRESTOCK && 
           m.status !== StockStatus.SIN_ROTACION
       );
@@ -667,12 +794,27 @@ const AnalysisModule: React.FC = () => {
           reviewedCount: revCount,
           totalToReview: totalCount
       };
-  }, [result, reviewedIds]);
+  }, [result, reviewedIds, dashboardViewMode, calculateHorizonMetrics]);
+
+  const prevIsReviewCompleteRef = useRef<boolean>(false);
+  const hasShownSuccessModalRef = useRef<boolean>(false);
+
+  // Reset completion modal state when a new analysis result is loaded
+  useEffect(() => {
+    prevIsReviewCompleteRef.current = false;
+    hasShownSuccessModalRef.current = false;
+  }, [result]);
 
   useEffect(() => {
     if (isReviewComplete && totalToReview > 0) {
+      if (!prevIsReviewCompleteRef.current && !hasShownSuccessModalRef.current) {
         setShowSuccessModal(true);
+        hasShownSuccessModalRef.current = true;
+      }
+    } else if (!isReviewComplete) {
+      hasShownSuccessModalRef.current = false;
     }
+    prevIsReviewCompleteRef.current = isReviewComplete;
   }, [isReviewComplete, totalToReview]);
 
   const handleDownloadClick = () => {
@@ -698,7 +840,7 @@ const AnalysisModule: React.FC = () => {
     
     const establishmentName = user?.facilityData?.name || 'ESTABLECIMIENTO DE SALUD';
     const responsibleName = user?.personnelData ? `${user.personnelData.firstName} ${user.personnelData.lastName}` : (user?.username || '');
-    await generateFullReportPDF(dashboardResult, finalMedications, additionalItems, establishmentName, responsibleName);
+    await generateFullReportPDF(dashboardResult, finalMedications, additionalItems, establishmentName, responsibleName, dashboardViewMode);
     
     setIsReportModalOpen(false);
   };
@@ -838,12 +980,33 @@ const AnalysisModule: React.FC = () => {
                 </div>
             )}
             
-            {!isFullScreen && <Dashboard result={dashboardResult} />}
+            {!isFullScreen && (
+                <Dashboard 
+                    result={dashboardResult} 
+                    viewMode={dashboardViewMode}
+                    onViewModeChange={setDashboardViewMode}
+                    scopeFilter={dashboardScopeFilter}
+                    onScopeFilterChange={setDashboardScopeFilter}
+                    selectedStatusFilter={activeFilters.status && activeFilters.status.length > 0 ? (activeFilters.status[0] as StockStatus) : null}
+                    onStatusFilterChange={(status) => {
+                      setActiveFilters(prev => {
+                        const next = { ...prev };
+                        if (!status) {
+                          delete next.status;
+                        } else {
+                          next.status = [status];
+                        }
+                        return next;
+                      });
+                    }}
+                />
+            )}
             
             <AnalysisTable 
                 medications={filteredMedications} 
                 allMedications={result.medications}
                 referenceDate={result.referenceDate} 
+                viewMode={dashboardViewMode}
                 onMedicationUpdate={handleMedicationUpdate}
                 searchTerm={searchTerm}
                 onSearchChange={setSearchTerm}

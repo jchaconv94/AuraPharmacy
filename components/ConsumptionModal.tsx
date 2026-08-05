@@ -137,11 +137,19 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
       };
   }, [medication, cpaMode, excludedIndices]);
 
-  const needsReview = dynamicData ? (
-      (dynamicData.status !== StockStatus.SOBRESTOCK && 
-      dynamicData.status !== StockStatus.SIN_ROTACION) ||
-      Number(reqQuantity) > 0
-  ) : false;
+  const needsReview = useMemo(() => {
+    if (!medication || !dynamicData) return false;
+
+    const rawCpm = medication.rawCpm || 0;
+    const rawStock = medication.currentStock || 0;
+    const rawMonths = rawCpm > 0 ? rawStock / rawCpm : (rawStock > 0 ? Infinity : 0);
+    const isRawOverstock = rawMonths > 6 || (rawCpm === 0 && rawStock > 0);
+
+    const isBaseOverstock = medication.status === StockStatus.SOBRESTOCK || medication.status === StockStatus.SIN_ROTACION;
+    const isDynamicOverstock = dynamicData.status === StockStatus.SOBRESTOCK || dynamicData.status === StockStatus.SIN_ROTACION;
+
+    return !isBaseOverstock || !isDynamicOverstock || !isRawOverstock || Number(reqQuantity) > 0;
+  }, [medication, dynamicData, reqQuantity]);
 
   const isLockedTimer = lockTimer > 0 && needsReview && !isReviewed;
 
@@ -625,20 +633,63 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                     </div>
                 </button>
 
-                <div className="bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 flex flex-col items-center justify-center text-center transition-all duration-300">
-                    <span className="text-blue-600 block text-[10px] uppercase font-bold">Meses Disp.</span>
-                    <span className="font-bold text-blue-800 text-lg sm:text-2xl text-center w-full">
-                    {isFinite(dynamicData.months || 0) ? (dynamicData.months || 0).toFixed(1) : '∞'}
-                    </span>
-                </div>
+             {(() => {
+                const realCpm = medication.rawCpm || 0;
+                const realStock = medication.currentStock;
+                const realMonths = realCpm > 0 ? realStock / realCpm : (realStock > 0 ? Infinity : 0);
+
+                return (
+                  <div className="bg-blue-50 px-3 py-2 rounded-lg border border-blue-100 flex flex-col items-center justify-center text-center transition-all duration-300">
+                      <span className="text-blue-600 block text-[10px] uppercase font-bold">Meses Disp.</span>
+                      <span className="font-bold text-blue-800 text-lg sm:text-2xl text-center w-full">
+                      {isFinite(dynamicData.months || 0) ? (dynamicData.months || 0).toFixed(1) : '∞'}
+                      </span>
+                      {cpaMode === 'ADJUSTED' && (
+                          <div className="text-[10px] font-bold text-slate-600 bg-white/80 px-2 py-0.5 rounded border border-slate-200 mt-1 flex items-center gap-1 shadow-xs">
+                             <span className="text-slate-400 font-bold uppercase text-[9px]">Real:</span>
+                             <span className="text-slate-800 font-extrabold">
+                                {isFinite(realMonths) ? realMonths.toFixed(1) : '∞'}
+                             </span>
+                          </div>
+                      )}
+                  </div>
+                );
+             })()}
              </div>
              
-             <div className={`${statusConfig.bg} px-4 py-2 rounded-lg border ${statusConfig.border} flex flex-col items-center justify-center text-center w-full lg:w-auto transition-colors duration-300`}>
-                <span className={`${statusConfig.label} block text-[10px] uppercase font-bold`}>Estado</span>
-                <span className={`font-bold ${statusConfig.text} text-xl text-center w-full`}>
-                   {dynamicData.status}
-                </span>
-             </div>
+             {(() => {
+                const realCpm = medication.rawCpm || 0;
+                const realStock = medication.currentStock;
+                const realMonths = realCpm > 0 ? realStock / realCpm : (realStock > 0 ? Infinity : 0);
+
+                let realStatus = StockStatus.NORMOSTOCK;
+                if (realStock === 0) {
+                    realStatus = StockStatus.DESABASTECIDO;
+                } else if (realCpm === 0 && realStock > 0) {
+                    realStatus = StockStatus.SIN_ROTACION;
+                } else if (realMonths > 6) {
+                    realStatus = StockStatus.SOBRESTOCK;
+                } else if (realMonths >= 2 && realMonths <= 6) {
+                    realStatus = StockStatus.NORMOSTOCK;
+                } else {
+                    realStatus = StockStatus.SUBSTOCK;
+                }
+
+                return (
+                   <div className={`${statusConfig.bg} px-4 py-2 rounded-lg border ${statusConfig.border} flex flex-col items-center justify-center text-center w-full lg:w-auto transition-colors duration-300`}>
+                      <span className={`${statusConfig.label} block text-[10px] uppercase font-bold`}>Estado</span>
+                      <span className={`font-bold ${statusConfig.text} text-xl text-center w-full`}>
+                         {dynamicData.status}
+                      </span>
+                      {cpaMode === 'ADJUSTED' && (
+                         <div className="text-[10px] font-bold text-slate-600 bg-white/80 px-2 py-0.5 rounded border border-slate-200 mt-1 flex items-center gap-1 shadow-xs">
+                            <span className="text-slate-400 font-bold uppercase text-[9px]">Cond. Real:</span>
+                            <span className="text-slate-800 font-extrabold">{realStatus}</span>
+                         </div>
+                      )}
+                   </div>
+                );
+             })()}
 
              {/* Dynamic Calculation Area */}
              <div className={`w-full lg:flex-1 text-white rounded-lg shadow-md p-4 flex flex-col sm:flex-row items-center gap-5 border lg:ml-auto transition-colors ${isReviewed ? 'bg-teal-900 border-teal-700' : 'bg-gray-900 border-gray-700'}`}>

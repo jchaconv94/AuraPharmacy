@@ -2,7 +2,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { ensurePdfUnicodeFont, PDF_UNICODE_FONT } from "./pdfUnicodeFont";
-import { AuraAnalysisResult, StockStatus, AnalyzedMedication, AdditionalItem } from "../types";
+import { AuraAnalysisResult, StockStatus, AnalyzedMedication, AdditionalItem, DashboardViewMode } from "../types";
 
 // --- COLORS PALETTE (PREMIUM UI MATCH) ---
 const COLORS = {
@@ -71,7 +71,19 @@ const getMonthHeaders = (refDate?: string, numMonths = 12) => {
 const calculateDynamicMetricsPDF = (item: AnalyzedMedication) => {
     let activeCpm = 0;
     const excludedIndices = item.excludedIndices || [];
-    const mode = item.selectedCpaMode || 'ADJUSTED';
+    let mode = item.selectedCpaMode || 'ADJUSTED';
+
+    // Migration/Correction for display: If saved as SIMPLE but it has spikes and no manual exclusions,
+    // it's likely a bug-induced state from a previous version. Default to ADJUSTED for display.
+    const cpmStr = (item.cpm || 0).toFixed(1);
+    const rawCpmStr = (item.rawCpm || 0).toFixed(1);
+    const isEqual = cpmStr === rawCpmStr;
+    const noSpikes = !item.hasSpikes;
+    const shouldBeSimple = isEqual || noSpikes;
+
+    if (mode === 'SIMPLE' && !shouldBeSimple && excludedIndices.length === 0) {
+        mode = 'ADJUSTED';
+    }
 
     if (excludedIndices.length === 0) {
         activeCpm = mode === 'SIMPLE' ? item.rawCpm : item.cpm;
@@ -150,7 +162,8 @@ export const generateFullReportPDF = async (
     filteredTableItems?: AnalyzedMedication[],
     additionalItems?: AdditionalItem[],
     establishmentName: string = 'ESTABLECIMIENTO DE SALUD',
-    responsibleName: string = ''
+    responsibleName: string = '',
+    viewMode: DashboardViewMode = 'INITIAL'
 ): Promise<void> => {
   try {
       // 1. Initialize Landscape PDF (A4 Landscape: 297mm x 210mm)
@@ -175,7 +188,7 @@ export const generateFullReportPDF = async (
       doc.setFontSize(10);
       doc.setFont(activeFont, "normal");
       doc.setTextColor(240, 240, 240);
-      doc.text(`CORTE: ${formattedDate}`, 15, 20);
+      doc.text(`CORTE: ${formattedDate}  |  DIAGNÓSTICO DE DISPONIBILIDAD (FOTOGRAFÍA INICIAL)`, 15, 20);
       
       // Establishment Info (with Code & Category if available)
       const facilityName = result.establishmentName ? result.establishmentName.toUpperCase() : establishmentName.toUpperCase();
@@ -240,8 +253,17 @@ export const generateFullReportPDF = async (
               return isMed && isPet && isEst;
           })
           .map(m => {
-              const { activeStatus } = calculateDynamicMetricsPDF(m);
-              return { ...m, status: activeStatus };
+              const rawCpm = m.rawCpm || 0;
+              const stock = m.currentStock || 0;
+              const months = rawCpm > 0 ? stock / rawCpm : (stock > 0 ? Infinity : 0);
+              let status = StockStatus.NORMOSTOCK;
+              if (stock === 0) status = StockStatus.DESABASTECIDO;
+              else if (rawCpm === 0 && stock > 0) status = StockStatus.SIN_ROTACION;
+              else if (months > 6) status = StockStatus.SOBRESTOCK;
+              else if (months >= 2 && months <= 6) status = StockStatus.NORMOSTOCK;
+              else status = StockStatus.SUBSTOCK;
+
+              return { ...m, status };
           });
 
       const stats = [
@@ -429,19 +451,11 @@ export const generateFullReportPDF = async (
       doc.text(total.toString(), rightX + rightColW - 10, distY + 59, { align: "right" });
 
       // Calculate stats for the legend
-      const essentialMedications = result.medications.filter(m => {
-          const isMed = (m.medtip || '').toUpperCase().trim() === 'M';
-          const isPet = (m.medpet || '').toUpperCase().trim() === 'P';
-          const est = (m.medest || '').toUpperCase().trim();
-          const isEst = est === '_' || est === 'S';
-          return isMed && isPet && isEst;
-      });
-
-      const normoCount = essentialMedications.filter((m: any) => m.status === 'NORMOSTOCK').length;
-      const sobreCount = essentialMedications.filter((m: any) => m.status === 'SOBRESTOCK').length;
-      const desabastecidoCount = essentialMedications.filter((m: any) => m.status === 'DESABASTECIDO').length;
-      const subCount = essentialMedications.filter((m: any) => m.status === 'SUBSTOCK').length;
-      const sinRotacionCount = essentialMedications.filter((m: any) => m.status === 'SIN_ROTACION').length;
+      const normoCount = recalculatedMedications.filter(m => m.status === StockStatus.NORMOSTOCK).length;
+      const sobreCount = recalculatedMedications.filter(m => m.status === StockStatus.SOBRESTOCK).length;
+      const desabastecidoCount = recalculatedMedications.filter(m => m.status === StockStatus.DESABASTECIDO).length;
+      const subCount = recalculatedMedications.filter(m => m.status === StockStatus.SUBSTOCK).length;
+      const sinRotacionCount = recalculatedMedications.filter(m => m.status === StockStatus.SIN_ROTACION).length;
 
       // We skip adding a new page and just append the legend at the bottom of Page 1.
       let currentY = startY + leftCardH + cardGap;

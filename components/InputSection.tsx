@@ -3,7 +3,8 @@ import React, { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { Trash2, Activity, Upload, FileSpreadsheet, Calendar, Check, AlertCircle, AlertTriangle, X, Syringe, Settings2, Play, RefreshCw, Sparkles, Download, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
 import { read, utils, writeFile } from 'xlsx';
-import { MedicationInput } from '../types';
+import { MedicationInput, HealthFacility, Microred } from '../types';
+import { api } from '../services/api';
 
 interface InputSectionProps {
   onAnalyze: (
@@ -105,6 +106,49 @@ export const InputSection: React.FC<InputSectionProps> = ({
   const [showReanalysisWarning, setShowReanalysisWarning] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
+
+  // States to hold official database facilities and microreds for metadata mapping and correction
+  const [dbFacilities, setDbFacilities] = useState<HealthFacility[]>([]);
+  const [dbMicroredes, setDbMicroredes] = useState<Microred[]>([]);
+
+  // Fetch facilities and microredes on mount
+  React.useEffect(() => {
+    const fetchDbData = async () => {
+      try {
+        const [facilities, microredes] = await Promise.all([
+          api.getFacilities(),
+          api.getMicroredes()
+        ]);
+        if (facilities) setDbFacilities(facilities);
+        if (microredes) setDbMicroredes(microredes);
+      } catch (err) {
+        console.error('Error fetching facilities or microredes for lookup:', err);
+      }
+    };
+    fetchDbData();
+  }, []);
+
+  // Automated lookup/correction: when importedCodEess is set or DB records load,
+  // find the corresponding official facility name and official microred name.
+  React.useEffect(() => {
+    if (importedCodEess && dbFacilities.length > 0) {
+      const normCod = importedCodEess.trim().replace(/^0+/, '');
+      const facility = dbFacilities.find(f => f.code.trim().replace(/^0+/, '') === normCod);
+      if (facility) {
+        // Correct/override establishment name with the official DB name
+        if (facility.name && facility.name !== importedEstablishmentName) {
+          setImportedEstablishmentName(facility.name);
+        }
+        // Correct/override microred with the official DB microred
+        if (facility.microredId && dbMicroredes.length > 0) {
+          const mr = dbMicroredes.find(m => m.id === facility.microredId);
+          if (mr && mr.name && mr.name !== importedMicrored) {
+            setImportedMicrored(mr.name);
+          }
+        }
+      }
+    }
+  }, [importedCodEess, dbFacilities, dbMicroredes, importedEstablishmentName, importedMicrored]);
 
   // Default to CURRENT month
   const [referenceDate, setReferenceDate] = useState<string>(() => {

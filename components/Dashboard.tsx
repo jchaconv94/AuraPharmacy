@@ -11,11 +11,17 @@ import {
   Cell,
   LabelList
 } from 'recharts';
-import { BarChart3, Package } from 'lucide-react';
-import { AuraAnalysisResult, StockStatus } from '../types';
+import { BarChart3, Package, X } from 'lucide-react';
+import { AuraAnalysisResult, StockStatus, DashboardViewMode } from '../types';
 
 interface DashboardProps {
   result: AuraAnalysisResult;
+  viewMode?: DashboardViewMode;
+  onViewModeChange?: (mode: DashboardViewMode) => void;
+  scopeFilter?: 'ALL' | 'DME';
+  onScopeFilterChange?: (scope: 'ALL' | 'DME') => void;
+  selectedStatusFilter?: StockStatus | null;
+  onStatusFilterChange?: (status: StockStatus | null) => void;
 }
 
 const COLORS = {
@@ -24,6 +30,14 @@ const COLORS = {
   [StockStatus.NORMOSTOCK]: '#10B981', // Emerald-500
   [StockStatus.SOBRESTOCK]: '#6366F1', // Indigo-500
   [StockStatus.SIN_ROTACION]: '#9CA3AF', // Gray-400
+};
+
+const BORDER_COLORS = {
+  [StockStatus.DESABASTECIDO]: '#B91C1C', // Red-700
+  [StockStatus.SUBSTOCK]: '#B45309', // Amber-700
+  [StockStatus.NORMOSTOCK]: '#047857', // Emerald-700
+  [StockStatus.SOBRESTOCK]: '#4338CA', // Indigo-700
+  [StockStatus.SIN_ROTACION]: '#4B5563', // Gray-600
 };
 
 // Descriptions for Tooltip
@@ -35,34 +49,67 @@ const STATUS_DESC = {
   [StockStatus.SIN_ROTACION]: 'Sin consumo (Inmovilizado)',
 };
 
-export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
+export const Dashboard: React.FC<DashboardProps> = React.memo(({ 
+  result, 
+  viewMode = 'INITIAL', 
+  onViewModeChange,
+  scopeFilter = 'ALL',
+  onScopeFilterChange,
+  selectedStatusFilter,
+  onStatusFilterChange
+}) => {
   const { medications, indicators } = result;
-  const totalItems = medications.length;
 
-  const essentialMedications = medications.filter(m => {
-      const isMed = (m.medtip || '').toUpperCase().trim() === 'M';
-      const isPet = (m.medpet || '').toUpperCase().trim() === 'P';
-      const est = (m.medest || '').toUpperCase().trim();
-      const isEst = est === '_' || est === 'S';
-      return isMed && isPet && isEst;
-  });
-  const essentialTotalItems = essentialMedications.length;
+  const handleBarClick = (statusKey: StockStatus) => {
+    if (!onStatusFilterChange) return;
+    if (selectedStatusFilter === statusKey) {
+      onStatusFilterChange(null);
+    } else {
+      onStatusFilterChange(statusKey);
+    }
+  };
 
-  // --- 1. Data for Availability Bar Chart (Only Essential Medications) ---
+  // Chart items depending on scopeFilter (ALL = 100% of medications/insumos in current table selection, DME = essential medications only)
+  const chartItems = scopeFilter === 'DME'
+    ? medications.filter(m => {
+        const isMed = (m.medtip || '').toUpperCase().trim() === 'M';
+        const isPet = (m.medpet || '').toUpperCase().trim() === 'P';
+        const est = (m.medest || '').toUpperCase().trim();
+        const isEst = est === '_' || est === 'S';
+        return isMed && isPet && isEst;
+      })
+    : medications;
+
+  const chartTotalItems = chartItems.length;
+  const totalItems = chartItems.length;
+
+  // --- 1. Data for Availability Bar Chart ---
   const statusData = [
-    { name: 'Desabastecido', key: StockStatus.DESABASTECIDO, value: essentialMedications.filter(m => m.status === StockStatus.DESABASTECIDO).length },
-    { name: 'SubStock', key: StockStatus.SUBSTOCK, value: essentialMedications.filter(m => m.status === StockStatus.SUBSTOCK).length },
-    { name: 'NormoStock', key: StockStatus.NORMOSTOCK, value: essentialMedications.filter(m => m.status === StockStatus.NORMOSTOCK).length },
-    { name: 'SobreStock', key: StockStatus.SOBRESTOCK, value: essentialMedications.filter(m => m.status === StockStatus.SOBRESTOCK).length },
-    { name: 'Sin Rotación', key: StockStatus.SIN_ROTACION, value: essentialMedications.filter(m => m.status === StockStatus.SIN_ROTACION).length },
+    { name: 'Desabastecido', key: StockStatus.DESABASTECIDO, value: chartItems.filter(m => m.status === StockStatus.DESABASTECIDO).length },
+    { name: 'SubStock', key: StockStatus.SUBSTOCK, value: chartItems.filter(m => m.status === StockStatus.SUBSTOCK).length },
+    { name: 'NormoStock', key: StockStatus.NORMOSTOCK, value: chartItems.filter(m => m.status === StockStatus.NORMOSTOCK).length },
+    { name: 'SobreStock', key: StockStatus.SOBRESTOCK, value: chartItems.filter(m => m.status === StockStatus.SOBRESTOCK).length },
+    { name: 'Sin Rotación', key: StockStatus.SIN_ROTACION, value: chartItems.filter(m => m.status === StockStatus.SIN_ROTACION).length },
   ].map(item => ({
     ...item,
-    percentageStr: essentialTotalItems > 0 ? ((item.value / essentialTotalItems) * 100).toFixed(1) : "0.0",
-    numericPercentage: essentialTotalItems > 0 ? (item.value / essentialTotalItems) * 100 : 0
+    percentageStr: chartTotalItems > 0 ? ((item.value / chartTotalItems) * 100).toFixed(1) : "0.0",
+    numericPercentage: chartTotalItems > 0 ? (item.value / chartTotalItems) * 100 : 0
   }));
 
-  // --- 2. Data for Distribution Chart (Meds vs Insumos) ---
-  const typeStats = medications.reduce((acc, item) => {
+  // --- 2. Calculate Availability Score for Center Card directly from chartItems ---
+  const availableItemsCount = chartItems.filter(m => 
+    m.status === StockStatus.NORMOSTOCK || m.status === StockStatus.SOBRESTOCK
+  ).length;
+
+  const availabilityScore = chartTotalItems > 0 ? (availableItemsCount / chartTotalItems) * 100 : 0;
+
+  let availabilityStatus = 'BAJO';
+  if (availabilityScore >= 90) availabilityStatus = 'OPTIMO';
+  else if (availabilityScore >= 80) availabilityStatus = 'ALTO';
+  else if (availabilityScore >= 70) availabilityStatus = 'REGULAR';
+
+  // --- 3. Data for Distribution Chart (Meds vs Insumos) from chartItems ---
+  const typeStats = chartItems.reduce((acc, item) => {
     const rawType = (item.medtip || '').toUpperCase().trim();
     let category = 'OTROS';
     if (rawType.startsWith('M') || item.name.includes('TABLET')) category = 'MEDICAMENTOS';
@@ -81,7 +128,7 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
     { name: 'INSUMOS', value: typeStats['INSUMOS']?.count || 0, money: typeStats['INSUMOS']?.money || 0, color: '#A855F7' }, // Purple
   ];
 
-  // Helper for DME Style
+  // Helper for Indicator Style
   const getIndicatorStyle = (status: string) => {
     switch(status) {
       case 'OPTIMO': return { container: 'bg-blue-50 border-blue-100', text: 'text-blue-800', badge: 'bg-blue-200 text-blue-900' };
@@ -90,7 +137,7 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
       default: return { container: 'bg-red-50 border-red-100', text: 'text-red-800', badge: 'bg-red-200 text-red-900' };
     }
   };
-  const indicatorStyle = getIndicatorStyle(indicators.status);
+  const indicatorStyle = getIndicatorStyle(availabilityStatus);
 
   // --- Custom Tooltips ---
   const CustomBarLabel = (props: any) => {
@@ -152,6 +199,87 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
   return (
     <div className="space-y-4 2xl:space-y-6">
         
+        {/* --- COMPACT CONTROLS TOOLBAR --- */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div className="flex items-center gap-3">
+                <div className="bg-teal-500/10 text-teal-700 p-2 rounded-xl shrink-0 border border-teal-500/10">
+                    <BarChart3 className="h-5 w-5" />
+                </div>
+                <div>
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                        Diagnóstico de Disponibilidad
+                    </h3>
+                </div>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {/* Switch 1: Horizon (Inicial vs Proyectado Simple vs Proyectado Ajustado) */}
+                <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200/80 text-xs font-bold">
+                    <button
+                        onClick={() => onViewModeChange?.('INITIAL')}
+                        className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                            viewMode === 'INITIAL'
+                                ? 'bg-white text-teal-900 shadow-sm border border-slate-200 font-black'
+                                : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                        title="Stock Actual con CPA Simple (sin pedidos)"
+                    >
+                        <span className={`h-2 w-2 rounded-full ${viewMode === 'INITIAL' ? 'bg-teal-500' : 'bg-slate-300'}`} />
+                        Stock Inicial
+                    </button>
+                    <button
+                        onClick={() => onViewModeChange?.('PROJECTED_SIMPLE')}
+                        className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                            viewMode === 'PROJECTED_SIMPLE'
+                                ? 'bg-white text-blue-900 shadow-sm border border-slate-200 font-black'
+                                : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                        title="Proyectado con pedido validado evaluado con CPA Simple (sin ajustes)"
+                    >
+                        <span className={`h-2 w-2 rounded-full ${viewMode === 'PROJECTED_SIMPLE' ? 'bg-blue-500' : 'bg-slate-300'}`} />
+                        Proyectado (CPA Simple)
+                    </button>
+                    <button
+                        onClick={() => onViewModeChange?.('PROJECTED_ADJUSTED')}
+                        className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                            viewMode === 'PROJECTED_ADJUSTED'
+                                ? 'bg-white text-purple-900 shadow-sm border border-slate-200 font-black'
+                                : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                        title="Proyectado con pedido validado evaluado con CPA Ajustado por atipicidades"
+                    >
+                        <span className={`h-2 w-2 rounded-full ${viewMode === 'PROJECTED_ADJUSTED' ? 'bg-purple-500' : 'bg-slate-300'}`} />
+                        Proyectado (CPA Ajust.)
+                    </button>
+                </div>
+
+                {/* Switch 2: Scope (Todos vs DME) */}
+                <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200/80 text-xs font-bold">
+                    <button
+                        onClick={() => onScopeFilterChange?.('ALL')}
+                        className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+                            scopeFilter === 'ALL' || !scopeFilter
+                                ? 'bg-white text-slate-900 shadow-sm border border-slate-200 font-black'
+                                : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                    >
+                        Todos (100%)
+                    </button>
+                    <button
+                        onClick={() => onScopeFilterChange?.('DME')}
+                        className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+                            scopeFilter === 'DME'
+                                ? 'bg-indigo-600 text-white shadow-sm font-black'
+                                : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                        title="Filtrar gráficos para Medicamentos Esenciales"
+                    >
+                        Esenciales (DME)
+                    </button>
+                </div>
+            </div>
+        </div>
+        
         {/* --- TOP SECTION: 3 COLUMNS --- */}
         {/* Layout: Changed to stack on mobile/tablet, and row on XL screens */}
         <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_0.8fr_1.1fr] gap-4 2xl:gap-6 items-stretch">
@@ -163,6 +291,16 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
                       <BarChart3 className="h-4 w-4" />
                       Distribución de Disponibilidad
                    </h4>
+                   {selectedStatusFilter && (
+                      <button
+                         onClick={() => onStatusFilterChange?.(null)}
+                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-900 text-white hover:bg-slate-800 transition-all shadow-xs"
+                         title="Quitar filtro de la matriz"
+                      >
+                         <span>Filtro: {selectedStatusFilter}</span>
+                         <X className="h-3 w-3 text-slate-300 hover:text-white" />
+                      </button>
+                   )}
                 </div>
 
                 <div className="flex-1 w-full min-h-0">
@@ -177,8 +315,28 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
                                 dataKey="name" 
                                 axisLine={{ stroke: '#E5E7EB', strokeWidth: 1.5 }} 
                                 tickLine={false} 
-                                tick={{ fill: '#6B7280', fontSize: 9, fontWeight: 600 }} 
-                                dy={10}
+                                tick={(props: any) => {
+                                  const { x, y, payload, index } = props;
+                                  const itemKey = statusData[index]?.key as StockStatus;
+                                  const isSelected = selectedStatusFilter === itemKey;
+                                  return (
+                                    <g transform={`translate(${x},${y})`}>
+                                      <text
+                                        x={0}
+                                        y={0}
+                                        dy={12}
+                                        textAnchor="middle"
+                                        fontSize={9}
+                                        fontWeight={isSelected ? 900 : 600}
+                                        fill={isSelected ? COLORS[itemKey] : '#6B7280'}
+                                        className="cursor-pointer select-none hover:underline"
+                                        onClick={() => handleBarClick(itemKey)}
+                                      >
+                                        {payload.value}
+                                      </text>
+                                    </g>
+                                  );
+                                }} 
                                 interval={0}
                             />
                             <YAxis 
@@ -191,10 +349,30 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
                                 width={30}
                             />
                             <Tooltip content={<CustomStatusTooltip />} cursor={{ fill: '#F9FAFB' }} />
-                            <Bar dataKey="numericPercentage" radius={[6, 6, 0, 0]}>
-                                {statusData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[entry.key as StockStatus]} />
-                                ))}
+                            <Bar 
+                                dataKey="numericPercentage" 
+                                radius={[6, 6, 0, 0]}
+                                onClick={(entry: any) => {
+                                  if (entry && entry.key) {
+                                    handleBarClick(entry.key as StockStatus);
+                                  }
+                                }}
+                            >
+                                {statusData.map((entry, index) => {
+                                    const isSelected = selectedStatusFilter === entry.key;
+                                    const isAnySelected = !!selectedStatusFilter;
+                                    return (
+                                        <Cell 
+                                            key={`cell-${index}`} 
+                                            fill={COLORS[entry.key as StockStatus]}
+                                            opacity={isAnySelected ? (isSelected ? 1 : 0.3) : 1}
+                                            stroke={isSelected ? BORDER_COLORS[entry.key as StockStatus] : undefined}
+                                            strokeWidth={isSelected ? 2.5 : 0}
+                                            className="cursor-pointer transition-all duration-200 hover:opacity-80"
+                                            onClick={() => handleBarClick(entry.key as StockStatus)}
+                                        />
+                                    );
+                                })}
                                 <LabelList content={<CustomBarLabel />} />
                             </Bar>
                         </BarChart>
@@ -202,21 +380,25 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ result }) => {
                 </div>
             </div>
 
-            {/* 2. CENTER: DME Indicator Card */}
+            {/* 2. CENTER: Availability Indicator Card */}
             <div className={`rounded-2xl p-6 2xl:p-8 border flex flex-col items-center justify-center text-center shadow-sm relative h-full min-h-[280px] 2xl:min-h-[380px] ${indicatorStyle.container}`}>
-                <h4 className="text-[9px] 2xl:text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 2xl:mb-2">% Disponibilidad de Medicamentos</h4>
+                <h4 className="text-[9px] 2xl:text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 2xl:mb-2">
+                    {scopeFilter === 'DME' ? '% DISPONIBILIDAD ESENCIALES (DME)' : '% DISPONIBILIDAD DE ÍTEMS'}
+                </h4>
                 <div className={`text-5xl 2xl:text-7xl font-black mb-3 2xl:mb-4 ${indicatorStyle.text} tracking-tighter`}>
-                    {(indicators.dmeScore || 0).toFixed(1)}%
+                    {availabilityScore.toFixed(1)}%
                 </div>
                 <div className={`px-3 py-1 2xl:px-4 2xl:py-1.5 rounded-full text-[9px] 2xl:text-[10px] font-bold uppercase tracking-wide mb-3 2xl:mb-4 ${indicatorStyle.badge}`}>
-                    {indicators.status}
+                    {availabilityStatus}
                 </div>
                 <p className="text-[9px] 2xl:text-[10px] text-gray-500 max-w-[200px] leading-relaxed mb-4 2xl:mb-6">
-                    Medicamentos e insumos con stock disponible en el establecimiento .
+                    {scopeFilter === 'DME' 
+                        ? 'Medicamentos esenciales con stock disponible (NormoStock + SobreStock).' 
+                        : 'Medicamentos e insumos seleccionados con stock disponible en el establecimiento.'}
                 </p>
                 <div className="absolute bottom-4 2xl:bottom-6 w-full px-6 2xl:px-8 flex justify-between text-[8px] 2xl:text-[9px] font-bold uppercase text-gray-400/80">
                       <span>Meta: &gt;90%</span>
-                      <span>{result.indicators.availableItems} / {result.indicators.totalItems}</span>
+                      <span>{availableItemsCount} / {chartTotalItems}</span>
                 </div>
             </div>
 
