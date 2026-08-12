@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
+  Coins,
   Download,
   FileSpreadsheet,
   Filter,
   LockKeyhole,
+  Package,
   PackagePlus,
   Pencil,
   RefreshCw,
@@ -154,6 +157,33 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
     (effectiveScope.ownerType === "IPRESS" && effectiveScope.facilityCode)
   );
   const inventoryIsClosed = activeInventory?.status === "CLOSED";
+
+  const kpiProductsCount = useMemo(() => {
+    if (preview) return validRows.length;
+    return activeInventory ? inventoryItems.length : 0;
+  }, [preview, validRows.length, activeInventory, inventoryItems.length]);
+
+  const kpiTotalQuantity = useMemo(() => {
+    if (preview) return validRows.reduce((sum, row) => sum + row.quantity, 0);
+    return activeInventory ? inventoryItems.reduce((sum, item) => sum + item.quantity, 0) : 0;
+  }, [preview, validRows, activeInventory, inventoryItems]);
+
+  const kpiTotalValue = useMemo(() => {
+    if (preview) return totalValue;
+    return activeInventory ? inventoryItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) : 0;
+  }, [preview, totalValue, activeInventory, inventoryItems]);
+
+  const kpiStatusLabel = useMemo(() => {
+    if (preview) return "Previsualización";
+    if (!activeInventory) return "Sin registrar";
+    return activeInventory.status === "CLOSED" ? "Cerrado" : "Borrador";
+  }, [preview, activeInventory]);
+
+  const kpiStatusTone = useMemo(() => {
+    if (preview) return "warning" as const;
+    if (!activeInventory) return "neutral" as const;
+    return activeInventory.status === "CLOSED" ? ("success" as const) : ("warning" as const);
+  }, [preview, activeInventory]);
 
   const processFile = async (file?: File) => {
     if (!file) return;
@@ -396,6 +426,34 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
           onFacilityChange={setAdminFacilityCode}
         />
       )}
+
+      {/* KPI Cards Grid */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <ImmunizationKpiCard
+          label="Productos/lotes"
+          value={String(kpiProductsCount)}
+          tone="success"
+          icon={<Package className="h-5 w-5" />}
+        />
+        <ImmunizationKpiCard
+          label="Frascos/unidades"
+          value={kpiTotalQuantity.toLocaleString("es-PE")}
+          tone="info"
+          icon={<Activity className="h-5 w-5" />}
+        />
+        <ImmunizationKpiCard
+          label="Valorización"
+          value={currencyFormatter.format(kpiTotalValue)}
+          tone="neutral"
+          icon={<Coins className="h-5 w-5" />}
+        />
+        <ImmunizationKpiCard
+          label="Estado"
+          value={kpiStatusLabel}
+          tone={kpiStatusTone}
+          icon={<LockKeyhole className="h-5 w-5" />}
+        />
+      </section>
 
       <div className="w-full">
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden w-full">
@@ -670,13 +728,6 @@ const SavedInventoryView: React.FC<SavedInventoryViewProps> = ({ inventory, item
 
   return (
     <div className={loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-slate-50 border-b border-slate-100">
-        <ImmunizationKpiCard filled label="Productos/lotes" value={String(items.length)} tone="success" />
-        <ImmunizationKpiCard filled label="Frascos/unidades" value={totalQuantity.toLocaleString("es-PE")} tone="neutral" />
-        <ImmunizationKpiCard filled label="Valorizacion" value={currencyFormatter.format(totalValue)} tone="neutral" />
-        <ImmunizationKpiCard filled label="Estado" value={inventory.status === "CLOSED" ? "Cerrado" : "Borrador"} tone={inventory.status === "CLOSED" ? "success" : "warning"} />
-      </div>
-
       <div className="p-3 bg-white border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
