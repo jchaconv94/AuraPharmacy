@@ -36,6 +36,7 @@ import { ImmunizationConsumptionModule } from './components/ImmunizationConsumpt
 import { ImmunizationDistributionsModule } from './components/ImmunizationDistributionsModule';
 import { ImmunizationIncomesModule } from './components/ImmunizationIncomesModule';
 import { ImmunizationIncomeOriginsModule } from './components/ImmunizationIncomeOriginsModule';
+import { ImmunizationConfigModule } from './components/ImmunizationConfigModule';
 import { ImmunizationInitialInventoryModule } from './components/ImmunizationInitialInventoryModule';
 import { ImmunizationReportsModule } from './components/ImmunizationReportsModule';
 import { ImmunizationReturnsModule } from './components/ImmunizationReturnsModule';
@@ -246,6 +247,7 @@ const AuthenticatedApp: React.FC = () => {
                            {currentView === 'IMMUNIZATION_ADJUSTMENTS' && 'Reajustes de Stock'}
                            {currentView === 'IMMUNIZATION_CLOSURES' && 'Cierre Mensual'}
                            {currentView === 'IMMUNIZATION_REPORTS' && 'Reportes Inmunizaciones'}
+                           {currentView === 'IMMUNIZATION_CONFIG' && 'Configuración Inmunizaciones'}
                            {currentView === 'ADMIN_STOCK_ASSIGN' && 'Asignar Stock a IPRESS'}
                            {currentView.startsWith('ADMIN') && currentView !== 'ADMIN_STOCK_ASSIGN' && 'Panel de Administración'}
                            {currentView === 'PROFILE' && 'Perfil de Usuario'}
@@ -279,6 +281,7 @@ const AuthenticatedApp: React.FC = () => {
                                 {currentView === 'IMMUNIZATION_ADJUSTMENTS' && <ImmunizationAdjustmentsModule />}
                                 {currentView === 'IMMUNIZATION_CLOSURES' && <ImmunizationClosuresModule />}
                                 {currentView === 'IMMUNIZATION_REPORTS' && <ImmunizationReportsModule />}
+                                {currentView === 'IMMUNIZATION_CONFIG' && <ImmunizationConfigModule />}
                                 {currentView === 'ADMIN_STOCK_ASSIGN' && <AdminStockAssignmentModule />}
                                 {currentView.startsWith('ADMIN') && currentView !== 'ADMIN_STOCK_ASSIGN' && <AdminPanel currentView={currentView} />}
                                 {currentView === 'PROFILE' && <UserProfile />}

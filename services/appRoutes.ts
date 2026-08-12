@@ -34,6 +34,7 @@ const RUTAS: Record<AppModule, string> = {
   IMMUNIZATION_ADJUSTMENTS: "/inmunizaciones/reajustes",
   IMMUNIZATION_CLOSURES: "/inmunizaciones/cierre-mensual",
   IMMUNIZATION_REPORTS: "/inmunizaciones/reportes",
+  IMMUNIZATION_CONFIG: "/inmunizaciones/configuracion",
 
   ADMIN_USERS: "/administracion/usuarios",
   ADMIN_ROLES: "/administracion/roles",

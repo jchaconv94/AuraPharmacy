@@ -356,7 +356,7 @@ export const ImmunizationReturnsModule: React.FC = () => {
           <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-600">{visibleBatches.length} visibles</span>
         </div>
 
-        {loading ? (
+        {loading && batches.length === 0 ? (
           <div className="flex justify-center py-16"><div className="h-9 w-9 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" /></div>
         ) : visibleBatches.length === 0 ? (
           <div className="p-10 text-center">
@@ -365,7 +365,7 @@ export const ImmunizationReturnsModule: React.FC = () => {
             <p className="mt-1 text-sm text-slate-500">Los movimientos apareceran cuando una IPRESS registre una baja o devolucion.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className={`overflow-x-auto ${loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}`}>
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
                 <tr>

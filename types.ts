@@ -132,7 +132,8 @@ export type AppModule =
   | 'IMMUNIZATION_RETURNS'
   | 'IMMUNIZATION_ADJUSTMENTS'
   | 'IMMUNIZATION_CLOSURES'
-  | 'IMMUNIZATION_REPORTS';
+  | 'IMMUNIZATION_REPORTS'
+  | 'IMMUNIZATION_CONFIG';
 
 export const AVAILABLE_MODULES: { id: AppModule; label: string; description: string }[] = [
   { id: 'DASHBOARD', label: 'Dashboard', description: 'Vista principal y resumen de indicadores' },
@@ -162,9 +163,22 @@ export const AVAILABLE_MODULES: { id: AppModule; label: string; description: str
   { id: 'IMMUNIZATION_ADJUSTMENTS', label: 'Reajustes de Stock', description: 'Correcciones auditadas por conteo físico' },
   { id: 'IMMUNIZATION_CLOSURES', label: 'Cierre Mensual', description: 'Precierre IPRESS y cierre definitivo mensual por UNGET' },
   { id: 'IMMUNIZATION_REPORTS', label: 'Reportes Inmunizaciones', description: 'Reportes parciales y consolidados del movimiento biológico' },
+  { id: 'IMMUNIZATION_CONFIG', label: 'Configuración Inmunizaciones', description: 'Configuraciones y catálogos auxiliares de inmunizaciones' },
 ];
 
-export type ImmunizationProductType = 'VACUNA' | 'JERINGA' | 'DILUYENTE';
+export type ImmunizationProductType = string;
+
+export interface ImmunizationProductTypeItem {
+  id?: string;
+  code: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 export type ImmunizationOwnerType = 'DIRESA' | 'UNGET' | 'IPRESS';
 export type ImmunizationInventoryStatus = 'DRAFT' | 'CLOSED';
 export type ImmunizationInventorySourceType = 'MANUAL' | 'EXCEL' | 'MIXED';

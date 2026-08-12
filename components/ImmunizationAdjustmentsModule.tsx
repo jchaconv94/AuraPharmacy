@@ -333,12 +333,12 @@ export function ImmunizationAdjustmentsModule() {
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center gap-2 border-b border-slate-100 p-4"><ClipboardCheck className="h-4 w-4 text-teal-600" /><h3 className="text-sm font-black uppercase tracking-wide text-slate-900">Auditoría de reajustes</h3></div>
-        {loading ? (
+        {loading && adjustments.length === 0 ? (
           <div className="flex justify-center py-16"><div className="h-9 w-9 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" /></div>
         ) : visibleAdjustments.length === 0 ? (
           <div className="p-10 text-center"><FileText className="mx-auto mb-3 h-10 w-10 text-slate-300" /><h3 className="font-black text-slate-800">Sin reajustes para este filtro</h3><p className="mt-1 text-sm text-slate-500">Aquí aparecerán las correcciones de cantidad y datos físicos auditadas.</p></div>
         ) : (
-          <>
+          <div className={loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}>
             <div className="divide-y divide-slate-100 md:hidden">
               {visibleAdjustments.map(adjustment => (
                 <article key={adjustment.id} className="p-4">
@@ -369,7 +369,7 @@ export function ImmunizationAdjustmentsModule() {
                 </tbody>
               </table>
             </div>
-          </>
+          </div>
         )}
       </section>
 

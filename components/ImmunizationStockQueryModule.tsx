@@ -333,7 +333,7 @@ export const ImmunizationStockQueryModule: React.FC = () => {
           </div>
         </div>
 
-        {loading ? (
+        {loading && layers.length === 0 ? (
           <div className="flex min-h-[220px] items-center justify-center">
             <div className="flex items-center gap-3 text-sm font-black text-slate-500">
               <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
@@ -352,7 +352,7 @@ export const ImmunizationStockQueryModule: React.FC = () => {
             ) : undefined}
           />
         ) : (
-          <>
+          <div className={loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}>
             {/* En celular la tabla no cabe: cada fila se muestra como tarjeta. */}
             <div className="divide-y divide-slate-100 md:hidden">
               {filas.map(fila => {
@@ -419,7 +419,7 @@ export const ImmunizationStockQueryModule: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          </>
+          </div>
         )}
       </section>
     </div>

@@ -289,7 +289,7 @@ export const ImmunizationReportsModule: React.FC = () => {
         </section>
       )}
 
-      {loading ? (
+      {loading && closures.length === 0 ? (
         <div className="flex min-h-[260px] items-center justify-center rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center gap-3 text-sm font-black text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
@@ -297,7 +297,7 @@ export const ImmunizationReportsModule: React.FC = () => {
           </div>
         </div>
       ) : (
-        <>
+        <div className={loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}>
           <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <ImmunizationKpiCard
               icon={<CalendarCheck className="h-5 w-5" />}
@@ -437,7 +437,7 @@ export const ImmunizationReportsModule: React.FC = () => {
               </div>
             )}
           </section>
-        </>
+        </div>
       )}
     </div>
   );

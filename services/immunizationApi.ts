@@ -14,6 +14,7 @@ import {
   ImmunizationMonthlyClosureOwnerType,
   ImmunizationOwnerType,
   ImmunizationProduct,
+  ImmunizationProductTypeItem,
   ImmunizationReceptionInput,
   ImmunizationReturnBatch,
   ImmunizationReturnItem,
@@ -32,6 +33,7 @@ const MOVEMENTS_CACHE_KEY = "aura_immunization_stock_movements";
 const INCOME_BATCHES_CACHE_KEY = "aura_immunization_income_batches";
 const INCOME_ITEMS_CACHE_KEY = "aura_immunization_income_items";
 const INCOME_ORIGINS_CACHE_KEY = "aura_immunization_income_origins";
+const PRODUCT_TYPES_CACHE_KEY = "aura_immunization_product_types";
 const DISTRIBUTION_BATCHES_CACHE_KEY = "aura_immunization_distribution_batches";
 const DISTRIBUTION_ITEMS_CACHE_KEY = "aura_immunization_distribution_items";
 const RETURN_BATCHES_CACHE_KEY = "aura_immunization_return_batches";
@@ -90,6 +92,16 @@ const normalizeProduct = (row: any): ImmunizationProduct => ({
   createdAt: row.created_at || undefined,
   updatedAt: row.updated_at || undefined
 });
+
+const normalizeCatalogText = (str: string): string =>
+  str
+    ? str
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, " ")
+    : "";
 
 const normalizeInventory = (row: any): ImmunizationInitialInventory => ({
   id: row.id,
@@ -252,6 +264,106 @@ const deleteLocalIncomeOrigin = (id: string, username?: string): { success: bool
   const exists = baseRows.some(row => row.id === id);
   if (!exists) return { success: false, message: "No se encontró el origen de ingreso." };
   setCachedList(INCOME_ORIGINS_CACHE_KEY, baseRows.map(row => row.id === id
+    ? { ...row, isActive: false, updatedBy: username, updatedAt: now }
+    : row
+  ));
+  return { success: true };
+};
+
+const defaultProductTypes = (): ImmunizationProductTypeItem[] => [
+  {
+    id: "default-vacuna",
+    code: "VACUNA",
+    name: "Vacuna",
+    description: "Biológicos de inmunización",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: "default-jeringa",
+    code: "JERINGA",
+    name: "Jeringa",
+    description: "Dispositivos de inyección y aplicación",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: "default-diluyente",
+    code: "DILUYENTE",
+    name: "Diluyente",
+    description: "Soluciones reconstituyentes para biológicos",
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+const normalizeProductType = (row: any): ImmunizationProductTypeItem => ({
+  id: row.id,
+  code: row.code || row.codigo || row.tipo_producto,
+  name: row.name || row.nombre || row.descripcion || row.code,
+  description: row.description || row.descripcion || undefined,
+  isActive: row.is_active !== false,
+  createdBy: row.created_by || undefined,
+  updatedBy: row.updated_by || undefined,
+  createdAt: row.created_at || undefined,
+  updatedAt: row.updated_at || undefined
+});
+
+const saveLocalProductType = (typeItem: ImmunizationProductTypeItem): { success: boolean; typeItem?: ImmunizationProductTypeItem; message?: string } => {
+  const code = (typeItem.code || "").trim().toUpperCase();
+  const name = (typeItem.name || "").trim();
+  if (!code || !name) return { success: false, message: "Código y nombre son obligatorios." };
+  const now = new Date().toISOString();
+  const cached = getCachedList<ImmunizationProductTypeItem>(PRODUCT_TYPES_CACHE_KEY);
+  const baseRows = cached.length > 0 ? cached : defaultProductTypes();
+  const existingByIdIndex = typeItem.id ? baseRows.findIndex(row => row.id === typeItem.id) : -1;
+  const duplicateCodeIndex = baseRows.findIndex(row =>
+    row.code.trim().toUpperCase() === code &&
+    (!typeItem.id || row.id !== typeItem.id)
+  );
+  if (duplicateCodeIndex >= 0) {
+    return { success: false, message: "Ya existe un tipo de producto con ese código." };
+  }
+  if (existingByIdIndex >= 0) {
+    const updated = {
+      ...baseRows[existingByIdIndex],
+      code,
+      name,
+      description: typeItem.description?.trim() || undefined,
+      isActive: typeItem.isActive !== false,
+      updatedBy: typeItem.updatedBy || typeItem.createdBy,
+      updatedAt: now
+    };
+    const next = baseRows.map((row, index) => index === existingByIdIndex ? updated : row);
+    setCachedList(PRODUCT_TYPES_CACHE_KEY, next);
+    return { success: true, typeItem: updated };
+  }
+
+  const saved: ImmunizationProductTypeItem = {
+    id: typeItem.id || makeLocalId("imm-prod-type"),
+    code,
+    name,
+    description: typeItem.description?.trim() || undefined,
+    isActive: typeItem.isActive !== false,
+    createdBy: typeItem.createdBy,
+    updatedBy: typeItem.updatedBy || typeItem.createdBy,
+    createdAt: now,
+    updatedAt: now
+  };
+  setCachedList(PRODUCT_TYPES_CACHE_KEY, [...baseRows, saved]);
+  return { success: true, typeItem: saved };
+};
+
+const deleteLocalProductType = (id: string, username?: string): { success: boolean; message?: string } => {
+  const now = new Date().toISOString();
+  const cached = getCachedList<ImmunizationProductTypeItem>(PRODUCT_TYPES_CACHE_KEY);
+  const baseRows = cached.length > 0 ? cached : defaultProductTypes();
+  const exists = baseRows.some(row => row.id === id);
+  if (!exists) return { success: false, message: "No se encontró el tipo de producto." };
+  setCachedList(PRODUCT_TYPES_CACHE_KEY, baseRows.map(row => row.id === id
     ? { ...row, isActive: false, updatedBy: username, updatedAt: now }
     : row
   ));
@@ -952,13 +1064,45 @@ export const immunizationApi = {
       const codigoSismed = product.codigoSismed.trim();
       const descripcion = product.descripcion.trim();
       if (!codigoSismed || !descripcion) {
-        return { success: false, message: "Codigo SISMED y descripcion son obligatorios." };
+        return { success: false, message: "Código SISMED y descripción son obligatorios." };
       }
-      if (!["VACUNA", "JERINGA", "DILUYENTE"].includes(product.tipoProducto)) {
-        return { success: false, message: "Tipo de producto invalido." };
+      if (!product.tipoProducto || !product.tipoProducto.trim()) {
+        return { success: false, message: "Seleccione un tipo de producto válido." };
       }
 
+      const normCode = normalizeCatalogText(codigoSismed);
+      const normDesc = normalizeCatalogText(descripcion);
+
       if (supabase) {
+        // Consultar catálogo existente para evitar duplicidad de código o descripción
+        const { data: existingProducts, error: fetchErr } = await supabase
+          .from("immunization_products")
+          .select("id, codigo_sismed, descripcion");
+
+        if (fetchErr) {
+          console.warn("Error verificando duplicados en Supabase", fetchErr);
+        } else if (existingProducts && existingProducts.length > 0) {
+          const dupCode = existingProducts.find(
+            p => p.id !== product.id && normalizeCatalogText(p.codigo_sismed) === normCode
+          );
+          if (dupCode) {
+            return {
+              success: false,
+              message: `El código SISMED "${codigoSismed}" ya pertenece al producto "${dupCode.descripcion}".`
+            };
+          }
+
+          const dupDesc = existingProducts.find(
+            p => p.id !== product.id && normalizeCatalogText(p.descripcion) === normDesc
+          );
+          if (dupDesc) {
+            return {
+              success: false,
+              message: `La descripción "${descripcion}" ya está registrada con el código SISMED "${dupDesc.codigo_sismed}".`
+            };
+          }
+        }
+
         const payload: any = {
           codigo_sismed: codigoSismed,
           descripcion,
@@ -982,7 +1126,28 @@ export const immunizationApi = {
       }
 
       const current = getCachedList<ImmunizationProduct>(PRODUCTS_CACHE_KEY);
-      const existing = current.find(p => p.id === product.id || p.codigoSismed === codigoSismed);
+
+      const dupCode = current.find(
+        p => p.id !== product.id && normalizeCatalogText(p.codigoSismed) === normCode
+      );
+      if (dupCode) {
+        return {
+          success: false,
+          message: `El código SISMED "${codigoSismed}" ya pertenece al producto "${dupCode.descripcion}".`
+        };
+      }
+
+      const dupDesc = current.find(
+        p => p.id !== product.id && normalizeCatalogText(p.descripcion) === normDesc
+      );
+      if (dupDesc) {
+        return {
+          success: false,
+          message: `La descripción "${descripcion}" ya está registrada con el código SISMED "${dupDesc.codigoSismed}".`
+        };
+      }
+
+      const existing = current.find(p => p.id === product.id || normalizeCatalogText(p.codigoSismed) === normCode);
       const nextProduct: ImmunizationProduct = {
         ...product,
         id: existing?.id || product.id || makeLocalId("imm-prod"),
@@ -1598,6 +1763,109 @@ export const immunizationApi = {
     } catch (e: any) {
       console.warn("Fallback local deleteIncomeOrigin inmunizaciones", e);
       return deleteLocalIncomeOrigin(id, username);
+    }
+  },
+
+  listProductTypes: async (includeInactive = false): Promise<ImmunizationProductTypeItem[]> => {
+    try {
+      if (supabase) {
+        let query = supabase
+          .from("immunization_product_types")
+          .select("*")
+          .order("name", { ascending: true });
+        if (!includeInactive) query = query.eq("is_active", true);
+        const { data, error } = await query;
+        if (error) throw error;
+        if (data && data.length > 0) return data.map(normalizeProductType);
+      }
+    } catch (e) {
+      console.warn("Fallback local listProductTypes inmunizaciones", e);
+    }
+    const cachedRows = getCachedList<ImmunizationProductTypeItem>(PRODUCT_TYPES_CACHE_KEY);
+    const baseRows = cachedRows.length > 0 ? cachedRows : defaultProductTypes();
+    if (cachedRows.length === 0) setCachedList(PRODUCT_TYPES_CACHE_KEY, baseRows);
+    const rows = includeInactive ? baseRows : baseRows.filter(t => t.isActive !== false);
+    if (rows.length > 0) return rows.sort((a, b) => a.name.localeCompare(b.name));
+    const defaults = defaultProductTypes();
+    setCachedList(PRODUCT_TYPES_CACHE_KEY, defaults);
+    return defaults;
+  },
+
+  saveProductType: async (
+    typeItem: ImmunizationProductTypeItem
+  ): Promise<{ success: boolean; typeItem?: ImmunizationProductTypeItem; message?: string }> => {
+    try {
+      const code = (typeItem.code || "").trim().toUpperCase();
+      const name = (typeItem.name || "").trim();
+      if (!code || !name) return { success: false, message: "Código y nombre son obligatorios." };
+
+      if (supabase) {
+        const now = new Date().toISOString();
+        if (typeItem.id && !typeItem.id.startsWith("default-")) {
+          const { data, error } = await supabase
+            .from("immunization_product_types")
+            .update({
+              code,
+              name,
+              description: typeItem.description?.trim() || null,
+              is_active: typeItem.isActive !== false,
+              updated_by: typeItem.updatedBy || typeItem.createdBy || null,
+              updated_at: now
+            })
+            .eq("id", typeItem.id)
+            .select()
+            .single();
+          if (error) throw error;
+          return { success: true, typeItem: normalizeProductType(data) };
+        }
+
+        const { data, error } = await supabase
+          .from("immunization_product_types")
+          .upsert({
+            code,
+            name,
+            description: typeItem.description?.trim() || null,
+            is_active: typeItem.isActive !== false,
+            created_by: typeItem.createdBy || null,
+            updated_by: typeItem.updatedBy || typeItem.createdBy || null,
+            created_at: now,
+            updated_at: now
+          }, { onConflict: "code" })
+          .select()
+          .single();
+        if (error) throw error;
+        return { success: true, typeItem: normalizeProductType(data) };
+      }
+
+      return saveLocalProductType(typeItem);
+    } catch (e: any) {
+      console.warn("Fallback local saveProductType inmunizaciones", e);
+      return saveLocalProductType(typeItem);
+    }
+  },
+
+  deleteProductType: async (
+    id: string,
+    username?: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    try {
+      if (!id) return { success: false, message: "No se encontró el tipo de producto." };
+      if (supabase && !id.startsWith("default-")) {
+        const { error } = await supabase
+          .from("immunization_product_types")
+          .update({
+            is_active: false,
+            updated_by: username || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", id);
+        if (error) throw error;
+        return { success: true };
+      }
+      return deleteLocalProductType(id, username);
+    } catch (e: any) {
+      console.warn("Fallback local deleteProductType inmunizaciones", e);
+      return deleteLocalProductType(id, username);
     }
   },
 

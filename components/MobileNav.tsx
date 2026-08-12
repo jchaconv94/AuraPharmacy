@@ -60,13 +60,13 @@ const GRUPOS: Grupo[] = [
       { module: 'IMMUNIZATION_STOCK', label: 'Stock Biológico', icon: icono(Boxes) },
       { module: 'IMMUNIZATION_STOCK_QUERY', label: 'Consulta de Stock', icon: icono(PackageSearch) },
       { module: 'IMMUNIZATION_INCOMES', label: 'Ingresos Regionales', icon: icono(ArrowDownToLine) },
-      { module: 'IMMUNIZATION_INCOME_ORIGINS', label: 'Orígenes de Ingreso', icon: icono(Sliders) },
       { module: 'IMMUNIZATION_DISTRIBUTIONS', label: 'Distribuciones', icon: icono(Truck) },
       { module: 'IMMUNIZATION_CONSUMPTION', label: 'Consumo IPRESS', icon: icono(Activity) },
       { module: 'IMMUNIZATION_RETURNS', label: 'Devoluciones y Bajas', icon: icono(ArchiveX) },
       { module: 'IMMUNIZATION_ADJUSTMENTS', label: 'Reajustes de Stock', icon: icono(Scale) },
       { module: 'IMMUNIZATION_CLOSURES', label: 'Cierre Mensual', icon: icono(CalendarCheck) },
-      { module: 'IMMUNIZATION_REPORTS', label: 'Reportes', icon: icono(BarChart3) }
+      { module: 'IMMUNIZATION_REPORTS', label: 'Reportes', icon: icono(BarChart3) },
+      { module: 'IMMUNIZATION_CONFIG', label: 'Configuración', icon: icono(Sliders) }
     ]
   },
   {

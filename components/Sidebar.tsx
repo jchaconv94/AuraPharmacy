@@ -205,7 +205,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         )}
 
-        {(hasPermission('IMMUNIZATION_CATALOG') || hasPermission('IMMUNIZATION_INITIAL_INVENTORY') || hasPermission('IMMUNIZATION_STOCK') || hasPermission('IMMUNIZATION_STOCK_QUERY') || hasPermission('IMMUNIZATION_INCOMES') || hasPermission('IMMUNIZATION_INCOME_ORIGINS') || hasPermission('IMMUNIZATION_DISTRIBUTIONS') || hasPermission('IMMUNIZATION_CONSUMPTION') || hasPermission('IMMUNIZATION_RETURNS') || hasPermission('IMMUNIZATION_ADJUSTMENTS') || hasPermission('IMMUNIZATION_CLOSURES') || hasPermission('IMMUNIZATION_REPORTS')) && (
+        {(hasPermission('IMMUNIZATION_CATALOG') || hasPermission('IMMUNIZATION_INITIAL_INVENTORY') || hasPermission('IMMUNIZATION_STOCK') || hasPermission('IMMUNIZATION_STOCK_QUERY') || hasPermission('IMMUNIZATION_INCOMES') || hasPermission('IMMUNIZATION_INCOME_ORIGINS') || hasPermission('IMMUNIZATION_DISTRIBUTIONS') || hasPermission('IMMUNIZATION_CONSUMPTION') || hasPermission('IMMUNIZATION_RETURNS') || hasPermission('IMMUNIZATION_ADJUSTMENTS') || hasPermission('IMMUNIZATION_CLOSURES') || hasPermission('IMMUNIZATION_REPORTS') || hasPermission('IMMUNIZATION_CONFIG')) && (
           <div className="flex flex-col gap-1">
             <button
               onClick={toggleImmunization}
@@ -287,17 +287,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       Ingresos Regionales
                     </button>
                   )}
-                  {hasPermission('IMMUNIZATION_INCOME_ORIGINS') && (
-                    <button
-                      onClick={() => setCurrentView('IMMUNIZATION_INCOME_ORIGINS')}
-                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
-                        currentView === 'IMMUNIZATION_INCOME_ORIGINS' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      <Sliders className="h-4 w-4 shrink-0" />
-                      Orígenes de Ingreso
-                    </button>
-                  )}
                   {hasPermission('IMMUNIZATION_DISTRIBUTIONS') && (
                     <button
                       onClick={() => setCurrentView('IMMUNIZATION_DISTRIBUTIONS')}
@@ -362,6 +351,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <BarChart3 className="h-4 w-4 shrink-0" />
                       Reportes
+                    </button>
+                  )}
+                  {(hasPermission('IMMUNIZATION_CONFIG') || hasPermission('IMMUNIZATION_INCOME_ORIGINS')) && (
+                    <button
+                      onClick={() => setCurrentView('IMMUNIZATION_CONFIG')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'IMMUNIZATION_CONFIG' || currentView === 'IMMUNIZATION_INCOME_ORIGINS' ? 'text-cyan-400 bg-white/5' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Sliders className="h-4 w-4 shrink-0" />
+                      Configuración
                     </button>
                   )}
                 </div>

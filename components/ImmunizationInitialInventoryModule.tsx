@@ -5,10 +5,12 @@ import {
   ClipboardList,
   Download,
   FileSpreadsheet,
+  Filter,
   LockKeyhole,
   PackagePlus,
   Pencil,
   RefreshCw,
+  Search,
   Trash2,
   Upload,
   X
@@ -24,7 +26,8 @@ import {
 import { api } from "../services/api";
 import { getCurrentImmunizationPeriod, getImmunizationScope, ImmunizationScope, immunizationApi } from "../services/immunizationApi";
 import { HealthFacility, ImmunizationInitialInventory, ImmunizationInitialInventoryItem, ImmunizationOwnerType, ImmunizationProduct, Unget } from "../types";
-import { ImmunizationKpiCard } from "./ui/immunization";
+import { ImmunizationKpiCard, normalizeImmunizationText } from "./ui/immunization";
+import { CustomSelect } from "./ui/CustomSelect";
 import { ConfirmationDialog } from "./ui/ConfirmationDialog";
 import { ImmunizationInventoryItemModal, InventoryItemFormData } from "./ImmunizationInventoryItemModal";
 
@@ -350,27 +353,23 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
     void processFile(event.dataTransfer.files?.[0]);
   };
 
-  if (loading) {
-    return <div className="py-16 flex justify-center"><div className="h-9 w-9 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" /></div>;
-  }
-
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-4">
-            <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-700">
+            <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-700 shrink-0">
               <ClipboardList className="h-6 w-6" />
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900">Inventario Inicial</h2>
-              <p className="text-sm text-slate-500 mt-1 max-w-3xl">
-                Carga el stock fisico por lote. La descripcion oficial se obtiene del catalogo biologico usando el codigo SISMED.
+              <p className="text-sm text-slate-500 mt-0.5 max-w-2xl">
+                Carga el stock fisico por lote de productos biologicos.
               </p>
             </div>
           </div>
-          {/* Con inventario cargado se muestra su periodo real, no el mes en curso. */}
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 font-medium shrink-0">
             <span>{activeInventory ? "Cargado en" : "Periodo"}</span>
             <span className="font-black text-teal-700">{activeInventory?.period || currentPeriod}</span>
           </div>
@@ -398,127 +397,148 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
         />
       )}
 
-      {!canSaveForScope && (
-        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-          <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-black">Selecciona el destino del inventario</p>
-            <p className="text-xs mt-0.5">Puedes revisar el Excel, pero el boton se habilitara cuando indiques la UNGET o IPRESS propietaria del stock.</p>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-5">
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3">
+      <div className="w-full">
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden w-full">
+          <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">{activeInventory ? "Detalle del inventario" : "Carga desde Excel"}</h3>
               <p className="text-xs text-slate-500 mt-0.5">{activeInventory ? "Revisa los productos guardados antes de cerrar y generar el stock." : "Primero validaremos las filas; nada se guarda automaticamente."}</p>
             </div>
-            {activeInventory && (
-              <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border ${activeInventory.status === "CLOSED" ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"}`}>
-                {activeInventory.status === "CLOSED" ? "Cerrado" : "Borrador existente"}
-              </span>
-            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              {activeInventory && activeInventory.status === "CLOSED" && (
+                <span className="text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-100">
+                  Cerrado
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={downloadImmunizationInventoryTemplate}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all border border-slate-200/80 shadow-2xs"
+                title="Usa las columnas oficiales para evitar observaciones durante la carga."
+              >
+                <Download className="h-3.5 w-3.5 text-slate-600" />
+                <span>Plantilla .xlsx</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void openManualItemModal()}
+                disabled={!canSaveForScope || inventoryIsClosed || manualSaving}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 disabled:opacity-50 disabled:pointer-events-none text-xs font-bold transition-all border border-teal-200/80 shadow-2xs"
+                title={inventoryIsClosed ? "El inventario ya esta cerrado." : "Agrega un producto o lote puntual al borrador antes del cierre."}
+              >
+                <PackagePlus className="h-3.5 w-3.5 text-teal-700" />
+                <span>Registro manual</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={requestCloseInventory}
+                disabled={!activeInventory || activeInventory.status === "CLOSED" || inventoryItems.length === 0 || loadingItems || closing}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all border shadow-2xs ${
+                  activeInventory?.status === "CLOSED"
+                    ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 disabled:opacity-50 disabled:pointer-events-none"
+                }`}
+                title={activeInventory?.status === "CLOSED" ? "El inventario ya fue cerrado." : "Confirma el borrador y genera el stock biologico por lote."}
+              >
+                {closing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <LockKeyhole className="h-3.5 w-3.5" />}
+                <span>
+                  {activeInventory?.status === "CLOSED"
+                    ? "Inventario cerrado"
+                    : closing
+                      ? "Cerrando..."
+                      : "Cerrar y generar stock"}
+                </span>
+              </button>
+            </div>
           </div>
 
-          {!preview && activeInventory ? (
-            <SavedInventoryView
-              inventory={activeInventory}
-              items={inventoryItems}
-              loading={loadingItems}
-              closing={closing}
-              onReload={() => void loadInventoryItems(activeInventory.id)}
-              onClose={requestCloseInventory}
-              onEdit={item => void openManualItemModal(item)}
-              onDelete={setItemToDelete}
-            />
-          ) : !preview ? (
-            <div className="p-5 sm:p-8">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                className="hidden"
-                onChange={event => void processFile(event.target.files?.[0])}
-              />
-              <div
-                role="button"
-                tabIndex={inventoryIsClosed ? -1 : 0}
-                aria-disabled={inventoryIsClosed}
-                onClick={() => !inventoryIsClosed && fileInputRef.current?.click()}
-                onKeyDown={event => {
-                  if (!inventoryIsClosed && (event.key === "Enter" || event.key === " ")) fileInputRef.current?.click();
-                }}
-                onDragOver={event => { event.preventDefault(); if (!inventoryIsClosed) setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-                className={`rounded-2xl border-2 border-dashed p-8 sm:p-12 text-center transition-all outline-none focus:ring-4 focus:ring-teal-100 ${
-                  inventoryIsClosed
-                    ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-70"
-                    : isDragging
-                      ? "cursor-copy border-teal-500 bg-teal-50 scale-[1.01]"
-                      : "cursor-pointer border-teal-200 bg-gradient-to-b from-white to-teal-50/40 hover:border-teal-400"
-                }`}
-              >
-                {processingFile ? (
-                  <>
-                    <RefreshCw className="h-11 w-11 text-teal-600 mx-auto animate-spin" />
-                    <h3 className="text-lg font-black text-slate-900 mt-4">Leyendo y validando el archivo</h3>
-                    <p className="text-sm text-slate-500 mt-1">Estamos comparando cada codigo contra el catalogo maestro.</p>
-                  </>
-                ) : (
-                  <>
-                    <div className="h-16 w-16 mx-auto rounded-2xl bg-white border border-teal-100 shadow-sm flex items-center justify-center">
-                      <FileSpreadsheet className="h-8 w-8 text-teal-600" />
-                    </div>
-                    <h3 className="text-lg font-black text-slate-900 mt-4">Arrastra aqui tu inventario inicial</h3>
-                    <p className="text-sm text-slate-500 mt-1">o haz clic para seleccionar un archivo .xlsx</p>
-                    <span className="inline-flex items-center gap-2 mt-5 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-black shadow-sm">
-                      <Upload className="h-4 w-4" /> Seleccionar Excel
-                    </span>
-                  </>
-                )}
-              </div>
+          {loading && !activeInventory ? (
+            <div className="py-16 flex flex-col items-center justify-center gap-2">
+              <div className="h-9 w-9 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" />
+              <span className="text-xs font-bold text-slate-500">Cargando inventario...</span>
             </div>
           ) : (
-            <ImportPreview
-              preview={preview}
-              validCount={validRows.length}
-              invalidCount={invalidRows.length}
-              warningCount={warningRows.length}
-              totalValue={totalValue}
-              hasBlockingErrors={hasBlockingErrors}
-              saving={saving}
-              canConfirm={canSaveForScope && !activeInventory}
-              onCancel={() => setPreview(null)}
-              onConfirm={() => void confirmImport()}
-            />
+            <div className={loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}>
+              {!preview && activeInventory ? (
+                <SavedInventoryView
+                  inventory={activeInventory}
+                  items={inventoryItems}
+                  loading={loadingItems}
+                  closing={closing}
+                  onReload={() => void loadInventoryItems(activeInventory.id)}
+                  onClose={requestCloseInventory}
+                  onEdit={item => void openManualItemModal(item)}
+                  onDelete={setItemToDelete}
+                />
+              ) : !preview ? (
+                <div className="p-5 sm:p-8">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    className="hidden"
+                    onChange={event => void processFile(event.target.files?.[0])}
+                  />
+                  <div
+                    role="button"
+                    tabIndex={inventoryIsClosed ? -1 : 0}
+                    aria-disabled={inventoryIsClosed}
+                    onClick={() => !inventoryIsClosed && fileInputRef.current?.click()}
+                    onKeyDown={event => {
+                      if (!inventoryIsClosed && (event.key === "Enter" || event.key === " ")) fileInputRef.current?.click();
+                    }}
+                    onDragOver={event => { event.preventDefault(); if (!inventoryIsClosed) setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                    className={`rounded-2xl border-2 border-dashed p-8 sm:p-12 text-center transition-all outline-none focus:ring-4 focus:ring-teal-100 ${
+                      inventoryIsClosed
+                        ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-70"
+                        : isDragging
+                          ? "cursor-copy border-teal-500 bg-teal-50 scale-[1.01]"
+                          : "cursor-pointer border-teal-200 bg-gradient-to-b from-white to-teal-50/40 hover:border-teal-400"
+                    }`}
+                  >
+                    {processingFile ? (
+                      <>
+                        <RefreshCw className="h-11 w-11 text-teal-600 mx-auto animate-spin" />
+                        <h3 className="text-lg font-black text-slate-900 mt-4">Leyendo y validando el archivo</h3>
+                        <p className="text-sm text-slate-500 mt-1">Estamos comparando cada codigo contra el catalogo maestro.</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="h-16 w-16 mx-auto rounded-2xl bg-white border border-teal-100 shadow-sm flex items-center justify-center">
+                          <FileSpreadsheet className="h-8 w-8 text-teal-600" />
+                        </div>
+                        <h3 className="text-lg font-black text-slate-900 mt-4">Arrastra aqui tu inventario inicial</h3>
+                        <p className="text-sm text-slate-500 mt-1">o haz clic para seleccionar un archivo .xlsx</p>
+                        <span className="inline-flex items-center gap-2 mt-5 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-black shadow-sm">
+                          <Upload className="h-4 w-4" /> Seleccionar Excel
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <ImportPreview
+                  preview={preview}
+                  validCount={validRows.length}
+                  invalidCount={invalidRows.length}
+                  warningCount={warningRows.length}
+                  totalValue={totalValue}
+                  hasBlockingErrors={hasBlockingErrors}
+                  saving={saving}
+                  canConfirm={canSaveForScope && !activeInventory}
+                  onCancel={() => setPreview(null)}
+                  onConfirm={() => void confirmImport()}
+                />
+              )}
+            </div>
           )}
         </section>
-
-        <aside className="space-y-3">
-          <ActionCard
-            icon={<Download className="h-5 w-5" />}
-            title="Descargar plantilla .xlsx"
-            description="Usa las columnas oficiales para evitar observaciones durante la carga."
-            onClick={downloadImmunizationInventoryTemplate}
-          />
-          <ActionCard
-            icon={<PackagePlus className="h-5 w-5" />}
-            title="Registro manual"
-            description={inventoryIsClosed ? "El inventario ya esta cerrado." : "Agrega un producto o lote puntual al borrador antes del cierre."}
-            onClick={() => void openManualItemModal()}
-            disabled={!canSaveForScope || inventoryIsClosed || manualSaving}
-          />
-          <ActionCard
-            icon={<LockKeyhole className="h-5 w-5" />}
-            title={activeInventory?.status === "CLOSED" ? "Inventario cerrado" : closing ? "Cerrando inventario..." : "Cerrar inventario"}
-            description={activeInventory?.status === "CLOSED" ? "El stock ya fue generado y el inventario no admite edicion directa." : "Confirma el borrador y genera el stock biologico por lote."}
-            onClick={requestCloseInventory}
-            disabled={!activeInventory || activeInventory.status === "CLOSED" || inventoryItems.length === 0 || loadingItems || closing}
-          />
-        </aside>
       </div>
 
       <ConfirmationDialog
@@ -613,10 +633,23 @@ interface SavedInventoryViewProps {
 }
 
 const SavedInventoryView: React.FC<SavedInventoryViewProps> = ({ inventory, items, loading, closing, onReload, onClose, onEdit, onDelete }) => {
+  const [searchTerm, setSearchTerm] = useState("");
   const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalValue = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
 
-  if (loading) {
+  const filteredItems = useMemo(() => {
+    const query = normalizeImmunizationText(searchTerm);
+    if (!query) return items;
+    return items.filter(item => {
+      const code = normalizeImmunizationText(item.product?.codigoSismed || item.codigoSismedSnapshot || "");
+      const desc = normalizeImmunizationText(item.product?.descripcion || item.excelDescriptionSnapshot || "");
+      const lote = normalizeImmunizationText(item.lote || "");
+      const fuente = normalizeImmunizationText(item.fundingSource || "");
+      return code.includes(query) || desc.includes(query) || lote.includes(query) || fuente.includes(query);
+    });
+  }, [items, searchTerm]);
+
+  if (loading && items.length === 0) {
     return <div className="py-16 flex justify-center"><RefreshCw className="h-8 w-8 text-teal-600 animate-spin" /></div>;
   }
 
@@ -636,12 +669,33 @@ const SavedInventoryView: React.FC<SavedInventoryViewProps> = ({ inventory, item
   }
 
   return (
-    <div>
+    <div className={loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-slate-50 border-b border-slate-100">
         <ImmunizationKpiCard filled label="Productos/lotes" value={String(items.length)} tone="success" />
         <ImmunizationKpiCard filled label="Frascos/unidades" value={totalQuantity.toLocaleString("es-PE")} tone="neutral" />
         <ImmunizationKpiCard filled label="Valorizacion" value={currencyFormatter.format(totalValue)} tone="neutral" />
         <ImmunizationKpiCard filled label="Estado" value={inventory.status === "CLOSED" ? "Cerrado" : "Borrador"} tone={inventory.status === "CLOSED" ? "success" : "warning"} />
+      </div>
+
+      <div className="p-3 bg-white border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Buscar por código SISMED, descripción o lote..."
+            className="w-full h-9 pl-9 pr-8 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-100"
+          />
+          {searchTerm && (
+            <button onClick={() => setSearchTerm("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <div className="text-xs text-slate-500 font-medium shrink-0">
+          Mostrando <span className="font-bold text-slate-800">{filteredItems.length}</span> de <span className="font-bold text-slate-800">{items.length}</span> ítems
+        </div>
       </div>
 
       <div className="overflow-auto max-h-[470px]">
@@ -660,7 +714,7 @@ const SavedInventoryView: React.FC<SavedInventoryViewProps> = ({ inventory, item
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {items.map(item => (
+            {filteredItems.map(item => (
               <tr key={item.id || `${item.productId}-${item.lote}-${item.unitPrice}`} className="bg-white hover:bg-slate-50">
                 <td className="px-3 py-3 font-black text-teal-700">{item.product?.codigoSismed || item.codigoSismedSnapshot}</td>
                 <td className="px-3 py-3 font-semibold text-slate-800">{item.product?.descripcion || item.excelDescriptionSnapshot || "Producto"}</td>
@@ -698,22 +752,17 @@ const SavedInventoryView: React.FC<SavedInventoryViewProps> = ({ inventory, item
             ))}
           </tbody>
         </table>
+        {filteredItems.length === 0 && (
+          <div className="p-8 text-center text-xs text-slate-500">
+            No se encontraron ítems que coincidan con la búsqueda &quot;{searchTerm}&quot;.
+          </div>
+        )}
       </div>
 
-      <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-3">
         <p className="text-xs text-slate-500">
           {inventory.status === "CLOSED" ? "Este inventario ya genero el stock biologico." : "Al cerrar, estas filas se convertiran en stock disponible por lote."}
         </p>
-        {inventory.status === "DRAFT" && (
-          <button
-            onClick={onClose}
-            disabled={closing}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-black hover:bg-slate-800 disabled:opacity-50"
-          >
-            {closing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
-            {closing ? "Generando stock..." : "Cerrar y generar stock"}
-          </button>
-        )}
       </div>
     </div>
   );
@@ -742,65 +791,82 @@ const AdminInventoryScopeSelector: React.FC<AdminInventoryScopeSelectorProps> = 
   onUngetChange,
   onFacilityChange
 }) => {
-  const availableFacilities = ungetId
-    ? facilities.filter(facility => facility.ungetId === ungetId)
-    : [];
+  const availableFacilities = useMemo(() => {
+    return ungetId
+      ? facilities.filter(facility => facility.ungetId === ungetId)
+      : [];
+  }, [facilities, ungetId]);
+
+  const ownerTypeOptions = useMemo(() => [
+    { value: "", label: "Seleccionar nivel..." },
+    { value: "UNGET", label: "UNGET" },
+    { value: "IPRESS", label: "IPRESS" }
+  ], []);
+
+  const ungetOptions = useMemo(() => [
+    { value: "", label: "Seleccionar UNGET..." },
+    ...ungets.map(unget => ({
+      value: unget.id,
+      label: unget.name
+    }))
+  ], [ungets]);
+
+  const facilityOptions = useMemo(() => [
+    { value: "", label: ungetId ? "Seleccionar IPRESS..." : "Seleccione primero una UNGET..." },
+    ...availableFacilities.map(facility => ({
+      value: facility.code,
+      label: `${facility.code} - ${facility.name}`
+    }))
+  ], [availableFacilities, ungetId]);
 
   return (
     <section className="bg-white rounded-2xl border border-cyan-200 shadow-sm p-4">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end">
-        <div className="xl:w-64">
-          <label htmlFor="inventory-owner-type" className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
+        <div className="xl:w-60">
+          <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
             Inventario perteneciente a
           </label>
-          <select
-            id="inventory-owner-type"
+          <CustomSelect
             value={ownerType}
+            onChange={val => onOwnerTypeChange(val as ImmunizationOwnerType | "")}
+            options={ownerTypeOptions}
             disabled={loading}
-            onChange={event => onOwnerTypeChange(event.target.value as ImmunizationOwnerType | "")}
-            className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100"
-          >
-            <option value="">Seleccionar nivel...</option>
-            <option value="UNGET">UNGET</option>
-            <option value="IPRESS">IPRESS</option>
-          </select>
+            placeholder="Seleccionar nivel..."
+            className="h-11 rounded-xl text-sm font-bold text-slate-800"
+          />
         </div>
 
         {ownerType && (
           <div className="min-w-0 flex-1">
-            <label htmlFor="inventory-unget" className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
+            <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
               UNGET propietaria
             </label>
-            <select
-              id="inventory-unget"
+            <CustomSelect
               value={ungetId}
+              onChange={onUngetChange}
+              options={ungetOptions}
               disabled={loading}
-              onChange={event => onUngetChange(event.target.value)}
-              className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100"
-            >
-              <option value="">Seleccionar UNGET...</option>
-              {ungets.map(unget => <option key={unget.id} value={unget.id}>{unget.name}</option>)}
-            </select>
+              placeholder="Seleccionar UNGET..."
+              className="h-11 rounded-xl text-sm font-semibold text-slate-800"
+              loading={loading}
+            />
           </div>
         )}
 
         {ownerType === "IPRESS" && (
           <div className="min-w-0 flex-1">
-            <label htmlFor="inventory-facility" className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
+            <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
               Establecimiento IPRESS
             </label>
-            <select
-              id="inventory-facility"
+            <CustomSelect
               value={facilityCode}
+              onChange={onFacilityChange}
+              options={facilityOptions}
               disabled={loading || !ungetId}
-              onChange={event => onFacilityChange(event.target.value)}
-              className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 disabled:bg-slate-100"
-            >
-              <option value="">Seleccionar IPRESS...</option>
-              {availableFacilities.map(facility => (
-                <option key={facility.code} value={facility.code}>{facility.code} - {facility.name}</option>
-              ))}
-            </select>
+              placeholder={ungetId ? "Seleccionar IPRESS..." : "Seleccione primero UNGET..."}
+              className="h-11 rounded-xl text-sm font-semibold text-slate-800"
+              loading={loading}
+            />
           </div>
         )}
 
@@ -831,94 +897,166 @@ const ImportPreview: React.FC<ImportPreviewProps> = ({
   canConfirm,
   onCancel,
   onConfirm
-}) => (
-  <div>
-    <div className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 border-b border-slate-100">
-      <ImmunizationKpiCard filled label="Filas validas" value={String(validCount)} tone="success" />
-      <ImmunizationKpiCard filled label="Con errores" value={String(invalidCount)} tone={invalidCount ? "danger" : "neutral"} />
-      <ImmunizationKpiCard filled label="Advertencias" value={String(warningCount)} tone={warningCount ? "warning" : "neutral"} />
-      <ImmunizationKpiCard filled label="Valor valido" value={currencyFormatter.format(totalValue)} tone="neutral" />
-    </div>
+}) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "VALID" | "ERROR" | "WARNING">("ALL");
 
-    {preview.missingColumns.length > 0 && (
-      <div className="m-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-        <span className="font-black">Faltan columnas obligatorias:</span> {preview.missingColumns.join(", ")}.
+  const filteredRows = useMemo(() => {
+    return preview.rows.filter(row => {
+      if (statusFilter === "VALID" && (row.errors.length > 0 || row.warnings.length > 0)) return false;
+      if (statusFilter === "ERROR" && row.errors.length === 0) return false;
+      if (statusFilter === "WARNING" && row.warnings.length === 0) return false;
+      if (!searchTerm.trim()) return true;
+      const query = normalizeImmunizationText(searchTerm);
+      const code = normalizeImmunizationText(row.codigoSismed || "");
+      const desc = normalizeImmunizationText(row.officialDescription || "");
+      const lote = normalizeImmunizationText(row.lote || "");
+      return code.includes(query) || desc.includes(query) || lote.includes(query);
+    });
+  }, [preview.rows, searchTerm, statusFilter]);
+
+  return (
+    <div>
+      <div className="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 border-b border-slate-100">
+        <ImmunizationKpiCard filled label="Filas validas" value={String(validCount)} tone="success" />
+        <ImmunizationKpiCard filled label="Con errores" value={String(invalidCount)} tone={invalidCount ? "danger" : "neutral"} />
+        <ImmunizationKpiCard filled label="Advertencias" value={String(warningCount)} tone={warningCount ? "warning" : "neutral"} />
+        <ImmunizationKpiCard filled label="Valor valido" value={currencyFormatter.format(totalValue)} tone="neutral" />
       </div>
-    )}
 
-    {preview.missingColumns.length === 0 && invalidCount > 0 && validCount > 0 && (
-      <div className="m-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-        <AlertTriangle className="h-4 w-4 shrink-0" />
-        <p>
-          <span className="font-black">Importacion parcial:</span> se guardaran {validCount} {validCount === 1 ? "fila valida" : "filas validas"} y se omitiran {invalidCount} {invalidCount === 1 ? "fila con error" : "filas con errores"}.
-        </p>
+      {preview.missingColumns.length > 0 && (
+        <div className="m-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+          <span className="font-black">Faltan columnas obligatorias:</span> {preview.missingColumns.join(", ")}.
+        </div>
+      )}
+
+      {preview.missingColumns.length === 0 && invalidCount > 0 && validCount > 0 && (
+        <div className="m-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <p>
+            <span className="font-black">Importacion parcial:</span> se guardaran {validCount} {validCount === 1 ? "fila valida" : "filas validas"} y se omitiran {invalidCount} {invalidCount === 1 ? "fila con error" : "filas con errores"}.
+          </p>
+        </div>
+      )}
+
+      <div className="p-3 bg-white border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Buscar en vista previa por SISMED, descripción o lote..."
+            className="w-full h-9 pl-9 pr-8 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:border-teal-500 focus:bg-white focus:ring-2 focus:ring-teal-100"
+          />
+          {searchTerm && (
+            <button onClick={() => setSearchTerm("")} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-bold shrink-0">
+          <button
+            type="button"
+            onClick={() => setStatusFilter("ALL")}
+            className={`px-3 py-1.5 rounded-lg border transition-all ${statusFilter === "ALL" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
+          >
+            Todas ({preview.rows.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("VALID")}
+            className={`px-3 py-1.5 rounded-lg border transition-all ${statusFilter === "VALID" ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-emerald-700 border-slate-200 hover:bg-emerald-50"}`}
+          >
+            Válidas ({validCount})
+          </button>
+          {invalidCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter("ERROR")}
+              className={`px-3 py-1.5 rounded-lg border transition-all ${statusFilter === "ERROR" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-700 border-slate-200 hover:bg-red-50"}`}
+            >
+              Con errores ({invalidCount})
+            </button>
+          )}
+          {warningCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter("WARNING")}
+              className={`px-3 py-1.5 rounded-lg border transition-all ${statusFilter === "WARNING" ? "bg-amber-600 text-white border-amber-600" : "bg-white text-amber-700 border-slate-200 hover:bg-amber-50"}`}
+            >
+              Advertencias ({warningCount})
+            </button>
+          )}
+        </div>
       </div>
-    )}
 
-    <div className="overflow-auto max-h-[480px]">
-      <table className="min-w-[1120px] w-full text-xs">
-        <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600 uppercase tracking-wide">
-          <tr>
-            <th className="px-3 py-3 text-left">Fila</th>
-            <th className="px-3 py-3 text-left">Codigo SISMED</th>
-            <th className="px-3 py-3 text-left min-w-[260px]">Descripcion oficial</th>
-            <th className="px-3 py-3 text-left">Lote</th>
-            <th className="px-3 py-3 text-left">Vencimiento</th>
-            <th className="px-3 py-3 text-right">Saldo</th>
-            <th className="px-3 py-3 text-right">Precio</th>
-            <th className="px-3 py-3 text-left">Fuente</th>
-            <th className="px-3 py-3 text-left">Suministro</th>
-            <th className="px-3 py-3 text-left min-w-[260px]">Validacion</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {preview.rows.map(row => (
-            <tr key={row.rowNumber} className={row.errors.length ? "bg-red-50/50" : "bg-white hover:bg-slate-50"}>
-              <td className="px-3 py-3 font-bold text-slate-400">{row.rowNumber}</td>
-              <td className="px-3 py-3 font-black text-slate-800">{row.codigoSismed || "—"}</td>
-              <td className="px-3 py-3 text-slate-700">{row.officialDescription}</td>
-              <td className="px-3 py-3 font-semibold text-slate-700">{row.lote || "—"}</td>
-              <td className="px-3 py-3 text-slate-600">{row.expirationDate || "—"}</td>
-              <td className="px-3 py-3 text-right font-black text-slate-800">{row.quantity}</td>
-              <td className="px-3 py-3 text-right text-slate-700">{currencyFormatter.format(row.unitPrice)}</td>
-              <td className="px-3 py-3 text-slate-600">{row.fundingSource || "—"}</td>
-              <td className="px-3 py-3 text-slate-600">{row.supplyType || "—"}</td>
-              <td className="px-3 py-3">
-                {row.errors.length > 0 ? (
-                  <div className="flex items-start gap-2 text-red-700"><X className="h-4 w-4 shrink-0" /><span>{row.errors.join(" · ")}</span></div>
-                ) : row.warnings.length > 0 ? (
-                  <div className="flex items-start gap-2 text-amber-700"><AlertTriangle className="h-4 w-4 shrink-0" /><span>{row.warnings.join(" · ")}</span></div>
-                ) : (
-                  <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /><span>Fila valida</span></div>
-                )}
-              </td>
+      <div className="overflow-auto max-h-[480px]">
+        <table className="min-w-[1120px] w-full text-xs">
+          <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600 uppercase tracking-wide">
+            <tr>
+              <th className="px-3 py-3 text-left">Fila</th>
+              <th className="px-3 py-3 text-left">Codigo SISMED</th>
+              <th className="px-3 py-3 text-left min-w-[260px]">Descripcion oficial</th>
+              <th className="px-3 py-3 text-left">Lote</th>
+              <th className="px-3 py-3 text-left">Vencimiento</th>
+              <th className="px-3 py-3 text-right">Saldo</th>
+              <th className="px-3 py-3 text-right">Precio</th>
+              <th className="px-3 py-3 text-left">Fuente</th>
+              <th className="px-3 py-3 text-left">Suministro</th>
+              <th className="px-3 py-3 text-left min-w-[260px]">Validacion</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      {preview.rows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">No se encontraron filas de inventario.</div>}
-    </div>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filteredRows.map(row => (
+              <tr key={row.rowNumber} className={row.errors.length ? "bg-red-50/50" : "bg-white hover:bg-slate-50"}>
+                <td className="px-3 py-3 font-bold text-slate-400">{row.rowNumber}</td>
+                <td className="px-3 py-3 font-black text-slate-800">{row.codigoSismed || "—"}</td>
+                <td className="px-3 py-3 text-slate-700">{row.officialDescription}</td>
+                <td className="px-3 py-3 font-semibold text-slate-700">{row.lote || "—"}</td>
+                <td className="px-3 py-3 text-slate-600">{row.expirationDate || "—"}</td>
+                <td className="px-3 py-3 text-right font-black text-slate-800">{row.quantity}</td>
+                <td className="px-3 py-3 text-right text-slate-700">{currencyFormatter.format(row.unitPrice)}</td>
+                <td className="px-3 py-3 text-slate-600">{row.fundingSource || "—"}</td>
+                <td className="px-3 py-3 text-slate-600">{row.supplyType || "—"}</td>
+                <td className="px-3 py-3">
+                  {row.errors.length > 0 ? (
+                    <div className="flex items-start gap-2 text-red-700"><X className="h-4 w-4 shrink-0" /><span>{row.errors.join(" · ")}</span></div>
+                  ) : row.warnings.length > 0 ? (
+                    <div className="flex items-start gap-2 text-amber-700"><AlertTriangle className="h-4 w-4 shrink-0" /><span>{row.warnings.join(" · ")}</span></div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /><span>Fila valida</span></div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filteredRows.length === 0 && <div className="p-10 text-center text-sm text-slate-500">No se encontraron filas de inventario con los filtros seleccionados.</div>}
+      </div>
 
-    <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <div className="text-xs text-slate-500 truncate">
-        <span className="font-bold text-slate-700">{preview.fileName}</span> · Hoja: {preview.sheetName}
-      </div>
-      <div className="flex gap-2">
-        <button onClick={onCancel} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50">Cancelar</button>
-        <button
-          onClick={onConfirm}
-          disabled={hasBlockingErrors || saving || !canConfirm}
-          className="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-black hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2"
-        >
-          {saving && <RefreshCw className="h-4 w-4 animate-spin" />}
-          {invalidCount > 0 && validCount > 0
-            ? `Guardar ${validCount} y omitir ${invalidCount}`
-            : `Guardar ${validCount} ${validCount === 1 ? "fila" : "filas"}`}
-        </button>
+      <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="text-xs text-slate-500 truncate">
+          <span className="font-bold text-slate-700">{preview.fileName}</span> · Hoja: {preview.sheetName}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onCancel} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50">Cancelar</button>
+          <button
+            onClick={onConfirm}
+            disabled={hasBlockingErrors || saving || !canConfirm}
+            className="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-black hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2"
+          >
+            {saving && <RefreshCw className="h-4 w-4 animate-spin" />}
+            {invalidCount > 0 && validCount > 0
+              ? `Guardar ${validCount} y omitir ${invalidCount}`
+              : `Guardar ${validCount} ${validCount === 1 ? "fila" : "filas"}`}
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const ActionCard: React.FC<{
   icon: React.ReactNode;

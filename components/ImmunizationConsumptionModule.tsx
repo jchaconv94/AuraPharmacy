@@ -314,11 +314,11 @@ export const ImmunizationConsumptionModule: React.FC = () => {
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <ImmunizationKpiCard label="Registros mes" value={formatNumber(totals.records)} />
-        <ImmunizationKpiCard label="Stock actual" value={formatNumber(totals.stock)} />
-        <ImmunizationKpiCard label="Consumo mes" value={formatNumber(totals.consumed)} />
-        <ImmunizationKpiCard label="Dosis aplicadas" value={formatNumber(totals.applied)} />
-        <ImmunizationKpiCard label="Factor pérdida" value={`${formatNumber(totals.lossFactor, 2)}%`} />
+        <ImmunizationKpiCard label="Registros mes" value={formatNumber(totals.records)} icon={<ReceiptText className="h-5 w-5" />} tone="info" />
+        <ImmunizationKpiCard label="Stock actual" value={formatNumber(totals.stock)} icon={<Activity className="h-5 w-5" />} tone="neutral" />
+        <ImmunizationKpiCard label="Consumo mes" value={formatNumber(totals.consumed)} icon={<Activity className="h-5 w-5" />} tone="info" />
+        <ImmunizationKpiCard label="Dosis aplicadas" value={formatNumber(totals.applied)} icon={<Syringe className="h-5 w-5" />} tone="success" />
+        <ImmunizationKpiCard label="Factor pérdida" value={`${formatNumber(totals.lossFactor, 2)}%`} icon={<AlertTriangle className="h-5 w-5" />} tone={totals.lossFactor > 15 ? "warning" : "neutral"} />
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
@@ -346,7 +346,7 @@ export const ImmunizationConsumptionModule: React.FC = () => {
           <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-600">{visibleGroups.length} visibles</span>
         </div>
 
-        {loading ? (
+        {loading && movements.length === 0 ? (
           <div className="flex justify-center py-16"><div className="h-9 w-9 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" /></div>
         ) : visibleGroups.length === 0 ? (
           <div className="p-10 text-center">
@@ -355,7 +355,7 @@ export const ImmunizationConsumptionModule: React.FC = () => {
             <p className="mt-1 text-sm text-slate-500">Use “Nuevo registro” para descargar varios productos en un solo movimiento.</p>
           </div>
         ) : (
-          <>
+          <div className={loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}>
             {/* En celular la tabla de 9 columnas es inservible: se muestran tarjetas. */}
             <div className="divide-y divide-slate-100 md:hidden">
               {visibleGroups.map(group => (
@@ -452,7 +452,7 @@ export const ImmunizationConsumptionModule: React.FC = () => {
               </tbody>
             </table>
             </div>
-          </>
+          </div>
         )}
       </section>
 

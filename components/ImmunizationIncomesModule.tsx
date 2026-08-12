@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowDownToLine,
@@ -423,7 +423,7 @@ export const ImmunizationIncomesModule: React.FC = () => {
           <FileText className="h-4 w-4 text-teal-600" />
           <h3 className="text-sm font-black uppercase tracking-wide text-slate-900">Historial de ingresos regionales</h3>
         </div>
-        {loading ? (
+        {loading && incomes.length === 0 ? (
           <div className="flex justify-center py-16"><div className="h-9 w-9 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" /></div>
         ) : visibleIncomes.length === 0 ? (
           <div className="p-10 text-center">
@@ -437,7 +437,7 @@ export const ImmunizationIncomesModule: React.FC = () => {
             {incomes.length > 0 && <button type="button" onClick={clearFilters} className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white">Limpiar filtros</button>}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className={`overflow-x-auto ${loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}`}>
             <table className="min-w-full divide-y divide-slate-100">
               <thead className="bg-slate-50">
                 <tr>

@@ -654,7 +654,7 @@ export const ImmunizationClosuresModule: React.FC = () => {
         <ImmunizationKpiCard icon={<Lock className="h-5 w-5" />} label={isUnget || isSupervisor ? "UNGET cerradas" : "Periodo bloqueado"} value={totals.locked} tone="locked" />
       </section>
 
-      {loading ? (
+      {loading && closures.length === 0 ? (
         <div className="flex min-h-[260px] items-center justify-center rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center gap-3 text-sm font-black text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
@@ -662,7 +662,7 @@ export const ImmunizationClosuresModule: React.FC = () => {
           </div>
         </div>
       ) : (
-        <>
+        <div className={loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}>
           {isIpress && (
             <IpressClosurePanel
               closure={validOwnIpressClosure}
@@ -737,7 +737,7 @@ export const ImmunizationClosuresModule: React.FC = () => {
               Este rol no tiene un ámbito operativo válido para cierre mensual.
             </div>
           )}
-        </>
+        </div>
       )}
 
       {dialogMode && createPortal(

@@ -564,7 +564,7 @@ export const ImmunizationDistributionsModule: React.FC = () => {
           <FileText className="h-4 w-4 text-sky-600" />
           <h3 className="text-sm font-black uppercase tracking-wide text-slate-900">Historial de distribuciones</h3>
         </div>
-        {loading ? (
+        {loading && distributions.length === 0 ? (
           <div className="flex justify-center py-16"><div className="h-9 w-9 animate-spin rounded-full border-2 border-sky-500 border-t-transparent" /></div>
         ) : visibleDistributions.length === 0 ? (
           <div className="p-10 text-center">
@@ -578,7 +578,7 @@ export const ImmunizationDistributionsModule: React.FC = () => {
             {distributions.length > 0 && <button type="button" onClick={clearFilters} className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white">Limpiar filtros</button>}
           </div>
         ) : (
-          <>
+          <div className={loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}>
             {/* En celular la tabla de 8 columnas obliga a desplazarse: se usan tarjetas. */}
             <div className="divide-y divide-slate-100 md:hidden">
               {visibleDistributions.map(distribution => {
@@ -707,7 +707,7 @@ export const ImmunizationDistributionsModule: React.FC = () => {
               </tbody>
             </table>
             </div>
-          </>
+          </div>
         )}
       </section>
 

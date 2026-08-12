@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   Edit3,
   Loader2,
@@ -17,9 +18,11 @@ import { getImmunizationScope, immunizationApi } from "../services/immunizationA
 import { ImmunizationIncomeOrigin } from "../types";
 import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, ImmunizationTableHeader as HeaderCell } from "./ui/immunization";
 
+interface ImmunizationIncomeOriginsModuleProps {
+  onBack?: () => void;
+}
 
-
-export const ImmunizationIncomeOriginsModule: React.FC = () => {
+export const ImmunizationIncomeOriginsModule: React.FC<ImmunizationIncomeOriginsModuleProps> = ({ onBack }) => {
   const { user } = useAuth();
   const scope = useMemo(() => getImmunizationScope(user), [user]);
   const canManage = scope.level === "GLOBAL" || scope.ownerType === "DIRESA" || scope.level === "DIRESA";
@@ -155,6 +158,16 @@ export const ImmunizationIncomeOriginsModule: React.FC = () => {
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+        >
+          <ArrowLeft className="h-4 w-4 text-slate-500" />
+          Volver a Configuraciones
+        </button>
+      )}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div className="flex items-start gap-4">
@@ -167,7 +180,7 @@ export const ImmunizationIncomeOriginsModule: React.FC = () => {
                 <span className="rounded-lg border border-teal-100 bg-teal-50 px-2 py-1 text-[10px] font-black uppercase text-teal-700">Catálogo DIRESA</span>
               </div>
               <p className="mt-1 max-w-3xl text-sm text-slate-500">
-                Administra la lista que se usa al registrar ingresos regionales de biológicos. El formulario de ingreso solo mostrará orígenes activos.
+                Administra la lista que se usa al registrar ingresos regionales de biológicos.
               </p>
             </div>
           </div>

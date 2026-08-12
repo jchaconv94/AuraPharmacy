@@ -345,7 +345,7 @@ export const ImmunizationStockModule: React.FC = () => {
             <div className="mt-3 text-xs text-slate-500"><span className="font-black text-slate-700">{grouped.length}</span> productos y <span className="font-black text-slate-700">{filteredLayers.length}</span> lotes visibles</div>
           </section>
 
-          {loading ? (
+          {loading && layers.length === 0 ? (
             <div className="flex justify-center py-16"><div className="h-9 w-9 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" /></div>
           ) : grouped.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
@@ -355,7 +355,7 @@ export const ImmunizationStockModule: React.FC = () => {
               {hasFilters && <button type="button" onClick={clearFilters} className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white">Limpiar filtros</button>}
             </div>
           ) : (
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <section className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}`}>
               <div className="hidden grid-cols-[130px_minmax(280px,1fr)_110px_120px_150px_150px_160px_32px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-500 lg:grid">
                 <span>Código</span><span>Producto</span><span>Tipo</span><span>Dosis/Unidad</span><span>Saldo</span><span>Valorización</span><span>Vencimiento próximo</span><span />
               </div>
