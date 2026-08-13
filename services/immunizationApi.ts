@@ -24,6 +24,7 @@ import {
   User
 } from "../types";
 import { supabase } from "./supabaseClient";
+import { consolidateItemsByCompositeKey, getItemUniqueCompositeKey } from "./immunizationDomain";
 
 const PRODUCTS_CACHE_KEY = "aura_immunization_products";
 const INVENTORIES_CACHE_KEY = "aura_immunization_initial_inventories";
@@ -1214,15 +1215,17 @@ export const immunizationApi = {
           .eq("inventory_id", inventoryId)
           .order("created_at", { ascending: true });
         if (error) throw error;
-        return (data || []).map(normalizeInventoryItem);
+        const normalized = (data || []).map(normalizeInventoryItem);
+        return consolidateItemsByCompositeKey(normalized);
       }
     } catch (e) {
       console.warn("Fallback local getInitialInventoryItems inmunizaciones", e);
     }
     const products = getCachedList<ImmunizationProduct>(PRODUCTS_CACHE_KEY);
-    return getCachedList<ImmunizationInitialInventoryItem>(INVENTORY_ITEMS_CACHE_KEY)
+    const rawItems = getCachedList<ImmunizationInitialInventoryItem>(INVENTORY_ITEMS_CACHE_KEY)
       .filter(item => item.inventoryId === inventoryId)
       .map(item => ({ ...item, product: products.find(product => product.id === item.productId) }));
+    return consolidateItemsByCompositeKey(rawItems);
   },
 
   getStockLayers: async (scope: ImmunizationScope): Promise<ImmunizationStockLayer[]> => {
@@ -1260,6 +1263,8 @@ export const immunizationApi = {
         return { success: false, message: "El saldo y el precio no pueden ser negativos." };
       }
 
+      const consolidatedItems = consolidateItemsByCompositeKey(items);
+
       if (supabase) {
         const { data, error } = await supabase
           .from("immunization_initial_inventories")
@@ -1276,8 +1281,8 @@ export const immunizationApi = {
           .single();
         if (error) throw error;
 
-        if (items.length > 0) {
-          const { error: itemError } = await supabase.from("immunization_initial_inventory_items").insert(items.map(item => ({
+        if (consolidatedItems.length > 0) {
+          const { error: itemError } = await supabase.from("immunization_initial_inventory_items").insert(consolidatedItems.map(item => ({
             inventory_id: data.id,
             product_id: item.productId,
             codigo_sismed_snapshot: item.codigoSismedSnapshot,
@@ -1307,7 +1312,7 @@ export const immunizationApi = {
       const cachedItems = getCachedList<ImmunizationInitialInventoryItem>(INVENTORY_ITEMS_CACHE_KEY);
       setCachedList(INVENTORY_ITEMS_CACHE_KEY, [
         ...cachedItems,
-        ...items.map(item => ({ ...item, id: item.id || makeLocalId("imm-inv-item"), inventoryId: savedInventory.id }))
+        ...consolidatedItems.map(item => ({ ...item, id: item.id || makeLocalId("imm-inv-item"), inventoryId: savedInventory.id }))
       ]);
       return { success: true, inventory: savedInventory };
     } catch (e: any) {
@@ -1338,7 +1343,7 @@ export const immunizationApi = {
 
         let duplicateQuery = supabase
           .from("immunization_initial_inventory_items")
-          .select("id")
+          .select("*")
           .eq("inventory_id", inventoryId)
           .eq("product_id", item.productId)
           .eq("lote", item.lote.trim())
@@ -1349,8 +1354,35 @@ export const immunizationApi = {
         if (item.id) duplicateQuery = duplicateQuery.neq("id", item.id);
         const { data: duplicateRows, error: duplicateError } = await duplicateQuery.limit(1);
         if (duplicateError) throw duplicateError;
+        
         if (duplicateRows && duplicateRows.length > 0) {
-          return { success: false, message: "Ya existe una fila con el mismo producto, lote, vencimiento, precio, fuente y suministro. Edite la fila existente." };
+          const existingRow = duplicateRows[0];
+          const newQuantity = Number(existingRow.quantity || 0) + Number(item.quantity || 0);
+          const mergedObs = [existingRow.observation, item.observation?.trim()].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join("; ");
+          
+          const { data: updatedExisting, error: updateErr } = await supabase
+            .from("immunization_initial_inventory_items")
+            .update({
+              quantity: newQuantity,
+              observation: mergedObs || null
+            })
+            .eq("id", existingRow.id)
+            .select("*, product:product_id(*)")
+            .single();
+          if (updateErr) throw updateErr;
+
+          // If we were editing an existing item (item.id) that changed its key to match existingRow, delete item.id
+          if (item.id && item.id !== existingRow.id) {
+            await supabase.from("immunization_initial_inventory_items").delete().eq("id", item.id);
+          }
+
+          if (inventoryRow.source_type === "EXCEL") {
+            await supabase
+              .from("immunization_initial_inventories")
+              .update({ source_type: "MIXED", updated_at: new Date().toISOString() })
+              .eq("id", inventoryId);
+          }
+          return { success: true, item: normalizeInventoryItem(updatedExisting) };
         }
 
         const payload = {
@@ -1398,7 +1430,17 @@ export const immunizationApi = {
         row.fundingSource === item.fundingSource.trim() &&
         row.supplyType === item.supplyType.trim()
       );
-      if (duplicate) return { success: false, message: "Ya existe una fila igual. Edite la fila existente." };
+      if (duplicate) {
+        const mergedItem: ImmunizationInitialInventoryItem = {
+          ...duplicate,
+          quantity: duplicate.quantity + item.quantity,
+          observation: [duplicate.observation, item.observation?.trim()].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join("; ") || undefined
+        };
+        const updatedCache = items.filter(row => row.id !== duplicate.id && row.id !== item.id);
+        updatedCache.push(mergedItem);
+        setCachedList(INVENTORY_ITEMS_CACHE_KEY, updatedCache);
+        return { success: true, item: mergedItem };
+      }
       const savedItem: ImmunizationInitialInventoryItem = {
         ...item,
         id: item.id || makeLocalId("imm-inv-item"),
@@ -1918,20 +1960,22 @@ export const immunizationApi = {
           .eq("income_id", incomeId)
           .order("created_at", { ascending: true });
         if (error) throw error;
-        return (data || []).map(normalizeIncomeItem);
+        const normalized = (data || []).map(normalizeIncomeItem);
+        return consolidateItemsByCompositeKey(normalized);
       }
     } catch (e) {
       console.warn("Fallback local getIncomeItems inmunizaciones", e);
     }
     const products = getCachedList<ImmunizationProduct>(PRODUCTS_CACHE_KEY);
-    return getCachedList<ImmunizationIncomeItem>(INCOME_ITEMS_CACHE_KEY)
+    const rawItems = getCachedList<ImmunizationIncomeItem>(INCOME_ITEMS_CACHE_KEY)
       .filter(item => item.incomeId === incomeId)
       .map(item => ({ ...item, product: products.find(product => product.id === item.productId) }));
+    return consolidateItemsByCompositeKey(rawItems);
   },
 
   createIncomeBatch: async (
     income: ImmunizationIncomeBatch,
-    items: ImmunizationIncomeItem[]
+    rawItems: ImmunizationIncomeItem[]
   ): Promise<{ success: boolean; income?: ImmunizationIncomeBatch; message?: string }> => {
     try {
       if (!["DIRESA", "UNGET"].includes(income.ownerType)) {
@@ -1949,10 +1993,10 @@ export const immunizationApi = {
       if (income.ownerType === "UNGET" && income.sourceType === "UNGET_TRANSFER" && income.sourceUngetId === income.ungetId) {
         return { success: false, message: "La UNGET de origen no puede ser la misma UNGET que recibe." };
       }
-      if (items.length === 0) {
+      if (rawItems.length === 0) {
         return { success: false, message: "Agregue al menos un producto/lote al ingreso." };
       }
-      if (items.some(item =>
+      if (rawItems.some(item =>
         !item.productId ||
         !item.codigoSismedSnapshot.trim() ||
         !item.lote.trim() ||
@@ -1964,6 +2008,8 @@ export const immunizationApi = {
       )) {
         return { success: false, message: "Revise los productos del ingreso; hay campos incompletos o cantidades invalidas." };
       }
+
+      const items = consolidateItemsByCompositeKey(rawItems);
 
       if (supabase) {
         const now = new Date().toISOString();

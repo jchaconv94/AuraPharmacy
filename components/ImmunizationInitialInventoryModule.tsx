@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   AlertTriangle,
@@ -29,7 +30,8 @@ import {
 import { api } from "../services/api";
 import { getCurrentImmunizationPeriod, getImmunizationScope, ImmunizationScope, immunizationApi } from "../services/immunizationApi";
 import { HealthFacility, ImmunizationInitialInventory, ImmunizationInitialInventoryItem, ImmunizationOwnerType, ImmunizationProduct, Unget } from "../types";
-import { ImmunizationKpiCard, normalizeImmunizationText } from "./ui/immunization";
+import { getItemUniqueCompositeKey } from "../services/immunizationDomain";
+import { formatImmunizationDate, ImmunizationKpiCard, normalizeImmunizationText } from "./ui/immunization";
 import { CustomSelect } from "./ui/CustomSelect";
 import { ConfirmationDialog } from "./ui/ConfirmationDialog";
 import { ImmunizationInventoryItemModal, InventoryItemFormData } from "./ImmunizationInventoryItemModal";
@@ -52,6 +54,21 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
   const [manualProducts, setManualProducts] = useState<ImmunizationProduct[]>([]);
   const [editingItem, setEditingItem] = useState<ImmunizationInitialInventoryItem | null>(null);
   const [manualSaving, setManualSaving] = useState(false);
+  const [manualDuplicatePrompt, setManualDuplicatePrompt] = useState<{
+    existingItem: ImmunizationInitialInventoryItem;
+    newItem: ImmunizationInitialInventoryItem;
+    productName: string;
+    addQuantity: number;
+    newTotalQuantity: number;
+  } | null>(null);
+  const [similarLotePrompt, setSimilarLotePrompt] = useState<{
+    existingItem: ImmunizationInitialInventoryItem;
+    newItem: ImmunizationInitialInventoryItem;
+    formData: InventoryItemFormData;
+    productName: string;
+    addQuantity: number;
+    diffReason: string;
+  } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<ImmunizationInitialInventoryItem | null>(null);
   const [deletingItem, setDeletingItem] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -311,7 +328,7 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
     }
   };
 
-  const saveManualItem = async (form: InventoryItemFormData) => {
+  const saveManualItem = async (form: InventoryItemFormData, forceConfirm?: boolean) => {
     const product = manualProducts.find(row => row.id === form.productId);
     if (!product?.id || !effectiveScope.ownerType) {
       toast.error("Seleccione un producto y un destino validos");
@@ -331,6 +348,55 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
       supplyType: form.supplyType,
       observation: form.observation || undefined
     };
+
+    if (!editingItem && !forceConfirm) {
+      const targetKey = getItemUniqueCompositeKey(item);
+      const existing = inventoryItems.find(i => getItemUniqueCompositeKey(i) === targetKey);
+      if (existing) {
+        setManualDuplicatePrompt({
+          existingItem: existing,
+          newItem: item,
+          productName: product.descripcion,
+          addQuantity: form.quantity,
+          newTotalQuantity: existing.quantity + form.quantity
+        });
+        return;
+      }
+
+      // Check for similar lot (same product & same lot, but different secondary data)
+      const existingSimilar = inventoryItems.find(i =>
+        (i.productId === item.productId || i.codigoSismedSnapshot === item.codigoSismedSnapshot) &&
+        i.lote.trim().toUpperCase() === item.lote.trim().toUpperCase()
+      );
+
+      if (existingSimilar) {
+        const diffs: string[] = [];
+        if (existingSimilar.expirationDate !== item.expirationDate) {
+          diffs.push(`Vencimiento (${formatImmunizationDate(existingSimilar.expirationDate)} vs ${formatImmunizationDate(item.expirationDate)})`);
+        }
+        if (Number(existingSimilar.unitPrice).toFixed(2) !== Number(item.unitPrice).toFixed(2)) {
+          diffs.push(`Precio Unitario (S/ ${Number(existingSimilar.unitPrice).toFixed(2)} vs S/ ${Number(item.unitPrice).toFixed(2)})`);
+        }
+        if (existingSimilar.fundingSource !== item.fundingSource) {
+          diffs.push(`Fuente (${existingSimilar.fundingSource} vs ${item.fundingSource})`);
+        }
+        if (existingSimilar.supplyType !== item.supplyType) {
+          diffs.push(`Suministro (${existingSimilar.supplyType} vs ${item.supplyType})`);
+        }
+
+        if (diffs.length > 0) {
+          setSimilarLotePrompt({
+            existingItem: existingSimilar,
+            newItem: item,
+            formData: form,
+            productName: product.descripcion,
+            addQuantity: form.quantity,
+            diffReason: diffs.join(" • ")
+          });
+          return;
+        }
+      }
+    }
 
     setManualSaving(true);
     try {
@@ -353,7 +419,65 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
       toast.success(editingItem ? "Producto/lote actualizado" : "Producto/lote agregado al borrador");
       setManualModalOpen(false);
       setEditingItem(null);
+      setManualDuplicatePrompt(null);
       if (activeInventory?.id) await loadInventoryItems(activeInventory.id);
+      await loadInventories();
+    } finally {
+      setManualSaving(false);
+    }
+  };
+
+  const confirmManualDuplicate = async () => {
+    if (!manualDuplicatePrompt || !activeInventory?.id) return;
+    const { existingItem, newItem, newTotalQuantity } = manualDuplicatePrompt;
+    const mergedObs = [existingItem.observation, newItem.observation].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join("; ");
+    const updatedItem: ImmunizationInitialInventoryItem = {
+      ...existingItem,
+      quantity: newTotalQuantity,
+      observation: mergedObs || undefined
+    };
+
+    setManualSaving(true);
+    try {
+      const result = await immunizationApi.saveInitialInventoryItem(activeInventory.id, updatedItem);
+      if (!result.success) {
+        toast.error(result.message || "No se pudo actualizar el stock");
+        return;
+      }
+      toast.success(`Stock aumentado a ${newTotalQuantity} unidades en el inventario`);
+      setManualModalOpen(false);
+      setEditingItem(null);
+      setManualDuplicatePrompt(null);
+      await loadInventoryItems(activeInventory.id);
+      await loadInventories();
+    } finally {
+      setManualSaving(false);
+    }
+  };
+
+  const confirmMergeSimilarLote = async () => {
+    if (!similarLotePrompt || !activeInventory?.id) return;
+    const { existingItem, newItem, addQuantity } = similarLotePrompt;
+    const newTotalQuantity = existingItem.quantity + addQuantity;
+    const mergedObs = [existingItem.observation, newItem.observation].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join("; ");
+    const updatedItem: ImmunizationInitialInventoryItem = {
+      ...existingItem,
+      quantity: newTotalQuantity,
+      observation: mergedObs || undefined
+    };
+
+    setManualSaving(true);
+    try {
+      const result = await immunizationApi.saveInitialInventoryItem(activeInventory.id, updatedItem);
+      if (!result.success) {
+        toast.error(result.message || "No se pudo unificar el lote");
+        return;
+      }
+      toast.success(`Datos unificados al registro existente y stock actualizado a ${newTotalQuantity} unidades`);
+      setManualModalOpen(false);
+      setEditingItem(null);
+      setSimilarLotePrompt(null);
+      await loadInventoryItems(activeInventory.id);
       await loadInventories();
     } finally {
       setManualSaving(false);
@@ -641,6 +765,153 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
       />
 
       <ConfirmationDialog
+        isOpen={Boolean(manualDuplicatePrompt)}
+        title="¡Producto y Lote ya existe en el inventario!"
+        description={`El producto "${manualDuplicatePrompt?.productName}" (SISMED: ${manualDuplicatePrompt?.existingItem.codigoSismedSnapshot}, Lote: ${manualDuplicatePrompt?.existingItem.lote}) con el mismo precio (S/ ${manualDuplicatePrompt?.existingItem.unitPrice.toFixed(2)}), fuente (${manualDuplicatePrompt?.existingItem.fundingSource}) y suministro (${manualDuplicatePrompt?.existingItem.supplyType}) ya se encuentra registrado.`}
+        confirmLabel="Sí, aumentar stock"
+        cancelLabel="Cancelar"
+        tone="warning"
+        isConfirming={manualSaving}
+        onCancel={() => setManualDuplicatePrompt(null)}
+        onConfirm={() => void confirmManualDuplicate()}
+      >
+        {manualDuplicatePrompt && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-950 space-y-2">
+            <p className="font-bold text-amber-900 text-sm">¿Deseas aumentar el stock de este registro?</p>
+            <div className="space-y-1.5 pt-1">
+              <div className="flex justify-between border-b border-amber-200/80 pb-1">
+                <span className="text-slate-600">Stock actual en inventario:</span>
+                <span className="font-mono font-bold text-slate-800">{manualDuplicatePrompt.existingItem.quantity} unidades</span>
+              </div>
+              <div className="flex justify-between border-b border-amber-200/80 pb-1">
+                <span className="text-slate-600">Stock adicional a ingresar:</span>
+                <span className="font-mono font-bold text-emerald-700">+{manualDuplicatePrompt.addQuantity} unidades</span>
+              </div>
+              <div className="flex justify-between pt-1 font-black text-slate-900 text-sm">
+                <span>Nuevo stock resultante:</span>
+                <span className="font-mono text-emerald-700">{manualDuplicatePrompt.newTotalQuantity} unidades</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </ConfirmationDialog>
+
+      {similarLotePrompt && createPortal(
+        <div
+          className="fixed inset-0 z-[1200000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget && !manualSaving) setSimilarLotePrompt(null);
+          }}
+        >
+          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-white/80 space-y-4 animate-in zoom-in-95 slide-in-from-bottom-3 duration-200">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">¡Doble Validación! Lote similar en inventario</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  El lote <strong className="text-slate-800 font-mono">{similarLotePrompt.existingItem.lote}</strong> de <strong>{similarLotePrompt.productName}</strong> ya existe en la lista pero tiene diferencias.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs space-y-3">
+              <div className="font-bold text-amber-950 border-b border-amber-200/80 pb-2">
+                Diferencias detectadas: <span className="text-amber-900 font-normal">{similarLotePrompt.diffReason}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                {(() => {
+                  const isExpDiff = similarLotePrompt.existingItem.expirationDate !== similarLotePrompt.newItem.expirationDate;
+                  const isPriceDiff = Number(similarLotePrompt.existingItem.unitPrice).toFixed(2) !== Number(similarLotePrompt.newItem.unitPrice).toFixed(2);
+                  const isFundingDiff = similarLotePrompt.existingItem.fundingSource !== similarLotePrompt.newItem.fundingSource;
+                  const isSupplyDiff = similarLotePrompt.existingItem.supplyType !== similarLotePrompt.newItem.supplyType;
+
+                  return (
+                    <>
+                      <div className="rounded-xl bg-white p-3 border border-amber-200/80 shadow-2xs space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Registro Existente</p>
+                        <p className={`text-xs ${isExpDiff ? "font-black text-amber-800" : "font-semibold text-slate-700"}`}>
+                          Venc: {formatImmunizationDate(similarLotePrompt.existingItem.expirationDate)}
+                        </p>
+                        <p className={`text-xs ${isPriceDiff ? "font-black text-amber-800" : "font-semibold text-slate-700"}`}>
+                          Precio: S/ {Number(similarLotePrompt.existingItem.unitPrice).toFixed(2)}
+                        </p>
+                        <p className={`text-[11px] ${isFundingDiff ? "font-bold text-amber-800" : "text-slate-600"}`}>
+                          Fuente: {similarLotePrompt.existingItem.fundingSource}
+                        </p>
+                        <p className={`text-[11px] ${isSupplyDiff ? "font-bold text-amber-800" : "text-slate-600"}`}>
+                          Suministro: {similarLotePrompt.existingItem.supplyType}
+                        </p>
+                        <p className="text-xs font-bold text-teal-700 pt-1.5 border-t border-slate-100">Stock actual: {similarLotePrompt.existingItem.quantity} un.</p>
+                      </div>
+
+                      <div className="rounded-xl bg-white p-3 border border-amber-200/80 shadow-2xs space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Nuevo a Ingresar</p>
+                        <p className={`text-xs ${isExpDiff ? "font-black text-red-600 bg-red-50 px-1 rounded" : "font-semibold text-slate-700"}`}>
+                          Venc: {formatImmunizationDate(similarLotePrompt.newItem.expirationDate)}
+                        </p>
+                        <p className={`text-xs ${isPriceDiff ? "font-black text-red-600 bg-red-50 px-1 rounded" : "font-semibold text-slate-700"}`}>
+                          Precio: S/ {Number(similarLotePrompt.newItem.unitPrice).toFixed(2)}
+                        </p>
+                        <p className={`text-[11px] ${isFundingDiff ? "font-bold text-red-600 bg-red-50 px-1 rounded" : "text-slate-600"}`}>
+                          Fuente: {similarLotePrompt.newItem.fundingSource}
+                        </p>
+                        <p className={`text-[11px] ${isSupplyDiff ? "font-bold text-red-600 bg-red-50 px-1 rounded" : "text-slate-600"}`}>
+                          Suministro: {similarLotePrompt.newItem.supplyType}
+                        </p>
+                        <p className="text-xs font-bold text-emerald-700 pt-1.5 border-t border-slate-100">A ingresar: +{similarLotePrompt.addQuantity} un.</p>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <p className="text-[11px] text-amber-900 italic pt-1">
+                ¿Fue una equivocación al digitar? Puedes adoptar los datos del registro existente y unificar el stock a {similarLotePrompt.existingItem.quantity + similarLotePrompt.addQuantity} unidades, o guardar esta fila con sus datos independientes.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                disabled={manualSaving}
+                onClick={() => void confirmMergeSimilarLote()}
+                className="w-full h-11 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs transition-all shadow-sm flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Adoptar datos del registro existente y unificar stock ({similarLotePrompt.existingItem.quantity + similarLotePrompt.addQuantity} un.)</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={manualSaving}
+                onClick={() => {
+                  const form = similarLotePrompt.formData;
+                  setSimilarLotePrompt(null);
+                  void saveManualItem(form, true);
+                }}
+                className="w-full h-10 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition-all border border-slate-200 flex items-center justify-center gap-2"
+              >
+                <span>Guardar como registro independiente con sus datos</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={manualSaving}
+                onClick={() => setSimilarLotePrompt(null)}
+                className="w-full h-9 px-4 text-slate-500 hover:text-slate-700 font-bold text-xs transition-all"
+              >
+                Cancelar y editar en el formulario
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      <ConfirmationDialog
         isOpen={Boolean(itemToDelete)}
         title="¿Eliminar este producto/lote?"
         description="La fila sera retirada del borrador del inventario inicial. Esta accion no afecta el stock porque el inventario aun no esta cerrado."
@@ -770,7 +1041,7 @@ const SavedInventoryView: React.FC<SavedInventoryViewProps> = ({ inventory, item
                 <td className="px-3 py-3 font-black text-teal-700">{item.product?.codigoSismed || item.codigoSismedSnapshot}</td>
                 <td className="px-3 py-3 font-semibold text-slate-800">{item.product?.descripcion || item.excelDescriptionSnapshot || "Producto"}</td>
                 <td className="px-3 py-3 font-black text-slate-700">{item.lote}</td>
-                <td className="px-3 py-3 text-slate-600">{item.expirationDate}</td>
+                <td className="px-3 py-3 text-slate-600">{formatImmunizationDate(item.expirationDate)}</td>
                 <td className="px-3 py-3 text-right font-black text-slate-900">{item.quantity.toLocaleString("es-PE")}</td>
                 <td className="px-3 py-3 text-right text-slate-700">{currencyFormatter.format(item.unitPrice)}</td>
                 <td className="px-3 py-3 text-slate-600">{item.fundingSource}</td>
@@ -1066,7 +1337,7 @@ const ImportPreview: React.FC<ImportPreviewProps> = ({
                 <td className="px-3 py-3 font-black text-slate-800">{row.codigoSismed || "—"}</td>
                 <td className="px-3 py-3 text-slate-700">{row.officialDescription}</td>
                 <td className="px-3 py-3 font-semibold text-slate-700">{row.lote || "—"}</td>
-                <td className="px-3 py-3 text-slate-600">{row.expirationDate || "—"}</td>
+                <td className="px-3 py-3 text-slate-600">{row.expirationDate ? formatImmunizationDate(row.expirationDate) : "—"}</td>
                 <td className="px-3 py-3 text-right font-black text-slate-800">{row.quantity}</td>
                 <td className="px-3 py-3 text-right text-slate-700">{currencyFormatter.format(row.unitPrice)}</td>
                 <td className="px-3 py-3 text-slate-600">{row.fundingSource || "—"}</td>

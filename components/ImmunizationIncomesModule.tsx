@@ -35,7 +35,9 @@ import {
   ImmunizationProduct,
   Unget
 } from "../types";
+import { getItemUniqueCompositeKey } from "../services/immunizationDomain";
 import { immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, ImmunizationTableHeader as HeaderCell, ImmunizationField as Field, formatImmunizationDate as formatDate, todayInputValue, ImmunizationKpiCard } from "./ui/immunization";
+import { ConfirmationDialog } from "./ui/ConfirmationDialog";
 
 type IncomeItemDraft = ImmunizationIncomeItem & { tempId: string };
 
@@ -546,6 +548,21 @@ function IncomeModal({
     observation: ""
   });
 
+  const [duplicatePrompt, setDuplicatePrompt] = useState<{
+    existingIndex: number;
+    existingItem: IncomeItemDraft;
+    productDescription: string;
+    codigoSismed: string;
+    lote: string;
+    expirationDate: string;
+    unitPrice: number;
+    fundingSource: string;
+    supplyType: string;
+    addQuantity: number;
+    newTotalQuantity: number;
+    newObservation?: string;
+  } | null>(null);
+
   useEffect(() => {
     if (!isOpen) return;
     setSelectedOriginId(origins[0]?.id || "");
@@ -635,7 +652,7 @@ function IncomeModal({
   const addItem = () => {
     const quantity = Number(itemForm.quantity);
     const unitPrice = Number(itemForm.unitPrice);
-    if (!selectedProduct?.id || !itemForm.lote.trim() || !itemForm.expirationDate || !itemForm.fundingSource.trim() || !itemForm.supplyType.trim()) {
+    if (!selectedProduct || !selectedProduct.id || !itemForm.lote.trim() || !itemForm.expirationDate || !itemForm.fundingSource.trim() || !itemForm.supplyType.trim()) {
       setError("Complete producto, lote, vencimiento, fuente y suministro.");
       return;
     }
@@ -643,10 +660,43 @@ function IncomeModal({
       setError("La cantidad debe ser mayor a cero y el precio no puede ser negativo.");
       return;
     }
+
+    const prod = selectedProduct!;
+
+    const newKey = getItemUniqueCompositeKey({
+      productId: prod.id!,
+      codigoSismedSnapshot: prod.codigoSismed,
+      lote: itemForm.lote.trim(),
+      expirationDate: itemForm.expirationDate,
+      unitPrice,
+      fundingSource: itemForm.fundingSource.trim(),
+      supplyType: itemForm.supplyType.trim()
+    });
+
+    const existingIdx = items.findIndex(item => getItemUniqueCompositeKey(item) === newKey);
+    if (existingIdx >= 0) {
+      const existing = items[existingIdx];
+      setDuplicatePrompt({
+        existingIndex: existingIdx,
+        existingItem: existing,
+        productDescription: prod.descripcion,
+        codigoSismed: prod.codigoSismed || existing.codigoSismedSnapshot,
+        lote: itemForm.lote.trim(),
+        expirationDate: itemForm.expirationDate,
+        unitPrice,
+        fundingSource: itemForm.fundingSource.trim(),
+        supplyType: itemForm.supplyType.trim(),
+        addQuantity: quantity,
+        newTotalQuantity: existing.quantity + quantity,
+        newObservation: itemForm.observation.trim() || undefined
+      });
+      return;
+    }
+
     const draft: IncomeItemDraft = {
       tempId: `income-item-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      productId: selectedProduct.id,
-      codigoSismedSnapshot: selectedProduct.codigoSismed,
+      productId: prod.id!,
+      codigoSismedSnapshot: prod.codigoSismed || "",
       lote: itemForm.lote.trim(),
       expirationDate: itemForm.expirationDate,
       quantity,
@@ -654,9 +704,30 @@ function IncomeModal({
       fundingSource: itemForm.fundingSource.trim(),
       supplyType: itemForm.supplyType.trim(),
       observation: itemForm.observation.trim() || undefined,
-      product: selectedProduct
+      product: prod
     };
     setItems(current => [...current, draft]);
+
+    setError("");
+    resetItemForm();
+  };
+
+  const confirmIncomeDuplicate = () => {
+    if (!duplicatePrompt) return;
+    const { existingIndex, addQuantity, newObservation, newTotalQuantity } = duplicatePrompt;
+    setItems(current => {
+      const updated = [...current];
+      const existing = updated[existingIndex];
+      const mergedObs = [existing.observation, newObservation].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join("; ");
+      updated[existingIndex] = {
+        ...existing,
+        quantity: existing.quantity + addQuantity,
+        observation: mergedObs || undefined
+      };
+      return updated;
+    });
+    toast.success(`Stock aumentado a ${newTotalQuantity} unidades en la lista.`);
+    setDuplicatePrompt(null);
     setError("");
     resetItemForm();
   };
@@ -853,6 +924,37 @@ function IncomeModal({
           </footer>
         </form>
       </section>
+
+      <ConfirmationDialog
+        isOpen={Boolean(duplicatePrompt)}
+        title="¡Producto y Lote ya existe en la lista de Ingreso!"
+        description={`El producto "${duplicatePrompt?.productDescription}" (SISMED: ${duplicatePrompt?.codigoSismed}, Lote: ${duplicatePrompt?.lote}) con la misma combinación de precio (S/ ${duplicatePrompt?.unitPrice.toFixed(2)}), fuente (${duplicatePrompt?.fundingSource}) y suministro (${duplicatePrompt?.supplyType}) ya se encuentra registrado en este ingreso.`}
+        confirmLabel="Sí, aumentar stock"
+        cancelLabel="Cancelar"
+        tone="warning"
+        onConfirm={confirmIncomeDuplicate}
+        onCancel={() => setDuplicatePrompt(null)}
+      >
+        {duplicatePrompt && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-950 space-y-2">
+            <p className="font-bold text-amber-900 text-sm">¿Deseas aumentar el stock de este registro?</p>
+            <div className="space-y-1.5 pt-1">
+              <div className="flex justify-between border-b border-amber-200/80 pb-1">
+                <span className="text-slate-600">Stock actual en la lista:</span>
+                <span className="font-mono font-bold text-slate-800">{duplicatePrompt.existingItem.quantity} unidades</span>
+              </div>
+              <div className="flex justify-between border-b border-amber-200/80 pb-1">
+                <span className="text-slate-600">Stock adicional a ingresar:</span>
+                <span className="font-mono font-bold text-emerald-700">+{duplicatePrompt.addQuantity} unidades</span>
+              </div>
+              <div className="flex justify-between pt-1 font-black text-slate-900 text-sm">
+                <span>Nuevo stock resultante:</span>
+                <span className="font-mono text-emerald-700">{duplicatePrompt.newTotalQuantity} unidades</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </ConfirmationDialog>
     </div>,
     document.body
   );

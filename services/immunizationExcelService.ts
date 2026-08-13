@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { ImmunizationInitialInventoryItem, ImmunizationProduct } from "../types";
+import { consolidateItemsByCompositeKey, getItemUniqueCompositeKey } from "./immunizationDomain";
 
 export interface ImmunizationImportRow {
   rowNumber: number;
@@ -193,21 +194,58 @@ export const parseImmunizationInventoryExcel = async (
     } satisfies ImmunizationImportRow];
   });
 
-  return { fileName: file.name, sheetName, rows, missingColumns };
+  // Consolidar filas válidas duplicadas por clave única
+  const invalidRows = rows.filter(r => r.errors.length > 0);
+  const validRows = rows.filter(r => r.errors.length === 0);
+
+  const consolidatedMap = new Map<string, ImmunizationImportRow>();
+  for (const row of validRows) {
+    const key = getItemUniqueCompositeKey({
+      codigoSismedSnapshot: row.codigoSismed,
+      lote: row.lote,
+      expirationDate: row.expirationDate,
+      unitPrice: row.unitPrice,
+      fundingSource: row.fundingSource,
+      supplyType: row.supplyType
+    });
+    const existing = consolidatedMap.get(key);
+    if (existing) {
+      const mergedObs = [existing.observation, row.observation].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join("; ");
+      const mergedWarnings = [...existing.warnings];
+      if (!mergedWarnings.some(w => w.includes("consolidada"))) {
+        mergedWarnings.push("Fila consolidada por duplicidad de producto/lote/precio/fuente/suministro");
+      }
+      consolidatedMap.set(key, {
+        ...existing,
+        quantity: existing.quantity + row.quantity,
+        observation: mergedObs,
+        warnings: mergedWarnings
+      });
+    } else {
+      consolidatedMap.set(key, { ...row });
+    }
+  }
+
+  const finalRows = [...invalidRows, ...Array.from(consolidatedMap.values())];
+
+  return { fileName: file.name, sheetName, rows: finalRows, missingColumns };
 };
 
-export const toInventoryItems = (rows: ImmunizationImportRow[]): ImmunizationInitialInventoryItem[] => rows.map(row => ({
-  productId: row.productId!,
-  codigoSismedSnapshot: row.codigoSismed,
-  excelDescriptionSnapshot: row.excelDescription || undefined,
-  lote: row.lote,
-  expirationDate: row.expirationDate,
-  quantity: row.quantity,
-  unitPrice: row.unitPrice,
-  fundingSource: row.fundingSource,
-  supplyType: row.supplyType,
-  observation: row.observation || undefined
-}));
+export const toInventoryItems = (rows: ImmunizationImportRow[]): ImmunizationInitialInventoryItem[] => {
+  const mapped = rows.map(row => ({
+    productId: row.productId!,
+    codigoSismedSnapshot: row.codigoSismed,
+    excelDescriptionSnapshot: row.excelDescription || undefined,
+    lote: row.lote,
+    expirationDate: row.expirationDate,
+    quantity: row.quantity,
+    unitPrice: row.unitPrice,
+    fundingSource: row.fundingSource,
+    supplyType: row.supplyType,
+    observation: row.observation || undefined
+  }));
+  return consolidateItemsByCompositeKey(mapped);
+};
 
 export const downloadImmunizationInventoryTemplate = () => {
   const worksheet = XLSX.utils.json_to_sheet([{
