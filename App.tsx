@@ -573,9 +573,43 @@ const AnalysisModule: React.FC = () => {
 
   const calculateHorizonMetrics = useCallback((item: AnalyzedMedication, mode: DashboardViewMode) => {
     const rawCpm = item.rawCpm || 0;
-    const activeCpm = (mode === 'INITIAL' || mode === 'PROJECTED_SIMPLE') 
-      ? rawCpm 
-      : (item.selectedCpaMode === 'SIMPLE' ? rawCpm : (item.cpm || 0));
+    const excludedIndices = item.excludedIndices || [];
+    let activeCpm = 0;
+
+    const useSimple = (mode === 'INITIAL' || mode === 'PROJECTED_SIMPLE') 
+      || (item.selectedCpaMode === 'SIMPLE');
+
+    if (excludedIndices.length === 0) {
+      activeCpm = useSimple ? rawCpm : (item.cpm || 0);
+    } else {
+      // Manual/Recalculated CPM based on excluded indices
+      const history = item.originalHistory || [];
+      const threshold = item.spikeThreshold || 0;
+      const isSporadic = item.isSporadic;
+      const valuesToAverage: number[] = [];
+
+      history.forEach((val, idx) => {
+        if (val === 0) return; // Ignore zeros
+        if (excludedIndices.includes(idx)) return; // Excluded by user
+
+        if (useSimple) {
+          valuesToAverage.push(val);
+        } else {
+          // ADJUSTED MODE
+          if (isSporadic) {
+            valuesToAverage.push(val);
+          } else {
+            if (val <= threshold) {
+              valuesToAverage.push(val);
+            }
+          }
+        }
+      });
+
+      activeCpm = valuesToAverage.length > 0
+        ? valuesToAverage.reduce((a, b) => a + b, 0) / valuesToAverage.length
+        : 0;
+    }
 
     let evalStock = item.currentStock || 0;
 
