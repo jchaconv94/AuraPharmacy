@@ -115,15 +115,17 @@ const calculateDynamicMetrics = (item: AnalyzedMedication) => {
         ? item.currentStock / activeCpm 
         : (item.currentStock > 0 ? Infinity : 0);
 
+    const roundedMonths = isFinite(activeMonths) ? parseFloat(activeMonths.toFixed(1)) : Infinity;
+
     // Calculate Status
     let activeStatus = StockStatus.NORMOSTOCK;
     if (item.currentStock === 0) {
         activeStatus = StockStatus.DESABASTECIDO;
     } else if (activeCpm === 0 && item.currentStock > 0) {
         activeStatus = StockStatus.SIN_ROTACION;
-    } else if (activeMonths > 6) {
+    } else if (roundedMonths > 6) {
         activeStatus = StockStatus.SOBRESTOCK;
-    } else if (activeMonths >= 2 && activeMonths <= 6) {
+    } else if (roundedMonths >= 2 && roundedMonths <= 6) {
         activeStatus = StockStatus.NORMOSTOCK;
     } else {
         activeStatus = StockStatus.SUBSTOCK;

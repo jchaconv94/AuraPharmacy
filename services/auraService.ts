@@ -100,6 +100,7 @@ const analyzeItemLocally = (item: MedicationInput): AnalyzedMedication => {
   const { adjusted: cpm, adjustedNoLows: cpmExcludingLows, raw: rawCpm, spikes, details, threshold, lowThreshold, lows, isSporadic } = calculateAdjustedCPM(history);
   
   const monthsOfProvision = cpm > 0 ? item.currentStock / cpm : (item.currentStock > 0 ? Infinity : 0);
+  const roundedMonths = isFinite(monthsOfProvision) ? parseFloat(monthsOfProvision.toFixed(1)) : Infinity;
 
   // 1. Initial Status Calculation
   let status = StockStatus.NORMOSTOCK;
@@ -107,9 +108,9 @@ const analyzeItemLocally = (item: MedicationInput): AnalyzedMedication => {
     status = StockStatus.DESABASTECIDO; 
   } else if (cpm === 0 && item.currentStock > 0) {
     status = StockStatus.SIN_ROTACION; 
-  } else if (monthsOfProvision > 6) {
+  } else if (roundedMonths > 6) {
     status = StockStatus.SOBRESTOCK; 
-  } else if (monthsOfProvision >= 2 && monthsOfProvision <= 6) {
+  } else if (roundedMonths >= 2 && roundedMonths <= 6) {
     status = StockStatus.NORMOSTOCK; 
   } else {
     // Covers monthsOfProvision < 2

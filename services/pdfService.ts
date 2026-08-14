@@ -113,15 +113,17 @@ const calculateDynamicMetricsPDF = (item: AnalyzedMedication) => {
         ? item.currentStock / activeCpm 
         : (item.currentStock > 0 ? Infinity : 0);
 
+    const roundedMonths = isFinite(activeMonths) ? parseFloat(activeMonths.toFixed(1)) : Infinity;
+
     // Calculate Status
     let activeStatus = StockStatus.NORMOSTOCK;
     if (item.currentStock === 0) {
         activeStatus = StockStatus.DESABASTECIDO;
     } else if (activeCpm === 0 && item.currentStock > 0) {
         activeStatus = StockStatus.SIN_ROTACION;
-    } else if (activeMonths > 6) {
+    } else if (roundedMonths > 6) {
         activeStatus = StockStatus.SOBRESTOCK;
-    } else if (activeMonths >= 2 && activeMonths <= 6) {
+    } else if (roundedMonths >= 2 && roundedMonths <= 6) {
         activeStatus = StockStatus.NORMOSTOCK;
     } else {
         activeStatus = StockStatus.SUBSTOCK;
@@ -244,11 +246,12 @@ export const generateFullReportPDF = async (
               const rawCpm = m.rawCpm || 0;
               const stock = m.currentStock || 0;
               const months = rawCpm > 0 ? stock / rawCpm : (stock > 0 ? Infinity : 0);
+              const roundedMonths = isFinite(months) ? parseFloat(months.toFixed(1)) : Infinity;
               let status = StockStatus.NORMOSTOCK;
               if (stock === 0) status = StockStatus.DESABASTECIDO;
               else if (rawCpm === 0 && stock > 0) status = StockStatus.SIN_ROTACION;
-              else if (months > 6) status = StockStatus.SOBRESTOCK;
-              else if (months >= 2 && months <= 6) status = StockStatus.NORMOSTOCK;
+              else if (roundedMonths > 6) status = StockStatus.SOBRESTOCK;
+              else if (roundedMonths >= 2 && roundedMonths <= 6) status = StockStatus.NORMOSTOCK;
               else status = StockStatus.SUBSTOCK;
 
               return { ...m, status };
@@ -530,14 +533,16 @@ export const generateFullReportPDF = async (
             ? projectedStock / activeCpm 
             : (projectedStock > 0 ? Infinity : 0);
 
+        const roundedProjectedMonths = isFinite(projectedMonths) ? parseFloat(projectedMonths.toFixed(1)) : Infinity;
+
         let projectedStatus = StockStatus.NORMOSTOCK;
         if (projectedStock === 0) {
             projectedStatus = StockStatus.DESABASTECIDO;
         } else if (activeCpm === 0 && projectedStock > 0) {
             projectedStatus = StockStatus.SIN_ROTACION;
-        } else if (projectedMonths > 6) {
+        } else if (roundedProjectedMonths > 6) {
             projectedStatus = StockStatus.SOBRESTOCK;
-        } else if (projectedMonths >= 2 && projectedMonths <= 6) {
+        } else if (roundedProjectedMonths >= 2 && roundedProjectedMonths <= 6) {
             projectedStatus = StockStatus.NORMOSTOCK;
         } else {
             projectedStatus = StockStatus.SUBSTOCK;

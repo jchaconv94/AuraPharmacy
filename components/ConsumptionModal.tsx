@@ -100,14 +100,16 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
           ? medication.currentStock / activeCpm 
           : (medication.currentStock > 0 ? Infinity : 0);
 
+      const roundedMonths = isFinite(activeMonths) ? parseFloat(activeMonths.toFixed(1)) : Infinity;
+
       let activeStatus = StockStatus.NORMOSTOCK;
       if (medication.currentStock === 0) {
           activeStatus = StockStatus.DESABASTECIDO;
       } else if (activeCpm === 0 && medication.currentStock > 0) {
           activeStatus = StockStatus.SIN_ROTACION;
-      } else if (activeMonths > 6) {
+      } else if (roundedMonths > 6) {
           activeStatus = StockStatus.SOBRESTOCK;
-      } else if (activeMonths >= 2 && activeMonths <= 6) {
+      } else if (roundedMonths >= 2 && roundedMonths <= 6) {
           activeStatus = StockStatus.NORMOSTOCK;
       } else {
           activeStatus = StockStatus.SUBSTOCK;
@@ -661,15 +663,16 @@ export const ConsumptionModal: React.FC<ConsumptionModalProps> = ({
                 const realCpm = medication.rawCpm || 0;
                 const realStock = medication.currentStock;
                 const realMonths = realCpm > 0 ? realStock / realCpm : (realStock > 0 ? Infinity : 0);
+                const roundedRealMonths = isFinite(realMonths) ? parseFloat(realMonths.toFixed(1)) : Infinity;
 
                 let realStatus = StockStatus.NORMOSTOCK;
                 if (realStock === 0) {
                     realStatus = StockStatus.DESABASTECIDO;
                 } else if (realCpm === 0 && realStock > 0) {
                     realStatus = StockStatus.SIN_ROTACION;
-                } else if (realMonths > 6) {
+                } else if (roundedRealMonths > 6) {
                     realStatus = StockStatus.SOBRESTOCK;
-                } else if (realMonths >= 2 && realMonths <= 6) {
+                } else if (roundedRealMonths >= 2 && roundedRealMonths <= 6) {
                     realStatus = StockStatus.NORMOSTOCK;
                 } else {
                     realStatus = StockStatus.SUBSTOCK;
