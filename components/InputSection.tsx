@@ -88,6 +88,26 @@ export const InputSection: React.FC<InputSectionProps> = ({
 }) => {
   const { user } = useAuth();
 
+  const userFacilityCode = React.useMemo(() => {
+    return (user?.facilityData?.code || user?.personnelData?.facilityCode || '').trim().replace(/^0+/, '');
+  }, [user]);
+
+  const currentStorageKey = React.useMemo(() => {
+    return userFacilityCode ? `aura_data_v1_${userFacilityCode}` : 'aura_data_v1';
+  }, [userFacilityCode]);
+
+  const currentInputKey = React.useMemo(() => {
+    return userFacilityCode ? `aura_input_data_v1_${userFacilityCode}` : 'aura_input_data_v1';
+  }, [userFacilityCode]);
+
+  const currentReviewKey = React.useMemo(() => {
+    return userFacilityCode ? `aura_reviews_v1_${userFacilityCode}` : 'aura_reviews_v1';
+  }, [userFacilityCode]);
+
+  const currentAdditionalKey = React.useMemo(() => {
+    return userFacilityCode ? `aura_additional_v1_${userFacilityCode}` : 'aura_additional_v1';
+  }, [userFacilityCode]);
+
   // Use Props instead of Local State
   const items = currentItems;
   const setItems = onItemsChange;
@@ -247,10 +267,10 @@ export const InputSection: React.FC<InputSectionProps> = ({
         source: "aura-pharma-ipress-requirement",
         timestamp: new Date().toISOString(),
         localStorage: {
-          aura_data_v1: window.localStorage.getItem('aura_data_v1'),
-          aura_reviews_v1: window.localStorage.getItem('aura_reviews_v1'),
-          aura_additional_v1: window.localStorage.getItem('aura_additional_v1'),
-          aura_input_data_v1: window.localStorage.getItem('aura_input_data_v1'),
+          aura_data_v1: window.localStorage.getItem(currentStorageKey) || window.localStorage.getItem('aura_data_v1'),
+          aura_reviews_v1: window.localStorage.getItem(currentReviewKey) || window.localStorage.getItem('aura_reviews_v1'),
+          aura_additional_v1: window.localStorage.getItem(currentAdditionalKey) || window.localStorage.getItem('aura_additional_v1'),
+          aura_input_data_v1: window.localStorage.getItem(currentInputKey) || window.localStorage.getItem('aura_input_data_v1'),
         },
         rawInputItems: items,
         metadata: {
@@ -301,31 +321,31 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
           // Restore localStorage keys
           if (importedData.localStorage.aura_data_v1) {
-            window.localStorage.setItem('aura_data_v1', importedData.localStorage.aura_data_v1);
+            window.localStorage.setItem(currentStorageKey, importedData.localStorage.aura_data_v1);
           } else {
-            window.localStorage.removeItem('aura_data_v1');
+            window.localStorage.removeItem(currentStorageKey);
           }
 
           if (importedData.localStorage.aura_reviews_v1) {
-            window.localStorage.setItem('aura_reviews_v1', importedData.localStorage.aura_reviews_v1);
+            window.localStorage.setItem(currentReviewKey, importedData.localStorage.aura_reviews_v1);
           } else {
-            window.localStorage.removeItem('aura_reviews_v1');
+            window.localStorage.removeItem(currentReviewKey);
           }
 
           if (importedData.localStorage.aura_additional_v1) {
-            window.localStorage.setItem('aura_additional_v1', importedData.localStorage.aura_additional_v1);
+            window.localStorage.setItem(currentAdditionalKey, importedData.localStorage.aura_additional_v1);
           } else {
-            window.localStorage.removeItem('aura_additional_v1');
+            window.localStorage.removeItem(currentAdditionalKey);
           }
 
           if (importedData.localStorage.aura_input_data_v1) {
-            window.localStorage.setItem('aura_input_data_v1', importedData.localStorage.aura_input_data_v1);
+            window.localStorage.setItem(currentInputKey, importedData.localStorage.aura_input_data_v1);
           } else {
             const rawItems = importedData.rawInputItems || [];
             if (rawItems.length > 0) {
-              window.localStorage.setItem('aura_input_data_v1', JSON.stringify(rawItems));
+              window.localStorage.setItem(currentInputKey, JSON.stringify(rawItems));
             } else {
-              window.localStorage.removeItem('aura_input_data_v1');
+              window.localStorage.removeItem(currentInputKey);
             }
           }
 

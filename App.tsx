@@ -315,11 +315,37 @@ const AnalysisModule: React.FC = () => {
   // NEW: Get User Context
   const { user } = useAuth();
 
-  // Initialize state from LocalStorage if available
+  const userFacilityCode = useMemo(() => {
+    return (user?.facilityData?.code || user?.personnelData?.facilityCode || '').trim().replace(/^0+/, '');
+  }, [user]);
+
+  const currentStorageKey = useMemo(() => {
+    return userFacilityCode ? `${STORAGE_KEY}_${userFacilityCode}` : STORAGE_KEY;
+  }, [userFacilityCode]);
+
+  const currentInputKey = useMemo(() => {
+    return userFacilityCode ? `aura_input_data_v1_${userFacilityCode}` : 'aura_input_data_v1';
+  }, [userFacilityCode]);
+
+  const currentReviewKey = useMemo(() => {
+    return userFacilityCode ? `${REVIEW_KEY}_${userFacilityCode}` : REVIEW_KEY;
+  }, [userFacilityCode]);
+
+  const currentAdditionalKey = useMemo(() => {
+    return userFacilityCode ? `${ADDITIONAL_ITEMS_KEY}_${userFacilityCode}` : ADDITIONAL_ITEMS_KEY;
+  }, [userFacilityCode]);
+
+  // Initialize state from LocalStorage if available for the active facility
   const [result, setResult] = useState<AuraAnalysisResult | null>(() => {
     try {
-      const savedData = localStorage.getItem(STORAGE_KEY);
-      return savedData ? JSON.parse(savedData) : null;
+      const savedData = localStorage.getItem(currentStorageKey) || (!userFacilityCode ? localStorage.getItem(STORAGE_KEY) : null);
+      if (!savedData) return null;
+      const parsed = JSON.parse(savedData) as AuraAnalysisResult;
+      const resultCod = parsed?.codEess?.trim().replace(/^0+/, '');
+      if (userFacilityCode && resultCod && resultCod !== userFacilityCode) {
+        return null;
+      }
+      return parsed;
     } catch (e) {
       console.error("Error loading from local storage", e);
       return null;
@@ -335,7 +361,7 @@ const AnalysisModule: React.FC = () => {
   // --- NEW: LIFTED STATE FOR INPUT DATA ---
   const [inputData, setInputData] = useState<MedicationInput[]>(() => {
     try {
-      const savedInput = localStorage.getItem('aura_input_data_v1');
+      const savedInput = localStorage.getItem(currentInputKey) || (!userFacilityCode ? localStorage.getItem('aura_input_data_v1') : null);
       return savedInput ? JSON.parse(savedInput) : [];
     } catch (e) {
       console.error("Error loading input data", e);
@@ -409,7 +435,7 @@ const AnalysisModule: React.FC = () => {
   // --- REVIEW SYSTEM STATE ---
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(() => {
       try {
-          const saved = localStorage.getItem(REVIEW_KEY);
+          const saved = localStorage.getItem(currentReviewKey) || (!userFacilityCode ? localStorage.getItem(REVIEW_KEY) : null);
           return saved ? new Set(JSON.parse(saved)) : new Set();
       } catch (e) {
           return new Set();
@@ -423,7 +449,7 @@ const AnalysisModule: React.FC = () => {
   // --- ADDITIONAL ITEMS STATE ---
   const [additionalItems, setAdditionalItems] = useState<AdditionalItem[]>(() => {
       try {
-          const saved = localStorage.getItem(ADDITIONAL_ITEMS_KEY);
+          const saved = localStorage.getItem(currentAdditionalKey) || (!userFacilityCode ? localStorage.getItem(ADDITIONAL_ITEMS_KEY) : null);
           return saved ? JSON.parse(saved) : [];
       } catch (e) {
           return [];
@@ -462,8 +488,6 @@ const AnalysisModule: React.FC = () => {
               (document as any).msExitFullscreen();
           }
       }
-      // Note: Actual state 'isFullScreen' is updated via the event listener below
-      // to ensure sync with "Esc" key presses.
   }, []);
 
   // Listen for browser fullscreen changes (e.g. user presses ESC)
@@ -486,45 +510,94 @@ const AnalysisModule: React.FC = () => {
       };
   }, []);
 
+  // Sync state when facility/user switches
+  useEffect(() => {
+    try {
+      let savedDataStr = localStorage.getItem(currentStorageKey);
+      let parsedResult: AuraAnalysisResult | null = savedDataStr ? JSON.parse(savedDataStr) : null;
 
+      // Legacy migration check if scoped key not found
+      if (!parsedResult && userFacilityCode) {
+        const legacyStr = localStorage.getItem(STORAGE_KEY);
+        if (legacyStr) {
+          const legacyParsed = JSON.parse(legacyStr) as AuraAnalysisResult;
+          const legacyCod = legacyParsed?.codEess?.trim().replace(/^0+/, '');
+          if (legacyCod === userFacilityCode) {
+            parsedResult = legacyParsed;
+            localStorage.setItem(currentStorageKey, legacyStr);
+          } else {
+            // Unscoped legacy key belonged to another establishment! Clear legacy keys.
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem('aura_input_data_v1');
+            localStorage.removeItem(REVIEW_KEY);
+            localStorage.removeItem(ADDITIONAL_ITEMS_KEY);
+          }
+        }
+      }
+
+      // Strict mismatch check: if parsedResult belongs to a different facility code than active user, reset
+      if (parsedResult?.codEess && userFacilityCode) {
+        const resultCod = parsedResult.codEess.trim().replace(/^0+/, '');
+        if (resultCod !== userFacilityCode) {
+          console.warn(`Mismatched establishment data in cache (stored: ${resultCod}, active user: ${userFacilityCode}). Resetting.`);
+          parsedResult = null;
+        }
+      }
+
+      setResult(parsedResult);
+
+      let savedInputStr = localStorage.getItem(currentInputKey);
+      setInputData(savedInputStr ? JSON.parse(savedInputStr) : []);
+
+      let savedReviewStr = localStorage.getItem(currentReviewKey);
+      setReviewedIds(savedReviewStr ? new Set(JSON.parse(savedReviewStr)) : new Set());
+
+      let savedAddStr = localStorage.getItem(currentAdditionalKey);
+      setAdditionalItems(savedAddStr ? JSON.parse(savedAddStr) : []);
+    } catch (e) {
+      console.error("Error syncing state for user facility:", e);
+    }
+  }, [userFacilityCode, currentStorageKey, currentInputKey, currentReviewKey, currentAdditionalKey]);
+
+  // PERSIST RESULT
   useEffect(() => {
     if (result) {
       try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+          localStorage.setItem(currentStorageKey, JSON.stringify(result));
       } catch (e) {
           console.warn('Storage quota exceeded on main result.', e);
       }
     } else {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(currentStorageKey);
     }
-  }, [result]);
+  }, [result, currentStorageKey]);
 
   // PERSIST INPUT DATA
   useEffect(() => {
     try {
       if (inputData && inputData.length > 0) {
-        localStorage.setItem('aura_input_data_v1', JSON.stringify(inputData));
+        localStorage.setItem(currentInputKey, JSON.stringify(inputData));
       } else {
-        localStorage.removeItem('aura_input_data_v1');
+        localStorage.removeItem(currentInputKey);
       }
     } catch (e) {
       console.warn('Storage quota exceeded on input data.', e);
     }
-  }, [inputData]);
+  }, [inputData, currentInputKey]);
 
   // PERSIST REVIEWED IDS
   useEffect(() => {
       try {
-          localStorage.setItem(REVIEW_KEY, JSON.stringify(Array.from(reviewedIds)));
+          localStorage.setItem(currentReviewKey, JSON.stringify(Array.from(reviewedIds)));
       } catch(e) { console.warn(e); }
-  }, [reviewedIds]);
+  }, [reviewedIds, currentReviewKey]);
 
   // PERSIST ADDITIONAL ITEMS
   useEffect(() => {
       try {
-          localStorage.setItem(ADDITIONAL_ITEMS_KEY, JSON.stringify(additionalItems));
+          localStorage.setItem(currentAdditionalKey, JSON.stringify(additionalItems));
       } catch(e) { console.warn(e); }
-  }, [additionalItems]);
+  }, [additionalItems, currentAdditionalKey]);
 
   const handleAnalyze = useCallback(async (
     data: MedicationInput[], 
