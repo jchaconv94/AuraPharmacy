@@ -43,6 +43,9 @@ import {
   Maximize2,
   Minimize2,
   Calendar,
+  Camera,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
@@ -50,6 +53,12 @@ import { saveAs } from "file-saver";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import { supabaseService, supabase } from "../services/supabaseClient";
+import {
+  DeficiencyCaptureModal,
+  SelectedEstablishmentData,
+} from "./DeficiencyCaptureModal";
+import { DeficiencyCaptureBar } from "./DeficiencyCaptureBar";
+import { EstablishmentCard } from "./EstablishmentCard";
 
 const normalizeName = (name: string): string => {
   if (!name) return "";
@@ -679,6 +688,13 @@ export const SheetSearchModule: React.FC = () => {
     null,
   );
   const [stockModalSearchTerm, setStockModalSearchTerm] = useState("");
+
+  // Capture mode for deficiency reporting (Photo snapshot / WhatsApp)
+  const [isCaptureMode, setIsCaptureMode] = useState<boolean>(false);
+  const [selectedCaptureIds, setSelectedCaptureIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [isCaptureModalOpen, setIsCaptureModalOpen] = useState<boolean>(false);
 
   // Handler to toggle native fullscreen + React state
   const handleToggleTableFullscreen = (targetState: boolean) => {
@@ -2774,6 +2790,130 @@ function processSheet(sheet) {
     supabaseSyncs,
   ]);
 
+  const toggleCardSelection = (sheetId: string) => {
+    setSelectedCaptureIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sheetId)) {
+        next.delete(sheetId);
+      } else {
+        next.add(sheetId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllCapture = () => {
+    setSelectedCaptureIds(new Set(filteredAndSortedSources.map((s) => s.id)));
+  };
+
+  const handleDeselectAllCapture = () => {
+    setSelectedCaptureIds(new Set());
+  };
+
+  const handleAutoSelectDeficiencies = () => {
+    const deficientIds = new Set<string>();
+    filteredAndSortedSources.forEach((sheet) => {
+      const sheetData = data.filter((r) => r.sourceId === sheet.id);
+      const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
+      const statusObj = getUpdateStatus(sheet.lastUpdateTime);
+      const isMismatch = !datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime);
+      const isOfflineOrDelayed =
+        !sheet.lastUpdateTime ||
+        statusObj.color.includes("red") ||
+        statusObj.color.includes("amber") ||
+        statusObj.label.toLowerCase().includes("desconectado") ||
+        statusObj.label.toLowerCase().includes("fuera") ||
+        statusObj.label.toLowerCase().includes("atrasado");
+
+      if (isOfflineOrDelayed || isMismatch || expiredCount > 0 || expiringThisMonthCount > 0) {
+        deficientIds.add(sheet.id);
+      }
+    });
+
+    setSelectedCaptureIds(deficientIds);
+    if (deficientIds.size === 0) {
+      toast.info("No se encontraron establecimientos con deficiencias visibles");
+    } else {
+      toast.success(`${deficientIds.size} establecimientos con deficiencias seleccionados`);
+    }
+  };
+
+  const deficiencyCount = useMemo(() => {
+    let count = 0;
+    filteredAndSortedSources.forEach((sheet) => {
+      const sheetData = data.filter((r) => r.sourceId === sheet.id);
+      const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
+      const statusObj = getUpdateStatus(sheet.lastUpdateTime);
+      const isMismatch = !datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime);
+      const isOfflineOrDelayed =
+        !sheet.lastUpdateTime ||
+        statusObj.color.includes("red") ||
+        statusObj.color.includes("amber") ||
+        statusObj.label.toLowerCase().includes("desconectado") ||
+        statusObj.label.toLowerCase().includes("fuera") ||
+        statusObj.label.toLowerCase().includes("atrasado");
+
+      if (isOfflineOrDelayed || isMismatch || expiredCount > 0 || expiringThisMonthCount > 0) {
+        count++;
+      }
+    });
+    return count;
+  }, [filteredAndSortedSources, data]);
+
+  const selectedCaptureItemsData = useMemo(() => {
+    return Array.from(selectedCaptureIds)
+      .map((id) => {
+        const sheet = sources.find((s) => s.id === id);
+        if (!sheet) return null;
+        const sheetData = data.filter((r) => r.sourceId === id);
+        const { expiredCount, expiringThisMonthCount } = getExpirationStats(sheetData);
+        const statusObj = getUpdateStatus(sheet.lastUpdateTime);
+        const lastDash = sheet.name.lastIndexOf("-");
+        const description =
+          lastDash === -1
+            ? sheet.name.replace(/^FARM\s*-\s*/i, "")
+            : sheet.name.substring(0, lastDash).trim().replace(/^FARM\s*-\s*/i, "");
+        const code = getAlmCodeForSheet(id, data);
+        const type = getSheetType(sheet.name);
+        const isMismatch = !datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime);
+        const syncRecord = supabaseSyncs[id];
+
+        return {
+          id: sheet.id,
+          name: description,
+          code: code || "",
+          type:
+            type === "CS"
+              ? "Centro de Salud"
+              : type === "PS"
+              ? "Puesto de Salud"
+              : type === "ALM"
+              ? "Almacén"
+              : type === "HOSP"
+              ? "Hospital"
+              : "Establecimiento",
+          lastUpdateTime: sheet.lastUpdateTime,
+          equipmentDateTime: sheet.equipmentDateTime,
+          expiredCount,
+          expiringThisMonthCount,
+          totalItems: sheetData.length,
+          syncStatusLabel: statusObj.label,
+          syncStatusColor: statusObj.color,
+          isMismatchEquipmentDate: isMismatch,
+          syncRecordDate: syncRecord?.sync_date,
+          hasSyncRecord: !!syncRecord,
+        };
+      })
+      .filter(Boolean) as SelectedEstablishmentData[];
+  }, [selectedCaptureIds, sources, data, supabaseSyncs]);
+
+  const activeCaptureUngetName = useMemo(() => {
+    if (selectedUngetIndex !== null && scriptUrls[selectedUngetIndex]) {
+      return formatDisplayName(scriptUrls[selectedUngetIndex].name);
+    }
+    return "Jurisdicción Regional";
+  }, [selectedUngetIndex, scriptUrls]);
+
   const establishmentSummary = useMemo(() => {
     if (viewLevel !== "sheets" || selectedUngetIndex === null) return null;
 
@@ -3985,6 +4125,25 @@ function processSheet(sheet) {
                       </span>
                     </div>
                   )}
+                  {/* Button for Exiting Capture Mode (Only visible when isCaptureMode is active) */}
+                  {isCaptureMode && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCaptureMode(false)}
+                      className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer border whitespace-nowrap bg-gradient-to-r from-rose-600 to-amber-600 text-white border-rose-500 shadow-md ring-2 ring-rose-300"
+                      title="Salir del modo de captura de evidencias"
+                    >
+                      <Camera className="h-4 w-4 shrink-0 text-white animate-pulse" />
+                      <span className="hidden sm:inline">Salir de Captura</span>
+                      <span className="sm:hidden">Salir</span>
+                      {selectedCaptureIds.size > 0 && (
+                        <span className="bg-white/20 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full ml-0.5">
+                          {selectedCaptureIds.size}
+                        </span>
+                      )}
+                    </button>
+                  )}
+
                   <div className="relative z-30">
                     <button
                       onClick={() =>
@@ -4007,7 +4166,33 @@ function processSheet(sheet) {
                           onClick={() => setIsExportDropdownOpen(false)}
                         />
                         {/* Dropdown Card */}
-                        <div className="absolute right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.05)] z-50 overflow-hidden w-64 divide-y divide-slate-100 py-1 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                        <div className="absolute right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.1),0_8px_10px_-6px_rgba(0,0,0,0.05)] z-50 overflow-hidden w-72 divide-y divide-slate-100 py-1 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                          <button
+                            onClick={() => {
+                              setIsExportDropdownOpen(false);
+                              setIsCaptureMode(true);
+                              if (selectedCaptureIds.size === 0) {
+                                handleAutoSelectDeficiencies();
+                              }
+                            }}
+                            className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-rose-50/50 transition-all text-slate-705 group cursor-pointer"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+                              <Camera className="w-4 h-4" />
+                            </div>
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                              <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 leading-tight flex items-center gap-1.5">
+                                <span>Foto Reporte Deficiencias</span>
+                                <span className="bg-rose-100 text-rose-700 text-[8px] font-black px-1.5 py-0.2 rounded-full">
+                                  NUEVO
+                                </span>
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-medium leading-normal">
+                                Seleccionar y descargar imagen para WhatsApp
+                              </span>
+                            </div>
+                          </button>
+
                           <button
                             onClick={() => {
                               setIsExportDropdownOpen(false);
@@ -4536,298 +4721,52 @@ function processSheet(sheet) {
                         <>
                           {/* 1) GRID LAYOUT */}
                           {sheetsViewMode === "grid" && (
-                            <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4 sm:gap-6 animate-in fade-in duration-200">
+                            <div className={`grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4 sm:gap-6 animate-in fade-in duration-200 ${isCaptureMode ? "pb-28" : ""}`}>
                               {filteredAndSortedSources.map((sheet) => {
                                 const sheetData = data.filter(
                                   (r) => r.sourceId === sheet.id,
                                 );
                                 const { expiredCount, expiringThisMonthCount } =
                                   getExpirationStats(sheetData);
-                                const statusObj = getUpdateStatus(
-                                  sheet.lastUpdateTime,
+                                const isSelected = selectedCaptureIds.has(sheet.id);
+                                const lastDash = sheet.name.lastIndexOf("-");
+                                const description =
+                                  lastDash === -1
+                                    ? sheet.name.replace(/^FARM\s*-\s*/i, "")
+                                    : sheet.name
+                                        .substring(0, lastDash)
+                                        .trim()
+                                        .replace(/^FARM\s*-\s*/i, "");
+                                const code = getAlmCodeForSheet(
+                                  sheet.id,
+                                  data,
                                 );
+                                const syncRecord = supabaseSyncs[sheet.id];
+
+                                const cardData = {
+                                  id: sheet.id,
+                                  name: description,
+                                  code: code || "",
+                                  lastUpdateTime: sheet.lastUpdateTime,
+                                  equipmentDateTime: sheet.equipmentDateTime,
+                                  expiredCount,
+                                  expiringThisMonthCount,
+                                  totalItems: sheetData.length,
+                                  syncRecordDate: syncRecord?.sync_date,
+                                  hasSyncRecord: !!syncRecord,
+                                  isCheckingSync: isLoading || isSilentSyncing,
+                                };
 
                                 return (
-                                  <button
+                                  <EstablishmentCard
                                     key={sheet.id}
+                                    data={cardData}
+                                    isCaptureMode={isCaptureMode}
+                                    isSelected={isSelected}
+                                    onToggleSelect={() => toggleCardSelection(sheet.id)}
                                     onClick={() => handleSelectSheet(sheet.id)}
-                                    className="group relative bg-white border border-gray-200 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-4 sm:gap-0 h-full cursor-pointer overflow-hidden"
-                                  >
-                                    <div className="hidden sm:flex absolute top-4 right-4 sm:top-6 sm:right-6 flex-col gap-1.5 items-end z-10 p-1">
-                                      {renderSyncStatusPill(
-                                        sheet.lastUpdateTime,
-                                      )}
-                                      {expiredCount > 0 && (
-                                        <div
-                                          className="flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-full text-[10px] font-black border border-rose-200/60 shadow-3xs"
-                                          title="Vencido en stock"
-                                        >
-                                          <AlertTriangle className="h-3 w-3 text-rose-500 shrink-0" />
-                                          <span>
-                                            {expiredCount} vencido
-                                            {expiredCount !== 1 ? "s" : ""}
-                                          </span>
-                                        </div>
-                                      )}
-                                      {expiringThisMonthCount > 0 && (
-                                        <div
-                                          className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full text-[10px] font-black border border-amber-200/60 shadow-3xs"
-                                          title="Vence este mes"
-                                        >
-                                          <Clock className="h-3 w-3 text-amber-505 shrink-0" />
-                                          <span>
-                                            {expiringThisMonthCount} por vencer
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="w-12 h-12 shrink-0 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center sm:mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors relative">
-                                      <Hospital className="h-6 w-6" />
-                                      <div
-                                        className="absolute -top-1 -right-1 flex h-4 w-4"
-                                        title={
-                                          getUpdateStatus(sheet.lastUpdateTime)
-                                            .label
-                                        }
-                                      >
-                                        <span
-                                          className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${getUpdateStatus(sheet.lastUpdateTime).color}`}
-                                        />
-                                        <span
-                                          className={`relative inline-flex rounded-full h-4 w-4 border-2 border-white ${getUpdateStatus(sheet.lastUpdateTime).color}`}
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="flex-1 sm:mb-4 min-w-0">
-                                      {(() => {
-                                        const description = sheet.name.replace(
-                                          /^FARM\s*-\s*/i,
-                                          "",
-                                        );
-                                        const code = getAlmCodeForSheet(
-                                          sheet.id,
-                                          data,
-                                        );
-
-                                        return (
-                                          <>
-                                            {code && (
-                                              <p className="text-[9px] sm:text-[10px] font-bold text-teal-600 mb-0.5">
-                                                {code}
-                                              </p>
-                                            )}
-                                            <h3
-                                              className="text-sm sm:text-[15px] md:text-lg font-black text-gray-900 leading-tight mb-1 truncate sm:whitespace-normal"
-                                              title={description}
-                                            >
-                                              {description}
-                                            </h3>
-                                          </>
-                                        );
-                                      })()}
-
-                                      {/* Mobile alerts right below the title */}
-                                      <div className="sm:hidden flex items-center gap-1.5 mt-1 sm:mt-1.5 flex-wrap">
-                                        <div
-                                          className="flex items-center gap-1 bg-slate-105 text-slate-700 px-1.5 py-0.5 rounded-md text-[8.5px] font-black border border-slate-200"
-                                          title="Total de ítems"
-                                        >
-                                          <Package className="h-3 w-3 text-slate-400" />
-                                          <span>{sheetData.length} ítems</span>
-                                        </div>
-                                        {expiredCount > 0 && (
-                                          <div
-                                            className="flex items-center gap-1 bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full text-[8.5px] font-bold"
-                                            title="Vencido en stock"
-                                          >
-                                            <AlertTriangle className="h-2.5 w-2.5" />
-                                            <span>{expiredCount}</span>
-                                          </div>
-                                        )}
-                                        {expiringThisMonthCount > 0 && (
-                                          <div
-                                            className="flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-[8.5px] font-bold"
-                                            title="Vence este mes"
-                                          >
-                                            <Clock className="h-2.5 w-2.5" />
-                                            <span>
-                                              {expiringThisMonthCount}
-                                            </span>
-                                          </div>
-                                        )}
-                                        {sheet.lastUpdateTime && (
-                                          <div className="flex flex-col gap-0.5 w-full mt-1">
-                                            <div className="flex items-center gap-1 text-[8px] sm:text-[9px] font-bold text-gray-500 flex-wrap">
-                                              <RefreshCw className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                              <span>
-                                                Act:{" "}
-                                                {formatFullDate(
-                                                  sheet.lastUpdateTime,
-                                                )}
-                                              </span>
-                                              <span
-                                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-extrabold ${statusObj.color.includes("bg-emerald-500") ? "bg-emerald-50 text-emerald-700" : statusObj.color.includes("bg-amber-500") ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}
-                                              >
-                                                {statusObj.label}
-                                              </span>
-                                            </div>
-                                            {sheet.equipmentDateTime && (
-                                              <div
-                                                className={`flex items-center gap-1 text-[8px] sm:text-[9px] font-bold ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? "text-red-500" : "text-slate-400"}`}
-                                              >
-                                                <Monitor className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                                <span>
-                                                  Eq:{" "}
-                                                  {formatFullDate(
-                                                    sheet.equipmentDateTime,
-                                                  )}
-                                                </span>
-                                              </div>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      {/* Desktop last updated */}
-                                      {sheet.lastUpdateTime && (
-                                        <div className="hidden sm:flex flex-col gap-0.5 mt-2">
-                                          <div className="flex items-center gap-1.5 text-[10.5px] font-medium text-gray-400 flex-wrap">
-                                            <RefreshCw className="h-3 w-3 text-slate-400 shrink-0" />
-                                            <span>
-                                              Act:{" "}
-                                              <span className="font-extrabold text-slate-600">
-                                                {formatFullDate(
-                                                  sheet.lastUpdateTime,
-                                                )}
-                                              </span>
-                                            </span>
-                                          </div>
-                                          {sheet.equipmentDateTime && (
-                                            <div
-                                              className={`flex items-center gap-1.5 text-[10px] font-medium ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? "text-red-500" : "text-slate-400"}`}
-                                            >
-                                              <Monitor className="h-3 w-3 shrink-0" />
-                                              <span>
-                                                Equipo:{" "}
-                                                <span
-                                                  className={`font-extrabold ${!datesMatch(sheet.lastUpdateTime, sheet.equipmentDateTime) ? "text-red-500 font-black" : "text-slate-500"}`}
-                                                >
-                                                  {formatFullDate(
-                                                    sheet.equipmentDateTime,
-                                                  )}
-                                                </span>
-                                              </span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-
-                                      {/* Supabase Realtime Sync Actions */}
-                                      {supabase && (
-                                        <div
-                                          className="w-full mt-3 pt-3 border-t border-slate-100 flex flex-col gap-2 relative z-20"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          {(() => {
-                                            // Force trigger GitHub deployment
-                                            if (isLoading || isSilentSyncing) {
-                                              return (
-                                                <div className="flex items-center justify-between bg-white border border-slate-200/80 shadow-sm rounded-lg p-2">
-                                                  <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[10.5px]">
-                                                    <FileClock className="h-3.5 w-3.5" />
-                                                    <span>
-                                                      Historial de cambios
-                                                    </span>
-                                                  </div>
-                                                  <div className="flex items-center gap-1.5 text-teal-600 bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
-                                                    <RefreshCw className="h-3 w-3 animate-spin" />
-                                                    <span className="font-extrabold uppercase text-[9px] tracking-wide">
-                                                      Comprobando
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                              );
-                                            }
-                                            const syncRecord =
-                                              supabaseSyncs[sheet.id];
-                                            if (!syncRecord) {
-                                              return (
-                                                <div className="flex items-center justify-between bg-white border border-slate-200/80 shadow-sm rounded-lg p-2">
-                                                  <div className="flex items-center gap-1.5 text-slate-500 font-bold text-[10.5px]">
-                                                    <FileClock className="h-3.5 w-3.5" />
-                                                    <span>
-                                                      Historial de cambios
-                                                    </span>
-                                                  </div>
-                                                  <span className="bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded font-extrabold uppercase text-[9px] tracking-wide">
-                                                    Sin verificar
-                                                  </span>
-                                                </div>
-                                              );
-                                            }
-                                            const formattedDate = new Date(
-                                              syncRecord.sync_date,
-                                            ).toLocaleString("es-PE", {
-                                              day: "2-digit",
-                                              month: "2-digit",
-                                              year: "numeric",
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                              second: "2-digit",
-                                            });
-
-                                            return (
-                                              <div
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleShowSyncHistory(
-                                                    sheet.id,
-                                                    sheet.name,
-                                                  );
-                                                }}
-                                                className="w-full flex items-center justify-between gap-3 bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-slate-300 shadow-sm hover:shadow rounded-lg p-2 transition-all duration-200 cursor-pointer group"
-                                                title={`Último cambio en inventario: ${formattedDate}`}
-                                              >
-                                                <div className="flex items-center gap-1.5 min-w-0">
-                                                  <FileClock className="h-3.5 w-3.5 text-slate-400 group-hover:text-teal-600 transition-colors shrink-0" />
-                                                  <span className="text-[10.5px] font-bold text-slate-600 group-hover:text-slate-900 transition-colors truncate">
-                                                    Últimos movimientos
-                                                  </span>
-                                                </div>
-                                                <div className="flex items-center shrink-0">
-                                                  {renderSyncStatusPill(
-                                                    new Date(
-                                                      syncRecord.sync_date,
-                                                    ).getTime(),
-                                                  )}
-                                                </div>
-                                              </div>
-                                            );
-                                          })()}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div className="hidden sm:flex items-center justify-between w-full mt-auto pt-4 border-t border-gray-50">
-                                      <span className="text-[10.5px] font-black text-teal-600 uppercase tracking-wider">
-                                        Consultar Stock
-                                      </span>
-                                      <div className="flex items-center gap-2">
-                                        <span
-                                          className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-extrabold px-1.5 py-0.5 rounded-md"
-                                          title="Total de ítems en este establecimiento"
-                                        >
-                                          <Package className="h-3 w-3 text-slate-400" />
-                                          <span>{sheetData.length} items</span>
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <div className="sm:hidden ml-auto flex items-center gap-1.5">
-                                      <span className="text-[10px] font-extrabold text-slate-400">
-                                        ({sheetData.length} ítems)
-                                      </span>
-                                    </div>
-                                  </button>
+                                    onShowHistory={() => handleShowSyncHistory(sheet.id, sheet.name)}
+                                  />
                                 );
                               })}
                             </div>
@@ -4854,13 +4793,41 @@ function processSheet(sheet) {
                                 const statusObj = getUpdateStatus(
                                   sheet.lastUpdateTime,
                                 );
+                                const isSelected = selectedCaptureIds.has(sheet.id);
 
                                 return (
                                   <button
                                     key={sheet.id}
-                                    onClick={() => handleSelectSheet(sheet.id)}
-                                    className="group relative bg-white border border-gray-200 p-4 sm:p-5 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left w-full cursor-pointer overflow-hidden"
+                                    onClick={() => {
+                                      if (isCaptureMode) {
+                                        toggleCardSelection(sheet.id);
+                                      } else {
+                                        handleSelectSheet(sheet.id);
+                                      }
+                                    }}
+                                    className={`group relative bg-white border p-4 sm:p-5 rounded-xl sm:rounded-2xl transition-all text-left w-full cursor-pointer overflow-hidden ${
+                                      isCaptureMode && isSelected
+                                        ? "border-rose-500 ring-4 ring-rose-400/30 bg-rose-50/20 shadow-md"
+                                        : isCaptureMode
+                                        ? "border-slate-200 hover:border-rose-300 hover:ring-2 hover:ring-rose-200/50 shadow-sm"
+                                        : "border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500"
+                                    }`}
                                   >
+                                    {isCaptureMode && (
+                                      <div className="absolute top-2 right-2 z-30 flex items-center gap-1.5 transition-all">
+                                        {isSelected ? (
+                                          <div className="flex items-center gap-1 bg-rose-600 text-white text-[10px] font-black px-2 py-0.5 rounded-lg shadow-sm">
+                                            <Check className="h-3.5 w-3.5 stroke-[3]" />
+                                            <span>Seleccionado</span>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-1 bg-white/90 backdrop-blur-xs text-slate-500 border border-slate-300 hover:border-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-xs">
+                                            <Square className="h-3.5 w-3.5" />
+                                            <span>Seleccionar</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                     <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-4 w-full">
                                       {/* Column 1: Hospital Info & Status (Flexible width) */}
                                       <div className="flex items-center gap-3 md:gap-4 flex-[1_1_240px] min-w-[200px]">
@@ -5034,13 +5001,39 @@ function processSheet(sheet) {
                                         .trim()
                                         .replace(/^FARM\s*-\s*/i, "");
                                 const code = getAlmCodeForSheet(sheet.id, data);
+                                const isSelected = selectedCaptureIds.has(sheet.id);
 
                                 return (
                                   <button
                                     key={sheet.id}
-                                    onClick={() => handleSelectSheet(sheet.id)}
-                                    className="group relative bg-white border border-gray-200 p-4 rounded-xl sm:rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500 transition-all text-left flex flex-col justify-between h-full min-h-[175px] cursor-pointer overflow-hidden"
+                                    onClick={() => {
+                                      if (isCaptureMode) {
+                                        toggleCardSelection(sheet.id);
+                                      } else {
+                                        handleSelectSheet(sheet.id);
+                                      }
+                                    }}
+                                    className={`group relative bg-white border p-4 rounded-xl sm:rounded-2xl transition-all text-left flex flex-col justify-between h-full min-h-[175px] cursor-pointer overflow-hidden ${
+                                      isCaptureMode && isSelected
+                                        ? "border-rose-500 ring-4 ring-rose-400/30 bg-rose-50/20 shadow-md"
+                                        : isCaptureMode
+                                        ? "border-slate-200 hover:border-rose-300 hover:ring-2 hover:ring-rose-200/50 shadow-sm"
+                                        : "border-gray-200 shadow-[0_1px_4px_rgba(0,0,0,0.012)] hover:shadow-md hover:border-teal-500"
+                                    }`}
                                   >
+                                    {isCaptureMode && (
+                                      <div className="absolute top-2 right-2 z-30 flex items-center gap-1.5 transition-all">
+                                        {isSelected ? (
+                                          <div className="flex items-center gap-1 bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-lg shadow-sm">
+                                            <Check className="h-3 w-3 stroke-[3]" />
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-1 bg-white/90 text-slate-500 border border-slate-300 text-[9px] font-bold px-1.5 py-0.5 rounded-lg shadow-xs">
+                                            <Square className="h-3 w-3" />
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                     <div className="w-full">
                                       {/* Compact Top Row: SISMED code with Establishment style icon, and stats/status dot on the right */}
                                       <div className="flex items-center justify-between mb-3.5">
@@ -5472,17 +5465,44 @@ function processSheet(sheet) {
                                       const statusObj = getUpdateStatus(
                                         sheet.lastUpdateTime,
                                       );
+                                      const isSelected = selectedCaptureIds.has(sheet.id);
 
                                       return (
                                         <tr
                                           key={sheet.id}
-                                          onClick={() =>
-                                            handleSelectSheet(sheet.id)
-                                          }
-                                          className="hover:bg-teal-50/20 transition-all cursor-pointer group"
+                                          onClick={() => {
+                                            if (isCaptureMode) {
+                                              toggleCardSelection(sheet.id);
+                                            } else {
+                                              handleSelectSheet(sheet.id);
+                                            }
+                                          }}
+                                          className={`transition-all cursor-pointer group ${
+                                            isCaptureMode && isSelected
+                                              ? "bg-rose-50/70 hover:bg-rose-50"
+                                              : "hover:bg-teal-50/20"
+                                          }`}
                                         >
                                           <td className="px-5 py-3 whitespace-nowrap">
-                                            {code ? (
+                                            {isCaptureMode ? (
+                                              <div className="flex items-center gap-2">
+                                                {isSelected ? (
+                                                  <div className="flex items-center gap-1 bg-rose-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm">
+                                                    <Check className="h-3 w-3 stroke-[3]" />
+                                                    <span>Sel.</span>
+                                                  </div>
+                                                ) : (
+                                                  <div className="flex items-center gap-1 bg-white text-slate-500 border border-slate-300 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                                    <Square className="h-3 w-3" />
+                                                  </div>
+                                                )}
+                                                {code && (
+                                                  <span className="text-[10px] font-extrabold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
+                                                    {code}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            ) : code ? (
                                               <span className="text-[10px] font-extrabold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
                                                 {code}
                                               </span>
@@ -8866,6 +8886,33 @@ function processSheet(sheet) {
           </div>
         </div>
       )}
+
+      {/* Floating Deficiency Capture Bar when in Capture Mode */}
+      {isCaptureMode && viewLevel === "sheets" && (
+        <DeficiencyCaptureBar
+          selectedCount={selectedCaptureIds.size}
+          totalVisibleCount={filteredAndSortedSources.length}
+          deficiencyCount={deficiencyCount}
+          onSelectAll={handleSelectAllCapture}
+          onDeselectAll={handleDeselectAllCapture}
+          onAutoSelectDeficiencies={handleAutoSelectDeficiencies}
+          onOpenPreview={() => setIsCaptureModalOpen(true)}
+          onDirectDownload={() => setIsCaptureModalOpen(true)}
+          onDirectCopy={() => setIsCaptureModalOpen(true)}
+          onExit={() => {
+            setIsCaptureMode(false);
+            setSelectedCaptureIds(new Set());
+          }}
+        />
+      )}
+
+      {/* Deficiency Capture Modal (Preview & Image Generation) */}
+      <DeficiencyCaptureModal
+        isOpen={isCaptureModalOpen}
+        onClose={() => setIsCaptureModalOpen(false)}
+        ungetName={activeCaptureUngetName}
+        selectedItems={selectedCaptureItemsData}
+      />
     </div>
   );
 };
