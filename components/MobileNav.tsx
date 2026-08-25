@@ -4,6 +4,7 @@ import {
   ArchiveX,
   ArrowDownToLine,
   ArrowRightLeft,
+  Ban,
   BarChart2,
   BarChart3,
   Boxes,
@@ -45,7 +46,8 @@ const GRUPOS: Grupo[] = [
   {
     titulo: 'Farmacia',
     entradas: [
-      { module: 'DASHBOARD', label: 'Análisis', icon: icono(BarChart2) },
+      { module: 'DASHBOARD', label: 'Análisis Requerimiento', icon: icono(BarChart2) },
+      { module: 'ANALYSIS_EXCLUSIONS', label: 'Lista de Exclusiones', icon: icono(Ban) },
       { module: 'REDISTRIBUTION', label: 'Redistribución', icon: icono(ArrowRightLeft) },
       { module: 'SIG_SEARCH', label: 'Consulta Stock', icon: icono(Database) },
       { module: 'IPRESS_STOCK', label: 'Stock SISMED', icon: icono(FileSpreadsheet) },

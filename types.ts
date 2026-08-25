@@ -89,11 +89,25 @@ export interface AuraAnalysisResult {
   referenceDate?: string; // Fecha de Corte (YYYY-MM)
   analysisConfig?: {
     vaccinesExcluded: boolean; // Tracks if vaccines were filtered at input
+    customExclusionsExcluded?: boolean; // Tracks if custom facility exclusions were filtered
+    customExclusionsCount?: number;
   };
   microred?: string;
   codEess?: string;
   establishmentName?: string;
   category?: string;
+}
+
+export interface RequirementExclusionItem {
+  id?: string;
+  establishmentCode: string;
+  sismedCode: string;
+  description: string;
+  presentation?: string;
+  reason?: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ChartDataPoint {
@@ -108,6 +122,7 @@ export type UserRole = string;
 export type AppModule =
   | 'DASHBOARD'
   | 'ANALYSIS'
+  | 'ANALYSIS_EXCLUSIONS'
   | 'ADMIN_USERS'
   | 'ADMIN_ROLES'
   | 'ADMIN_FACILITIES'
@@ -136,7 +151,8 @@ export type AppModule =
   | 'IMMUNIZATION_CONFIG';
 
 export const AVAILABLE_MODULES: { id: AppModule; label: string; description: string }[] = [
-  { id: 'DASHBOARD', label: 'Dashboard', description: 'Vista principal y resumen de indicadores' },
+  { id: 'DASHBOARD', label: 'Análisis de Requerimiento', description: 'Vista principal y resumen de indicadores' },
+  { id: 'ANALYSIS_EXCLUSIONS', label: 'Lista de Exclusiones', description: 'Medicamentos excluidos del análisis por establecimiento' },
   { id: 'ANALYSIS', label: 'Análisis Inteligente', description: 'Módulo de análisis de requerimientos' },
   { id: 'SIG_SEARCH', label: 'Consulta Stock', description: 'Buscador de stock SIG' },
   { id: 'REDISTRIBUTION', label: 'Redistribución', description: 'Módulo de redistribución de medicamentos' },

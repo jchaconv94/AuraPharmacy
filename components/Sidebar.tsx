@@ -28,7 +28,8 @@ import {
   BarChart3,
   Activity,
   ArchiveX,
-  CalendarCheck
+  CalendarCheck,
+  Ban
 } from 'lucide-react';
 import { AppModule, User } from '../types';
 
@@ -53,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [isAdminExpanded, setIsAdminExpanded] = useState(false);
   const [isImmunizationExpanded, setIsImmunizationExpanded] = useState(false);
+  const [isAnalysisExpanded, setIsAnalysisExpanded] = useState(true);
   
   useEffect(() => {
     if (currentView.startsWith('ADMIN') && !isCollapsed) {
@@ -61,9 +63,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (currentView.startsWith('IMMUNIZATION') && !isCollapsed) {
       setIsImmunizationExpanded(true);
     }
+    if ((currentView === 'DASHBOARD' || currentView === 'ANALYSIS_EXCLUSIONS') && !isCollapsed) {
+      setIsAnalysisExpanded(true);
+    }
   }, [currentView, isCollapsed]);
 
   const toggleCollapse = () => setIsCollapsed(!isCollapsed);
+
+  const toggleAnalysis = () => {
+    if (isCollapsed) {
+      setIsCollapsed(false);
+      setIsAnalysisExpanded(true);
+    } else {
+      setIsAnalysisExpanded(!isAnalysisExpanded);
+    }
+  };
 
   const toggleAdmin = () => {
     if (isCollapsed) {
@@ -130,19 +144,64 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation Links */}
       <div className="flex-1 overflow-y-auto py-6 px-3 space-y-2">
-        {hasPermission('DASHBOARD') && (
-          <button
-            onClick={() => setCurrentView('DASHBOARD')}
-            className={`w-full flex items-center gap-3 py-3 rounded-xl transition-all duration-300 group ${
-              currentView === 'DASHBOARD'
-                ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
-                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
-            } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}
-            title={isCollapsed ? "Análisis" : ""}
-          >
-            <BarChart2 className={`h-5 w-5 shrink-0 ${currentView === 'DASHBOARD' ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
-            {!isCollapsed && <span className="font-semibold text-sm">Análisis</span>}
-          </button>
+        {(hasPermission('DASHBOARD') || hasPermission('ANALYSIS_EXCLUSIONS')) && (
+          <div className="flex flex-col gap-1">
+            <button
+              onClick={toggleAnalysis}
+              className={`w-full flex items-center py-3 rounded-xl transition-all duration-300 group ${
+                currentView === 'DASHBOARD' || currentView === 'ANALYSIS_EXCLUSIONS'
+                  ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+              } ${isCollapsed ? 'justify-center px-0' : 'justify-between px-3'}`}
+              title={isCollapsed ? "Análisis" : ""}
+            >
+              {isCollapsed ? (
+                <BarChart2 className={`h-5 w-5 shrink-0 ${currentView === 'DASHBOARD' || currentView === 'ANALYSIS_EXCLUSIONS' ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
+              ) : (
+                <>
+                  <div className="flex items-center gap-3">
+                    <BarChart2 className={`h-5 w-5 shrink-0 ${currentView === 'DASHBOARD' || currentView === 'ANALYSIS_EXCLUSIONS' ? 'text-teal-400' : 'group-hover:text-teal-400 transition-colors'}`} />
+                    <span className="font-semibold text-sm">Análisis</span>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isAnalysisExpanded ? 'rotate-180 text-teal-400' : 'text-gray-500 group-hover:text-gray-400'}`} />
+                </>
+              )}
+            </button>
+
+            {/* Sub-menu */}
+            {!isCollapsed && isAnalysisExpanded && (
+              <div className="flex flex-col gap-1 pl-4 mt-1 animate-in slide-in-from-top-2 fade-in duration-200">
+                <div className="pl-3 border-l-2 border-white/10 flex flex-col gap-1">
+                  {hasPermission('DASHBOARD') && (
+                    <button
+                      onClick={() => setCurrentView('DASHBOARD')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'DASHBOARD'
+                          ? 'text-teal-400 bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <BarChart2 className="h-4 w-4 shrink-0" />
+                      Análisis Requerimiento
+                    </button>
+                  )}
+                  {hasPermission('ANALYSIS_EXCLUSIONS') && (
+                    <button
+                      onClick={() => setCurrentView('ANALYSIS_EXCLUSIONS')}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg transition-all duration-200 ${
+                        currentView === 'ANALYSIS_EXCLUSIONS'
+                          ? 'text-teal-400 bg-white/5'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Ban className="h-4 w-4 shrink-0 text-rose-400" />
+                      Lista de Exclusiones
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {hasPermission('REDISTRIBUTION') && (

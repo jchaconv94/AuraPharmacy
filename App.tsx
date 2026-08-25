@@ -1,7 +1,8 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef, Suspense } from 'react';
 import { InputSection } from './components/InputSection';
-import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppModule, QuickFilterOption, AnalyzedMedication, DashboardViewMode } from './types';
+import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppModule, QuickFilterOption, AnalyzedMedication, DashboardViewMode, HealthFacility, Microred } from './types';
+import { api } from './services/api';
 import { analyzeInventoryWithAura } from './services/auraService';
 import { generateFullReportPDF } from './services/pdfService';
 import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, Building2, Calendar, Clock, Network } from 'lucide-react';
@@ -29,6 +30,7 @@ import { SheetSearchModule } from './components/SheetSearchModule';
 import { AdminStockAssignmentModule } from './components/AdminStockAssignmentModule';
 import { AssignedIpressStockModule } from './components/AssignedIpressStockModule';
 import { StockMonitoringModule } from './components/IpressStockModule';
+import { AnalysisExclusionsModule } from './components/AnalysisExclusionsModule';
 import { ImmunizationAdjustmentsModule } from './components/ImmunizationAdjustmentsModule';
 import { ImmunizationCatalogModule } from './components/ImmunizationCatalogModule';
 import { ImmunizationClosuresModule } from './components/ImmunizationClosuresModule';
@@ -162,6 +164,7 @@ const AuthenticatedApp: React.FC = () => {
     useEffect(() => {
         if (isAuthenticated && !isLoading && user && !hasPermission(currentView)) {
             if (hasPermission('DASHBOARD')) setCurrentView('DASHBOARD');
+            else if (hasPermission('ANALYSIS_EXCLUSIONS')) setCurrentView('ANALYSIS_EXCLUSIONS');
             else if (hasPermission('IMMUNIZATION_STOCK')) setCurrentView('IMMUNIZATION_STOCK');
                             else if (hasPermission('IMMUNIZATION_STOCK_QUERY')) setCurrentView('IMMUNIZATION_STOCK_QUERY');
             else if (hasPermission('IMMUNIZATION_INCOMES')) setCurrentView('IMMUNIZATION_INCOMES');
@@ -231,6 +234,7 @@ const AuthenticatedApp: React.FC = () => {
                      <div className="flex items-center gap-3">
                         <h2 className="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
                            {currentView === 'DASHBOARD' && 'Análisis de Requerimiento'}
+                           {currentView === 'ANALYSIS_EXCLUSIONS' && 'Lista de Exclusiones de Requerimiento'}
                            {currentView === 'REDISTRIBUTION' && 'Módulo de Redistribución'}
                            {currentView === 'SIG_SEARCH' && 'Consulta Stock'}
                            {currentView === 'IPRESS_STOCK' && 'Stock SISMED'}
@@ -265,6 +269,7 @@ const AuthenticatedApp: React.FC = () => {
                         <ErrorBoundary>
                             <Suspense fallback={<SuspenseFallback />}>
                                 {currentView === 'DASHBOARD' && <AnalysisModule />}
+                                {currentView === 'ANALYSIS_EXCLUSIONS' && <AnalysisExclusionsModule />}
                                 {currentView === 'REDISTRIBUTION' && <RedistributionModule />}
                                 {currentView === 'SIG_SEARCH' && <SheetSearchModule />}
                                 {currentView === 'IPRESS_STOCK' && <AssignedIpressStockModule />}
@@ -340,6 +345,59 @@ const AnalysisModule: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // DB lookup for facility & microred metadata fallback
+  const [dbFacilities, setDbFacilities] = useState<HealthFacility[]>([]);
+  const [dbMicroredes, setDbMicroredes] = useState<Microred[]>([]);
+
+  useEffect(() => {
+    const fetchDb = async () => {
+      try {
+        const [facs, mrs] = await Promise.all([
+          api.getFacilities(),
+          api.getMicroredes()
+        ]);
+        if (facs) setDbFacilities(facs);
+        if (mrs) setDbMicroredes(mrs);
+      } catch (e) {
+        console.error("Error fetching db in AnalysisModule", e);
+      }
+    };
+    fetchDb();
+  }, []);
+
+  const activeCodEess = useMemo(() => {
+    return result?.codEess || user?.facilityData?.code || user?.personnelData?.facilityCode || '';
+  }, [result, user]);
+
+  const activeEstName = useMemo(() => {
+    if (result?.establishmentName) return result.establishmentName;
+    if (user?.facilityData?.name) return user.facilityData.name;
+    if (activeCodEess && dbFacilities.length > 0) {
+      const norm = activeCodEess.trim().replace(/^0+/, '');
+      const fac = dbFacilities.find(f => f.code.trim().replace(/^0+/, '') === norm);
+      if (fac?.name) return fac.name;
+    }
+    return '';
+  }, [result, user, activeCodEess, dbFacilities]);
+
+  const activeMicrored = useMemo(() => {
+    if (result?.microred) return result.microred;
+    const mrId = user?.facilityData?.microredId || user?.personnelData?.microredId;
+    if (mrId && dbMicroredes.length > 0) {
+      const mr = dbMicroredes.find(m => m.id === mrId);
+      if (mr?.name) return mr.name;
+    }
+    if (activeCodEess && dbFacilities.length > 0) {
+      const norm = activeCodEess.trim().replace(/^0+/, '');
+      const fac = dbFacilities.find(f => f.code.trim().replace(/^0+/, '') === norm);
+      if (fac?.microredId && dbMicroredes.length > 0) {
+        const mr = dbMicroredes.find(m => m.id === fac.microredId);
+        if (mr?.name) return mr.name;
+      }
+    }
+    return '';
+  }, [result, user, activeCodEess, dbFacilities, dbMicroredes]);
 
   // --- LIFTED STATE FOR FILTERING ---
   const [searchTerm, setSearchTerm] = useState('');
@@ -946,21 +1004,21 @@ const AnalysisModule: React.FC = () => {
                         <h2 className="text-2xl 2xl:text-3xl font-bold text-gray-900 tracking-tight">Resultados del Análisis</h2>
                         <div className="mt-2.5 flex flex-wrap items-center gap-2">
                             {/* ESTABLECIMIENTO Y CÓDIGO */}
-                            {result.establishmentName && (
+                            {activeEstName && (
                                 <div className="flex items-center gap-1.5 text-teal-900 bg-teal-50/80 border border-teal-100 rounded-lg px-2.5 py-1 tracking-tight font-extrabold text-xs">
                                     <Building2 className="h-3.5 w-3.5 text-teal-600 animate-pulse" />
                                     <span>
-                                        {result.codEess ? `${result.codEess} - ` : ''}
-                                        {result.establishmentName.toUpperCase()}
+                                        {activeCodEess ? `${activeCodEess} - ` : ''}
+                                        {activeEstName.toUpperCase()}
                                     </span>
                                 </div>
                             )}
 
                             {/* MICRORED */}
-                            {result.microred && (
+                            {activeMicrored && (
                                 <div className="flex items-center gap-1.5 text-teal-800 bg-teal-50/50 border border-teal-100 rounded-lg px-2.5 py-1 text-xs font-semibold">
                                     <Network className="h-3.5 w-3.5 text-teal-600" />
-                                    <span>MR: <span className="font-bold text-teal-800">{result.microred.toUpperCase()}</span></span>
+                                    <span>MR: <span className="font-bold text-teal-800">{activeMicrored.toUpperCase()}</span></span>
                                 </div>
                             )}
 

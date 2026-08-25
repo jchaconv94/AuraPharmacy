@@ -108,7 +108,7 @@ export const ImmunizationKpiCard: React.FC<{
   const renderIcon = icon || defaultToneIcons[tone];
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md flex flex-col justify-between h-full">
       {/* Dynamic top color accent line */}
       <div className={`absolute top-0 left-0 right-0 h-1 ${toneTopBar[tone]}`} />
 
@@ -120,11 +120,6 @@ export const ImmunizationKpiCard: React.FC<{
           <p className="mt-1.5 truncate text-2xl font-black text-slate-900 tracking-tight">
             {value}
           </p>
-          {hint && (
-            <p className="mt-1 truncate text-xs font-semibold text-slate-400">
-              {hint}
-            </p>
-          )}
         </div>
 
         {renderIcon && (
@@ -133,6 +128,12 @@ export const ImmunizationKpiCard: React.FC<{
           </div>
         )}
       </div>
+
+      {hint && (
+        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center text-xs font-semibold text-slate-400">
+          <span className="truncate">{hint}</span>
+        </div>
+      )}
     </div>
   );
 };
@@ -151,19 +152,19 @@ export const ImmunizationPageHeader: React.FC<{
   tone?: ImmunizationTone;
 }> = ({ icon, title, description, scopeLabel, badges, actions, tone = "info" }) => (
   <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex items-start gap-4">
-        <div className={`rounded-2xl p-3 ${toneIcon[tone]}`}>{icon}</div>
-        <div>
+    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="flex items-start gap-4 min-w-0">
+        <div className={`rounded-2xl p-3 shrink-0 ${toneIcon[tone]}`}>{icon}</div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-2xl font-black text-slate-900">{title}</h2>
             {badges}
           </div>
-          {description && <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-600">{description}</p>}
+          {description && <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">{description}</p>}
           {scopeLabel && <p className="mt-2 text-xs font-black text-teal-700">{scopeLabel}</p>}
         </div>
       </div>
-      {actions && <div className="flex flex-col gap-2 sm:flex-row">{actions}</div>}
+      {actions && <div className="flex items-center gap-2 shrink-0 self-start xl:self-center">{actions}</div>}
     </div>
   </section>
 );

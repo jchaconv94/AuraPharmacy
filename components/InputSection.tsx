@@ -1,10 +1,13 @@
 
 import React, { useState, useRef } from 'react';
 import { toast } from 'sonner';
-import { Trash2, Activity, Upload, FileSpreadsheet, Calendar, Check, AlertCircle, AlertTriangle, X, Syringe, Settings2, Play, RefreshCw, Sparkles, Download, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import { Trash2, Activity, Upload, FileSpreadsheet, Calendar, Check, AlertCircle, AlertTriangle, X, Syringe, Settings2, Play, RefreshCw, Sparkles, Download, ChevronDown, ChevronUp, CheckCircle, Ban, ListFilter, Building2 } from 'lucide-react';
 import { read, utils, writeFile } from 'xlsx';
-import { MedicationInput, HealthFacility, Microred } from '../types';
+import { MedicationInput, HealthFacility, Microred, RequirementExclusionItem } from '../types';
 import { api } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { requirementExclusionService } from '../services/requirementExclusionService';
+import { getUserJurisdictionScope } from '../services/jurisdictionService';
 
 interface InputSectionProps {
   onAnalyze: (
@@ -83,6 +86,8 @@ export const InputSection: React.FC<InputSectionProps> = ({
     additionalItems,
     onAdditionalItemsChange
 }) => {
+  const { user } = useAuth();
+
   // Use Props instead of Local State
   const items = currentItems;
   const setItems = onItemsChange;
@@ -92,8 +97,11 @@ export const InputSection: React.FC<InputSectionProps> = ({
   
   // Modal State
   const [isDateModalOpen, setIsDateModalOpen] = useState(false);
-  const [isVaccineModalOpen, setIsVaccineModalOpen] = useState(false); // NEW: Vaccine Check
+  const [isVaccineModalOpen, setIsVaccineModalOpen] = useState(false); // NEW: Vaccine & Exclusion Config Modal
   const [excludeVaccinesSelection, setExcludeVaccinesSelection] = useState(true); // Default selection
+  const [excludeCustomListSelection, setExcludeCustomListSelection] = useState(true); // Default selection for custom establishment exclusion list
+  const [customExclusionItems, setCustomExclusionItems] = useState<RequirementExclusionItem[]>([]);
+  const [customExclusionCount, setCustomExclusionCount] = useState<number>(0);
   const [detectedMonthsCount, setDetectedMonthsCount] = useState<number>(12);
   const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
   const [showClearWarning, setShowClearWarning] = useState(false); 
@@ -110,6 +118,54 @@ export const InputSection: React.FC<InputSectionProps> = ({
   // States to hold official database facilities and microreds for metadata mapping and correction
   const [dbFacilities, setDbFacilities] = useState<HealthFacility[]>([]);
   const [dbMicroredes, setDbMicroredes] = useState<Microred[]>([]);
+
+  // User facility fallback values
+  const userFacility = user?.facilityData;
+  const userPersonnel = user?.personnelData;
+
+  const displayCodEess = React.useMemo(() => {
+    return importedCodEess || userFacility?.code || userPersonnel?.facilityCode || '';
+  }, [importedCodEess, userFacility, userPersonnel]);
+
+  const displayEstablishmentName = React.useMemo(() => {
+    if (importedEstablishmentName) return importedEstablishmentName;
+    if (userFacility?.name) return userFacility.name;
+    if (displayCodEess && dbFacilities.length > 0) {
+      const norm = displayCodEess.trim().replace(/^0+/, '');
+      const fac = dbFacilities.find(f => f.code.trim().replace(/^0+/, '') === norm);
+      if (fac?.name) return fac.name;
+    }
+    return '';
+  }, [importedEstablishmentName, userFacility, displayCodEess, dbFacilities]);
+
+  const displayCategory = React.useMemo(() => {
+    if (importedCategory) return importedCategory;
+    if (userFacility?.category) return userFacility.category;
+    if (displayCodEess && dbFacilities.length > 0) {
+      const norm = displayCodEess.trim().replace(/^0+/, '');
+      const fac = dbFacilities.find(f => f.code.trim().replace(/^0+/, '') === norm);
+      if (fac?.category) return fac.category;
+    }
+    return '';
+  }, [importedCategory, userFacility, displayCodEess, dbFacilities]);
+
+  const displayMicrored = React.useMemo(() => {
+    if (importedMicrored) return importedMicrored;
+    const mrId = userFacility?.microredId || userPersonnel?.microredId;
+    if (mrId && dbMicroredes.length > 0) {
+      const mr = dbMicroredes.find(m => m.id === mrId);
+      if (mr?.name) return mr.name;
+    }
+    if (displayCodEess && dbFacilities.length > 0) {
+      const norm = displayCodEess.trim().replace(/^0+/, '');
+      const fac = dbFacilities.find(f => f.code.trim().replace(/^0+/, '') === norm);
+      if (fac?.microredId && dbMicroredes.length > 0) {
+        const mr = dbMicroredes.find(m => m.id === fac.microredId);
+        if (mr?.name) return mr.name;
+      }
+    }
+    return '';
+  }, [importedMicrored, userFacility, userPersonnel, displayCodEess, dbFacilities, dbMicroredes]);
 
   // Fetch facilities and microredes on mount
   React.useEffect(() => {
@@ -297,6 +353,22 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
           // Restore components internal metadata
           if (importedData.metadata) {
+            const userScope = getUserJurisdictionScope(user);
+            if (userScope.level === 'IPRESS') {
+              const userFacilityCode = user?.facilityData?.code || user?.personnelData?.facilityCode;
+              const userFacilityName = user?.facilityData?.name || dbFacilities.find(f => f.code === userFacilityCode)?.name || '';
+              const fileCod = importedData.metadata.importedCodEess;
+              const fileEst = importedData.metadata.importedEstablishmentName;
+
+              const normalizeCode = (c?: string) => (c || '').trim().replace(/^0+/, '');
+              const activeNorm = normalizeCode(userFacilityCode);
+              const fileNorm = normalizeCode(fileCod);
+
+              if (fileNorm && activeNorm && fileNorm !== activeNorm) {
+                throw new Error(`El respaldo pertenece a "${fileEst || fileCod}" (CÓD: ${fileCod}), pero su usuario está asignado a "${userFacilityName || activeNorm}" (CÓD: ${userFacilityCode}). Como personal de Farmacia / IPRESS solo puede importar requerimientos de su propio establecimiento.`);
+              }
+            }
+
             setImportedMicrored(importedData.metadata.importedMicrored || '');
             setImportedCodEess(importedData.metadata.importedCodEess || '');
             setImportedEstablishmentName(importedData.metadata.importedEstablishmentName || '');
@@ -432,6 +504,37 @@ export const InputSection: React.FC<InputSectionProps> = ({
             if (catKey && !catTemp) catTemp = String(row[catKey] || '').trim();
 
             if (mrTemp && codTemp && estTemp && catTemp) break;
+          }
+
+          // Validate establishment restriction for IPRESS / Farmacia users
+          let fileCodToValidate = codTemp;
+          let fileEstToValidate = estTemp;
+
+          if (!fileCodToValidate && fileEstToValidate && dbFacilities.length > 0) {
+            const normEst = fileEstToValidate.toLowerCase().trim();
+            const fac = dbFacilities.find(f => f.name.toLowerCase().trim() === normEst || f.name.toLowerCase().includes(normEst));
+            if (fac) {
+              fileCodToValidate = fac.code;
+            }
+          }
+
+          const userScope = getUserJurisdictionScope(user);
+          if (userScope.level === 'IPRESS') {
+            const userFacilityCode = user?.facilityData?.code || user?.personnelData?.facilityCode;
+            const userFacilityName = user?.facilityData?.name || dbFacilities.find(f => f.code === userFacilityCode)?.name || '';
+
+            const normalizeCode = (c?: string) => (c || '').trim().replace(/^0+/, '');
+            const activeNorm = normalizeCode(userFacilityCode);
+            const fileNorm = normalizeCode(fileCodToValidate);
+
+            if (fileNorm && activeNorm && fileNorm !== activeNorm) {
+              const errorMsg = `Acceso denegado: El archivo cargado pertenece a "${fileEstToValidate || fileCodToValidate}" (CÓD: ${fileCodToValidate}), pero su usuario está asignado a "${userFacilityName || activeNorm}" (CÓD: ${userFacilityCode}). Como personal de Farmacia / IPRESS solo puede procesar requerimientos de su propio establecimiento.`;
+              setUploadError(errorMsg);
+              setIsProcessingFile(false);
+              if (fileInputRef.current) fileInputRef.current.value = '';
+              toast.error("El archivo pertenece a otro establecimiento");
+              return;
+            }
           }
 
           setImportedMicrored(mrTemp);
@@ -660,39 +763,75 @@ export const InputSection: React.FC<InputSectionProps> = ({
       setImportedCategory('');
   };
 
-  // --- ANALYSIS EXECUTION LOGIC (WITH VACCINE CHECK) ---
+  // --- ANALYSIS EXECUTION LOGIC (WITH VACCINE AND CUSTOM EXCLUSION CHECK) ---
+  const prepareAnalysisModal = async () => {
+      const userFacilityCode = user?.facilityData?.code || user?.personnelData?.facilityCode || '';
+      const effectiveCode = (importedCodEess || userFacilityCode).trim();
+      if (effectiveCode) {
+          try {
+              const list = await requirementExclusionService.getExclusions(effectiveCode);
+              setCustomExclusionItems(list);
+              setCustomExclusionCount(list.length);
+          } catch (e) {
+              console.warn("Error fetching exclusions:", e);
+              setCustomExclusionItems([]);
+              setCustomExclusionCount(0);
+          }
+      } else {
+          setCustomExclusionItems([]);
+          setCustomExclusionCount(0);
+      }
+      setExcludeVaccinesSelection(true); // Default true
+      setExcludeCustomListSelection(true); // Default true
+      setIsVaccineModalOpen(true);
+  };
+
   const handleExecuteClick = () => {
       if (hasAnalyzedData) {
           setShowReanalysisWarning(true);
       } else {
-          setExcludeVaccinesSelection(true); // Reset to default true every time modal opens
-          setIsVaccineModalOpen(true);
+          prepareAnalysisModal();
       }
   };
 
   const confirmReanalysis = () => {
       setShowReanalysisWarning(false);
-      setExcludeVaccinesSelection(true);
-      setIsVaccineModalOpen(true);
+      prepareAnalysisModal();
   };
 
   const handleRunAnalysis = () => {
       let finalData = [...items];
       const excludeVaccines = excludeVaccinesSelection;
+      const excludeCustom = excludeCustomListSelection;
       
       if (excludeVaccines) {
           finalData = finalData.filter(item => {
-              const name = item.name.toUpperCase();
+              const name = (item.name || '').toUpperCase();
               return !name.includes("VACUNA") && !name.includes("DILUYENTE");
           });
       }
 
+      if (excludeCustom && customExclusionItems.length > 0) {
+          const excludedCodes = new Set(
+              customExclusionItems.map(item => item.sismedCode.trim().toUpperCase())
+          );
+          finalData = finalData.filter(item => {
+              const code = (item.id || '').trim().toUpperCase();
+              return !excludedCodes.has(code);
+          });
+      }
+
+      const totalExcluded = items.length - finalData.length;
+      if (totalExcluded > 0) {
+          toast.info(`Se han excluido ${totalExcluded} ítems del análisis según las opciones seleccionadas.`);
+      }
+
       // Pass the excludeVaccines decision and parsed metadata to App.tsx so it knows the data is already filtered
       onAnalyze(finalData, referenceDate, excludeVaccines, {
-          microred: importedMicrored,
-          codEess: importedCodEess,
-          establishmentName: importedEstablishmentName,
-          category: importedCategory
+          microred: displayMicrored,
+          codEess: displayCodEess,
+          establishmentName: displayEstablishmentName,
+          category: displayCategory
       });
       setIsVaccineModalOpen(false);
       setIsUploadSectionCollapsed(true);
@@ -738,12 +877,12 @@ export const InputSection: React.FC<InputSectionProps> = ({
                   </div>
                   <div>
                       <h3 className="text-sm font-bold text-gray-900">
-                          {importedEstablishmentName ? importedEstablishmentName.toUpperCase() : "Requerimiento IPRESS Cargado"}
+                          {displayEstablishmentName ? displayEstablishmentName.toUpperCase() : "Requerimiento IPRESS Cargado"}
                       </h3>
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">
-                          {importedCodEess && <span className="text-[10px] text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded">CÓD: {importedCodEess}</span>}
-                          {importedCategory && <span className="text-[10px] text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded">CAT: {importedCategory}</span>}
-                          {importedMicrored && <span className="text-[10px] text-teal-850 font-bold bg-teal-100/70 px-1.5 py-0.5 rounded">MR: {importedMicrored}</span>}
+                          {displayCodEess && <span className="text-[10px] text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded">CÓD: {displayCodEess}</span>}
+                          {displayCategory && <span className="text-[10px] text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded">CAT: {displayCategory}</span>}
+                          {displayMicrored && <span className="text-[10px] text-teal-850 font-bold bg-teal-100/70 px-1.5 py-0.5 rounded">MR: {displayMicrored}</span>}
                           <span className="text-xs font-bold text-teal-600">{items.length.toLocaleString()} registros</span>
                           <span className="text-[10px] text-gray-400">•</span>
                           <span className="text-xs text-gray-500">Corte: <strong className="text-gray-700">{referenceDate}</strong></span>
@@ -898,7 +1037,7 @@ export const InputSection: React.FC<InputSectionProps> = ({
 
       {/* Item Preview */}
       {items.length > 0 && !hasAnalyzedData && (
-        <div className="space-y-4 mt-12 sm:mt-16 pt-6 border-t border-dashed border-gray-200 animate-in fade-in duration-500">
+        <div className="space-y-4 mt-4 pt-4 border-t border-dashed border-gray-200 animate-in fade-in duration-500">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center max-w-5xl mx-auto px-1 gap-4">
             <div className="space-y-1.5 text-left">
               <h3 className="text-sm font-black text-gray-700 uppercase tracking-wide flex flex-wrap items-center gap-2">
@@ -907,19 +1046,19 @@ export const InputSection: React.FC<InputSectionProps> = ({
                   Corte: {referenceDate}
                 </span>
               </h3>
-              {(importedCodEess || importedEstablishmentName || importedMicrored) && (
+              {(displayCodEess || displayEstablishmentName || displayMicrored) && (
                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                  {(importedCodEess || importedEstablishmentName) && (
+                  {(displayCodEess || displayEstablishmentName) && (
                     <span className="text-[10px] font-extrabold text-teal-850 bg-teal-50 border border-teal-150 px-2 py-0.5 rounded uppercase flex items-center gap-1">
                       <span>
-                        {importedCodEess ? `${importedCodEess} - ` : ''}
-                        {importedEstablishmentName ? importedEstablishmentName.toUpperCase() : 'ESTABLECIMIENTO'}
+                        {displayCodEess ? `${displayCodEess} - ` : ''}
+                        {displayEstablishmentName ? displayEstablishmentName.toUpperCase() : 'ESTABLECIMIENTO'}
                       </span>
                     </span>
                   )}
-                  {importedMicrored && (
+                  {displayMicrored && (
                     <span className="text-[10px] font-bold text-indigo-800 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded uppercase">
-                      MR: {importedMicrored}
+                      MR: {displayMicrored}
                     </span>
                   )}
                 </div>
@@ -982,96 +1121,146 @@ export const InputSection: React.FC<InputSectionProps> = ({
       )}
     </div>
 
-    {/* VACCINE CONFIG MODAL */}
+    {/* ANALYSIS CONFIGURATION MODAL (EXCLUSIONS) */}
     {isVaccineModalOpen && (
         <div className="fixed inset-0 z-[110000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 border-t-4 border-blue-500">
-                <div className="p-6 sm:p-8 flex flex-col items-center text-center">
-                    
-                    <div className="bg-blue-50 p-4 rounded-full mb-4">
-                       <Settings2 className="h-8 w-8 text-blue-600" />
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
+                {/* Modal Header */}
+                <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-teal-900 p-5 text-white flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white/10 rounded-xl backdrop-blur-sm text-teal-300">
+                            <Settings2 className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <h3 className="text-base sm:text-lg font-bold text-white leading-tight">
+                                Configuración de Análisis
+                            </h3>
+                            <p className="text-xs text-teal-200/80">
+                                Criterios de exclusión y depuración de ítems
+                            </p>
+                        </div>
                     </div>
+                    <button 
+                        onClick={() => setIsVaccineModalOpen(false)}
+                        className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
 
-                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
-                       Configuración de Análisis
-                    </h3>
-                    <p className="text-xs sm:text-sm text-gray-500 mb-6 max-w-xs mx-auto">
-                       Antes de procesar la matriz, defina cómo desea tratar los productos de la cadena de frío.
+                <div className="p-5 sm:p-6 space-y-4">
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                        Seleccione las opciones de exclusión que se aplicarán a los <strong className="text-gray-800">{items.length} ítems</strong> cargados antes de calcular el requerimiento:
                     </p>
 
-                    <div className="w-full space-y-3">
-                        {/* Option 1: Exclude (Selected by Default) */}
+                    <div className="space-y-3">
+                        {/* Option 1: Exclude Vaccines */}
                         <div
-                            onClick={() => setExcludeVaccinesSelection(true)}
-                            className={`w-full flex items-center justify-between p-4 rounded-xl transition-all cursor-pointer group border-2 ${
+                            onClick={() => setExcludeVaccinesSelection(!excludeVaccinesSelection)}
+                            className={`w-full flex items-start justify-between p-4 rounded-xl transition-all cursor-pointer border-2 select-none ${
                                 excludeVaccinesSelection 
-                                ? 'bg-teal-50 border-teal-500 shadow-md ring-1 ring-teal-500/20' 
+                                ? 'bg-teal-50/70 border-teal-500 shadow-sm ring-1 ring-teal-500/20' 
                                 : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                             }`}
                         >
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg transition-colors ${
-                                    excludeVaccinesSelection ? 'bg-teal-200 text-teal-800' : 'bg-gray-100 text-gray-500'
+                            <div className="flex items-start gap-3">
+                                <div className={`p-2 rounded-xl transition-colors mt-0.5 ${
+                                    excludeVaccinesSelection ? 'bg-teal-500 text-white shadow-sm' : 'bg-gray-100 text-gray-400'
                                 }`}>
                                      <Syringe className="h-5 w-5" />
                                 </div>
                                 <div className="text-left">
-                                    <span className={`block font-bold text-sm ${excludeVaccinesSelection ? 'text-teal-900' : 'text-gray-700'}`}>
-                                        Excluir Vacunas y Diluyentes
-                                    </span>
-                                    <span className="block text-xs text-gray-500">Se eliminarán del cálculo (Recomendado)</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`font-bold text-sm ${excludeVaccinesSelection ? 'text-teal-950' : 'text-gray-700'}`}>
+                                            Excluir Vacunas y Diluyentes
+                                        </span>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 border border-teal-200">
+                                            Recomendado
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Omite productos de cadena de frío para el análisis de farmacia.
+                                    </p>
                                 </div>
                             </div>
-                            <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                excludeVaccinesSelection ? 'border-teal-500' : 'border-gray-300'
+                            <div className={`h-6 w-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ml-2 mt-1 ${
+                                excludeVaccinesSelection ? 'bg-teal-600 border-teal-600 text-white' : 'border-gray-300 bg-white'
                             }`}>
-                                {excludeVaccinesSelection && <div className="h-2.5 w-2.5 rounded-full bg-teal-500" />}
+                                {excludeVaccinesSelection && <Check className="h-4 w-4 stroke-[3]" />}
                             </div>
                         </div>
 
-                        {/* Option 2: Include All */}
+                        {/* Option 2: Exclude Custom Establishment List */}
                         <div
-                            onClick={() => setExcludeVaccinesSelection(false)}
-                            className={`w-full flex items-center justify-between p-4 rounded-xl transition-all cursor-pointer group border-2 ${
-                                !excludeVaccinesSelection 
-                                ? 'bg-teal-50 border-teal-500 shadow-md ring-1 ring-teal-500/20' 
+                            onClick={() => setExcludeCustomListSelection(!excludeCustomListSelection)}
+                            className={`w-full flex items-start justify-between p-4 rounded-xl transition-all cursor-pointer border-2 select-none ${
+                                excludeCustomListSelection 
+                                ? 'bg-rose-50/70 border-rose-500 shadow-sm ring-1 ring-rose-500/20' 
                                 : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                             }`}
                         >
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg transition-colors ${
-                                    !excludeVaccinesSelection ? 'bg-teal-200 text-teal-800' : 'bg-gray-100 text-gray-500'
+                            <div className="flex items-start gap-3">
+                                <div className={`p-2 rounded-xl transition-colors mt-0.5 ${
+                                    excludeCustomListSelection ? 'bg-rose-500 text-white shadow-sm' : 'bg-gray-100 text-gray-400'
                                 }`}>
-                                     <FileSpreadsheet className="h-5 w-5" />
+                                     <Ban className="h-5 w-5" />
                                 </div>
                                 <div className="text-left">
-                                    <span className={`block font-bold text-sm ${!excludeVaccinesSelection ? 'text-teal-900' : 'text-gray-700'}`}>
-                                        Incluir Todo
-                                    </span>
-                                    <span className="block text-xs text-gray-500">Analizar todos los ítems cargados</span>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className={`font-bold text-sm ${excludeCustomListSelection ? 'text-rose-950' : 'text-gray-700'}`}>
+                                            Excluir Lista Personalizada del Establecimiento
+                                        </span>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                            customExclusionCount > 0 
+                                                ? 'bg-rose-100 text-rose-800 border-rose-200' 
+                                                : 'bg-gray-100 text-gray-600 border-gray-200'
+                                        }`}>
+                                            {customExclusionCount} {customExclusionCount === 1 ? 'medicamento' : 'medicamentos'}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        {customExclusionCount > 0 
+                                            ? `Se excluirán automáticamente los medicamentos configurados en la Lista de Exclusiones de ${importedEstablishmentName || user?.facilityData?.name || 'este establecimiento'}.`
+                                            : `No hay medicamentos registrados en la lista de exclusión de este establecimiento (${importedCodEess || user?.facilityData?.code || user?.personnelData?.facilityCode || 'Sin código'}).`
+                                        }
+                                    </p>
                                 </div>
                             </div>
-                            <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                !excludeVaccinesSelection ? 'border-teal-500' : 'border-gray-300'
+                            <div className={`h-6 w-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ml-2 mt-1 ${
+                                excludeCustomListSelection ? 'bg-rose-600 border-rose-600 text-white' : 'border-gray-300 bg-white'
                             }`}>
-                                {!excludeVaccinesSelection && <div className="h-2.5 w-2.5 rounded-full bg-teal-500" />}
+                                {excludeCustomListSelection && <Check className="h-4 w-4 stroke-[3]" />}
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex gap-3 w-full mt-8">
+                    {/* Summary Info */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between text-xs text-slate-600">
+                        <div className="flex items-center gap-2">
+                            <FileSpreadsheet className="h-4 w-4 text-slate-500" />
+                            <span>Total ítems en archivo: <strong className="text-slate-800 font-bold">{items.length}</strong></span>
+                        </div>
+                        <div className="text-right">
+                            <span className="text-teal-700 font-semibold">
+                                {excludeVaccinesSelection || (excludeCustomListSelection && customExclusionCount > 0) ? 'Filtros activos' : 'Sin exclusiones'}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-3 pt-2">
                         <button 
                             onClick={() => setIsVaccineModalOpen(false)}
-                            className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            className="flex-1 py-2.5 px-4 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
                         >
                             Cancelar
                         </button>
                         <button 
                             onClick={handleRunAnalysis}
-                            className="flex-1 py-2.5 text-sm font-bold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors shadow-lg flex items-center justify-center gap-2"
+                            className="flex-1 py-2.5 px-4 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
                         >
                             <Play className="h-4 w-4 fill-current" />
-                            Aceptar
+                            Ejecutar Análisis
                         </button>
                     </div>
                 </div>
