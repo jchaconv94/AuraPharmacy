@@ -587,24 +587,33 @@ export const generateFullReportPDF = async (
             cellPadding: 1, 
             valign: 'middle', 
             halign: 'center', 
-            lineColor: [220, 220, 220], 
-            lineWidth: 0.1 
+            textColor: [17, 24, 39], // Texto oscuro de alta nitidez para impresión
+            lineColor: [75, 85, 99], // Líneas de cuadrícula gris oscuro nítidas (#4B5563)
+            lineWidth: 0.22 // Grosor reforzado para que se imprima claramente
         },
-        headStyles: { fillColor: COLORS.BLACK, textColor: 255, fontSize: 6, fontStyle: 'bold', halign: 'center' },
+        headStyles: { 
+            fillColor: COLORS.BLACK, 
+            textColor: 255, 
+            fontSize: 6, 
+            fontStyle: 'bold', 
+            halign: 'center',
+            lineColor: [255, 255, 255], // Líneas blancas divisorias entre columnas de cabecera
+            lineWidth: 0.25
+        },
         columnStyles: {
-            id: { cellWidth: 9 },
-            name: { cellWidth: 'auto', halign: 'left' },
-            ff: { cellWidth: 12 },
-            type: { cellWidth: 6 },
-            pet: { cellWidth: 6 },
-            est: { cellWidth: 6 },
-            stock: { cellWidth: 11, fontStyle: 'bold' },
+            id: { cellWidth: 9, fontStyle: 'bold', textColor: [17, 24, 39] },
+            name: { cellWidth: 'auto', halign: 'left', textColor: [17, 24, 39] },
+            ff: { cellWidth: 12, textColor: [31, 41, 55] },
+            type: { cellWidth: 6, textColor: [31, 41, 55] },
+            pet: { cellWidth: 6, textColor: [31, 41, 55] },
+            est: { cellWidth: 6, textColor: [31, 41, 55] },
+            stock: { cellWidth: 11, fontStyle: 'bold', textColor: [17, 24, 39] },
             rawCpm: { cellWidth: 9 },
             cpm: { cellWidth: 9 },
-            currentMonths: { cellWidth: 9 },
-            monthsProvision: { cellWidth: 9, fontStyle: 'bold' },
-            status: { cellWidth: 18, fontSize: 5 },
-            req: { cellWidth: 9, fontStyle: 'bold', textColor: COLORS.PIE_BLUE }
+            currentMonths: { cellWidth: 9, fontStyle: 'bold', textColor: [31, 41, 55] },
+            monthsProvision: { cellWidth: 9, fontStyle: 'bold', textColor: [17, 24, 39] },
+            status: { cellWidth: 18, fontSize: 5.5, fontStyle: 'bold' },
+            req: { cellWidth: 9, fontStyle: 'bold' }
         },
         didDrawPage: function(data: any) {
             // Header on every page of the table -> now only on first page of the table
@@ -665,22 +674,24 @@ export const generateFullReportPDF = async (
                 const isExcluded = row._excludedIndices && row._excludedIndices.includes(idx);
 
                 if (isExcluded) {
-                    data.cell.styles.fillColor = COLORS.BG_GRAY_EXCLUDED;
-                    data.cell.styles.textColor = COLORS.TEXT_GRAY_EXCLUDED;
-                    // Note: Strikethrough is handled in didDrawCell
+                    data.cell.styles.fillColor = [229, 231, 235]; // Gray-200
+                    data.cell.styles.textColor = [75, 85, 99]; // Gray-600 legible
                 } else if (val > threshold && val > 0) {
-                    data.cell.styles.fillColor = COLORS.YELLOW_HIGHLIGHT;
-                    data.cell.styles.textColor = COLORS.RED;
+                    data.cell.styles.fillColor = [254, 240, 138]; // Yellow-200
+                    data.cell.styles.textColor = [153, 27, 27]; // Red-800 oscuro nítido
                     data.cell.styles.fontStyle = 'bold';
                 } else if (val < lowThreshold && val > 0) {
-                    data.cell.styles.fillColor = COLORS.BG_ORANGE_LOW;
-                    data.cell.styles.textColor = COLORS.TEXT_ORANGE_LOW;
-                    // data.cell.styles.fontStyle = 'bold'; // Optional
+                    data.cell.styles.fillColor = [254, 215, 170]; // Orange-200
+                    data.cell.styles.textColor = [154, 52, 18]; // Orange-800
+                    data.cell.styles.fontStyle = 'bold';
                 } else if (val > 0) {
-                    data.cell.styles.fillColor = COLORS.BG_GREEN_CELL;
-                    data.cell.styles.textColor = COLORS.TEXT_GREEN_DARK;
+                    data.cell.styles.fillColor = [220, 252, 231]; // Green-100
+                    data.cell.styles.textColor = [20, 83, 45]; // Green-900 oscuro
+                    data.cell.styles.fontStyle = 'bold';
                 } else {
-                    if (val === 0) data.cell.styles.textColor = [200, 200, 200];
+                    if (val === 0) {
+                        data.cell.styles.textColor = [100, 116, 139]; // Slate-500 legible en impresión
+                    }
                 }
             }
 
@@ -688,27 +699,28 @@ export const generateFullReportPDF = async (
             if (data.column.dataKey === 'rawCpm') { // CPA Simple
                 if (row._selectedMode === 'SIMPLE') {
                     data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.textColor = [30, 64, 175]; // Blue-800 (Stronger than original but not black)
-                    data.cell.styles.fillColor = [219, 234, 254]; // Blue-100 (Visible but not overwhelming)
+                    data.cell.styles.textColor = [30, 58, 138]; // Blue-900 oscuro
+                    data.cell.styles.fillColor = [219, 234, 254]; // Blue-100
                 } else {
-                    data.cell.styles.textColor = COLORS.TEXT_INACTIVE;
+                    data.cell.styles.textColor = [75, 85, 99]; // Slate-600 nítido
                 }
             }
 
             if (data.column.dataKey === 'cpm') { // CPA Adjusted
                 if (row._selectedMode === 'ADJUSTED') {
                     data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.textColor = [30, 64, 175]; // Blue-800 (Same as Simple)
-                    data.cell.styles.fillColor = [219, 234, 254]; // Blue-100 (Same as Simple)
+                    data.cell.styles.textColor = [30, 58, 138]; // Blue-900 oscuro
+                    data.cell.styles.fillColor = [219, 234, 254]; // Blue-100
                 } else {
-                    data.cell.styles.textColor = COLORS.TEXT_INACTIVE;
+                    data.cell.styles.textColor = [75, 85, 99]; // Slate-600 nítido
                 }
             }
 
             // Style Stock Column
             if (data.column.dataKey === 'stock') {
-                data.cell.styles.fillColor = [220, 252, 231]; // light green (emerald-50)
+                data.cell.styles.fillColor = [220, 252, 231]; // light green
                 data.cell.styles.fontStyle = 'bold';
+                data.cell.styles.textColor = [17, 24, 39];
             }
 
             // Style Req Column
@@ -716,27 +728,30 @@ export const generateFullReportPDF = async (
                 if (row.req !== '-') {
                     data.cell.styles.fillColor = [219, 234, 254]; // blue-100 highlight
                     data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.textColor = COLORS.PIE_BLUE; // Keep the blue text
+                    data.cell.styles.textColor = [29, 78, 216]; // Blue-700 nítido
+                } else {
+                    data.cell.styles.textColor = [100, 116, 139];
                 }
             }
 
             // Color Status
             if (data.column.dataKey === 'status') {
+                 data.cell.styles.fontStyle = 'bold';
                  if (row._statusEnum === StockStatus.DESABASTECIDO) {
                      data.cell.styles.fillColor = [254, 226, 226]; 
-                     data.cell.styles.textColor = COLORS.RED;
+                     data.cell.styles.textColor = [185, 28, 28]; // Red-700
                  } else if (row._statusEnum === StockStatus.SOBRESTOCK) {
                      data.cell.styles.fillColor = [224, 231, 255]; 
-                     data.cell.styles.textColor = COLORS.PIE_BLUE;
+                     data.cell.styles.textColor = [29, 78, 216]; // Blue-700
                  } else if (row._statusEnum === StockStatus.NORMOSTOCK) {
                      data.cell.styles.fillColor = [209, 250, 229]; 
-                     data.cell.styles.textColor = [6, 95, 70];
+                     data.cell.styles.textColor = [6, 95, 70]; // Emerald-800
                  } else if (row._statusEnum === StockStatus.SUBSTOCK) {
                      data.cell.styles.fillColor = [255, 237, 213]; 
-                     data.cell.styles.textColor = COLORS.ORANGE;
+                     data.cell.styles.textColor = [194, 65, 12]; // Orange-700
                  } else if (row._statusEnum === StockStatus.SIN_ROTACION) {
                      data.cell.styles.fillColor = [243, 244, 246]; 
-                     data.cell.styles.textColor = COLORS.GRAY;
+                     data.cell.styles.textColor = [55, 65, 81]; // Gray-700
                  }
             }
         },
@@ -757,16 +772,16 @@ export const generateFullReportPDF = async (
                      const doc = data.doc;
                      const { x, y, width, height } = data.cell;
                      
-                     // Use Gray for Excluded, Red for Spikes
+                     // Use a softer tone for strikethrough so digits remain clearly readable
                      if (isExcluded) {
-                        doc.setDrawColor(156, 163, 175); // Gray-400
+                        doc.setDrawColor(156, 163, 175); // Gray-400 suave
                      } else {
-                        doc.setDrawColor(220, 38, 38); // Red-600
+                        doc.setDrawColor(220, 80, 80); // Rojo suave para no tapar los dígitos
                      }
                      
-                     doc.setLineWidth(0.2);
+                     doc.setLineWidth(0.18); // Trazo más fino para que se lea el número perfectamente
                      // Horizontal line in the middle
-                     doc.line(x + 2, y + height / 2, x + width - 2, y + height / 2);
+                     doc.line(x + 1.5, y + height / 2, x + width - 1.5, y + height / 2);
                  }
             }
         }
@@ -813,15 +828,31 @@ export const generateFullReportPDF = async (
                   { header: 'OBSERVACIÓN', dataKey: 'obs' },
               ],
               body: addTableData,
-              headStyles: { fillColor: COLORS.PURPLE, textColor: 255, fontSize: 10, fontStyle: 'bold', halign: 'center' },
-              styles: { font: activeFont, fontSize: 10, cellPadding: 3, valign: 'middle' },
+              headStyles: { 
+                  fillColor: COLORS.PURPLE, 
+                  textColor: 255, 
+                  fontSize: 9, 
+                  fontStyle: 'bold', 
+                  halign: 'center',
+                  lineColor: [255, 255, 255],
+                  lineWidth: 0.25
+              },
+              styles: { 
+                  font: activeFont, 
+                  fontSize: 9, 
+                  cellPadding: 2.5, 
+                  valign: 'middle',
+                  textColor: [17, 24, 39],
+                  lineColor: [75, 85, 99],
+                  lineWidth: 0.22
+              },
               columnStyles: {
-                  idx: { cellWidth: 15, halign: 'center' },
-                  code: { cellWidth: 25, halign: 'center' },
-                  name: { halign: 'left' },
-                  ff: { cellWidth: 25, halign: 'left' },
-                  qty: { cellWidth: 25, halign: 'center', fontStyle: 'bold' },
-                  obs: { cellWidth: 60, halign: 'left' }
+                  idx: { cellWidth: 15, halign: 'center', fontStyle: 'bold', textColor: [17, 24, 39] },
+                  code: { cellWidth: 25, halign: 'center', fontStyle: 'bold', textColor: [17, 24, 39] },
+                  name: { halign: 'left', textColor: [17, 24, 39] },
+                  ff: { cellWidth: 25, halign: 'left', textColor: [31, 41, 55] },
+                  qty: { cellWidth: 25, halign: 'center', fontStyle: 'bold', textColor: [126, 34, 206] },
+                  obs: { cellWidth: 60, halign: 'left', textColor: [31, 41, 55] }
               }
           });
       }

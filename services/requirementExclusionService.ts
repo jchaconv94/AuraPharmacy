@@ -111,61 +111,8 @@ export const requirementExclusionService = {
 
     let resultItem: RequirementExclusionItem | null = null;
 
-    try {
-      if (supabase) {
-        if (item.id) {
-          // Update
-          const { data, error } = await supabase
-            .from("requirement_exclusion_lists")
-            .update(payload)
-            .eq("id", item.id)
-            .select()
-            .single();
-
-          if (error) throw error;
-          if (data) {
-            resultItem = {
-              id: data.id,
-              establishmentCode: data.establishment_code,
-              sismedCode: data.sismed_code,
-              description: data.description,
-              presentation: data.presentation || "",
-              reason: data.reason || "",
-              createdBy: data.created_by || "",
-              createdAt: data.created_at,
-              updatedAt: data.updated_at
-            };
-          }
-        } else {
-          // Upsert / Insert
-          const { data, error } = await supabase
-            .from("requirement_exclusion_lists")
-            .upsert({ ...payload, created_at: new Date().toISOString() }, { onConflict: "establishment_code,sismed_code" })
-            .select()
-            .single();
-
-          if (error) throw error;
-          if (data) {
-            resultItem = {
-              id: data.id,
-              establishmentCode: data.establishment_code,
-              sismedCode: data.sismed_code,
-              description: data.description,
-              presentation: data.presentation || "",
-              reason: data.reason || "",
-              createdBy: data.created_by || "",
-              createdAt: data.created_at,
-              updatedAt: data.updated_at
-            };
-          }
-        }
-      }
-    } catch (err: any) {
-      console.warn("Supabase save exclusion failed, storing locally:", err);
-    }
-
-    // Si falló supabase o no hay conexión, construir el objeto localmente
-    if (!resultItem) {
+    if (!supabase) {
+      console.warn("Supabase no configurado, guardando en cache local");
       resultItem = {
         id: item.id || `local-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         establishmentCode: cleanEstCode,
@@ -177,9 +124,77 @@ export const requirementExclusionService = {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
+      const all = getLocalExclusions();
+      const filtered = all.filter(
+        i => !(i.establishmentCode === cleanEstCode && i.sismedCode === cleanSismedCode) && i.id !== resultItem!.id
+      );
+      saveLocalExclusions([...filtered, resultItem]);
+      return { success: true, data: resultItem };
     }
 
-    // Actualizar local storage
+    try {
+      if (item.id && !item.id.startsWith("local-") && !item.id.startsWith("batch-")) {
+        // Update
+        const { data, error } = await supabase
+          .from("requirement_exclusion_lists")
+          .update(payload)
+          .eq("id", item.id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error("Error al actualizar exclusión en Supabase:", error);
+          return { success: false, message: `Error en Supabase: ${error.message} (${error.code || 'RLS/Tabla'})` };
+        }
+        if (data) {
+          resultItem = {
+            id: data.id,
+            establishmentCode: data.establishment_code,
+            sismedCode: data.sismed_code,
+            description: data.description,
+            presentation: data.presentation || "",
+            reason: data.reason || "",
+            createdBy: data.created_by || "",
+            createdAt: data.created_at,
+            updatedAt: data.updated_at
+          };
+        }
+      } else {
+        // Upsert / Insert
+        const { data, error } = await supabase
+          .from("requirement_exclusion_lists")
+          .upsert({ ...payload, created_at: new Date().toISOString() }, { onConflict: "establishment_code,sismed_code" })
+          .select()
+          .single();
+
+        if (error) {
+          console.error("Error al guardar exclusión en Supabase:", error);
+          return { success: false, message: `Error en Supabase: ${error.message} (${error.code || 'RLS/Tabla'})` };
+        }
+        if (data) {
+          resultItem = {
+            id: data.id,
+            establishmentCode: data.establishment_code,
+            sismedCode: data.sismed_code,
+            description: data.description,
+            presentation: data.presentation || "",
+            reason: data.reason || "",
+            createdBy: data.created_by || "",
+            createdAt: data.created_at,
+            updatedAt: data.updated_at
+          };
+        }
+      }
+    } catch (err: any) {
+      console.error("Excepción al guardar en Supabase:", err);
+      return { success: false, message: `Error de red o conexión con Supabase: ${err.message || err}` };
+    }
+
+    if (!resultItem) {
+      return { success: false, message: "No se pudo obtener la confirmación del registro guardado en Supabase." };
+    }
+
+    // Actualizar local storage solo tras éxito en Supabase
     const all = getLocalExclusions();
     const filtered = all.filter(
       i => !(i.establishmentCode === cleanEstCode && i.sismedCode === cleanSismedCode) && i.id !== resultItem!.id
@@ -245,11 +260,23 @@ export const requirementExclusionService = {
           .upsert(rowsToInsert, { onConflict: "establishment_code,sismed_code" });
 
         if (error) {
-          console.warn("Supabase batch upsert error, proceeding with local fallback:", error);
+          console.error("Error en Supabase batch upsert:", error);
+          return {
+            success: false,
+            count: 0,
+            duplicatesCount: duplicates,
+            message: `Error al guardar lote en Supabase: ${error.message}`
+          };
         }
       }
-    } catch (err) {
-      console.warn("Supabase batch upsert exception:", err);
+    } catch (err: any) {
+      console.error("Excepción al guardar lote en Supabase:", err);
+      return {
+        success: false,
+        count: 0,
+        duplicatesCount: duplicates,
+        message: `Excepción en Supabase: ${err.message || err}`
+      };
     }
 
     // Actualizar local storage
@@ -275,7 +302,7 @@ export const requirementExclusionService = {
       success: true,
       count: uniqueItems.length,
       duplicatesCount: duplicates,
-      message: `Se registraron ${uniqueItems.length} medicamentos en la lista de exclusión.`
+      message: `Se registraron ${uniqueItems.length} medicamentos en la lista de exclusión en Supabase.`
     };
   },
 
@@ -290,16 +317,25 @@ export const requirementExclusionService = {
           .delete()
           .eq("id", id);
 
-        if (error) console.warn("Supabase delete failed:", error);
+        if (error) {
+          console.error("Error al eliminar en Supabase:", error);
+          return { success: false, message: `Error en Supabase: ${error.message}` };
+        }
       } else if (supabase && facilityCode && sismedCode) {
-        await supabase
+        const { error } = await supabase
           .from("requirement_exclusion_lists")
           .delete()
           .eq("establishment_code", facilityCode)
           .eq("sismed_code", sismedCode);
+
+        if (error) {
+          console.error("Error al eliminar por código en Supabase:", error);
+          return { success: false, message: `Error en Supabase: ${error.message}` };
+        }
       }
-    } catch (err) {
-      console.warn("Supabase delete exception:", err);
+    } catch (err: any) {
+      console.error("Excepción al eliminar en Supabase:", err);
+      return { success: false, message: `Error de conexión: ${err.message || err}` };
     }
 
     // Sincronizar localmente
@@ -328,10 +364,14 @@ export const requirementExclusionService = {
           .delete()
           .eq("establishment_code", cleanCode);
 
-        if (error) console.warn("Supabase clear failed:", error);
+        if (error) {
+          console.error("Error al vaciar exclusiones en Supabase:", error);
+          return { success: false, message: `Error en Supabase: ${error.message}` };
+        }
       }
-    } catch (err) {
-      console.warn("Supabase clear exception:", err);
+    } catch (err: any) {
+      console.error("Excepción al vaciar exclusiones en Supabase:", err);
+      return { success: false, message: `Error de conexión: ${err.message || err}` };
     }
 
     // Actualizar local

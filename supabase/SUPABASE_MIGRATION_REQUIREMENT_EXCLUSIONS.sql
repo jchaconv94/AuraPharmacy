@@ -18,17 +18,32 @@ CREATE TABLE IF NOT EXISTS public.requirement_exclusion_lists (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 2. Índices para búsquedas rápidas y prevención de duplicados por establecimiento
-CREATE UNIQUE INDEX IF NOT EXISTS idx_req_exclusions_est_sismed 
-ON public.requirement_exclusion_lists (establishment_code, sismed_code);
+-- 2. Asegurar la restricción UNIQUE requerida por PostgREST upsert (onConflict)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'requirement_exclusion_lists_est_sismed_key'
+  ) THEN
+    ALTER TABLE public.requirement_exclusion_lists 
+      ADD CONSTRAINT requirement_exclusion_lists_est_sismed_key 
+      UNIQUE (establishment_code, sismed_code);
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN
+    NULL;
+END $$;
 
+-- 3. Índices para búsquedas rápidas por establecimiento y código SISMED
 CREATE INDEX IF NOT EXISTS idx_req_exclusions_est_code 
 ON public.requirement_exclusion_lists (establishment_code);
 
 CREATE INDEX IF NOT EXISTS idx_req_exclusions_sismed_code 
 ON public.requirement_exclusion_lists (sismed_code);
 
--- 3. Habilitar Seguridad RLS
+-- 4. Conceder permisos explícitos de tabla a los roles anon y authenticated
+GRANT ALL ON public.requirement_exclusion_lists TO anon, authenticated;
+
+-- 5. Habilitar Seguridad RLS
 ALTER TABLE public.requirement_exclusion_lists ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS app_sesion_valida ON public.requirement_exclusion_lists;
