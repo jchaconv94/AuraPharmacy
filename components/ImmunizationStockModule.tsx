@@ -1,21 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   Boxes,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
   FilterX,
-  MapPin,
+  Layers,
   Package,
   RefreshCw,
   Search,
   ShieldCheck,
-  Syringe
+  Syringe,
+  X
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import {
-  getCurrentImmunizationPeriod,
   getImmunizationScope,
   ImmunizationScope,
   immunizationApi
@@ -27,7 +30,13 @@ import {
   ImmunizationStockLayer,
   Unget
 } from "../types";
-import { normalizeImmunizationText as normalizeText } from "./ui/immunization";
+import {
+  formatImmunizationCurrency,
+  formatImmunizationDate,
+  ImmunizationKpiCard,
+  normalizeImmunizationText as normalizeText
+} from "./ui/immunization";
+import { CustomSelect } from "./ui/CustomSelect";
 
 type ExpirationKey = "EXPIRED" | "CRITICAL" | "UPCOMING" | "VALID" | "UNKNOWN";
 type ExpirationFilter = "ALL" | ExpirationKey | "ALERTS";
@@ -74,8 +83,6 @@ const getExpirationStatus = (dateStr: string): ExpirationStatus => {
   return { key: "VALID", label: `Vigente · ${diffDays} días`, shortLabel: "Vigente", days: diffDays, className: "bg-emerald-50 text-emerald-700 border-emerald-200" };
 };
 
-const currentPeriod = getCurrentImmunizationPeriod();
-
 export const ImmunizationStockModule: React.FC = () => {
   const { user } = useAuth();
   const userScope = useMemo(() => getImmunizationScope(user), [user]);
@@ -88,7 +95,7 @@ export const ImmunizationStockModule: React.FC = () => {
   const [adminOwnerType, setAdminOwnerType] = useState<ImmunizationOwnerType | "">("");
   const [adminUngetId, setAdminUngetId] = useState("");
   const [adminFacilityCode, setAdminFacilityCode] = useState("");
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [selectedModalIndex, setSelectedModalIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [productType, setProductType] = useState<"ALL" | ImmunizationProductType>("ALL");
@@ -152,7 +159,7 @@ export const ImmunizationStockModule: React.FC = () => {
   }, [effectiveScope, hasOperationalScope]);
 
   useEffect(() => {
-    setExpanded({});
+    setSelectedModalIndex(null);
     void loadStock();
   }, [loadStock]);
 
@@ -209,6 +216,24 @@ export const ImmunizationStockModule: React.FC = () => {
       .sort((a, b) => (a.nearest || "9999").localeCompare(b.nearest || "9999") || a.descripcion.localeCompare(b.descripcion));
   }, [filteredLayers]);
 
+  useEffect(() => {
+    if (selectedModalIndex === null) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setSelectedModalIndex(prev => (prev !== null && prev > 0 ? prev - 1 : prev));
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setSelectedModalIndex(prev => (prev !== null && prev < grouped.length - 1 ? prev + 1 : prev));
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setSelectedModalIndex(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedModalIndex, grouped.length]);
+
   const totals = useMemo(() => {
     const statuses = filteredLayers.map(layer => getExpirationStatus(layer.expirationDate));
     return {
@@ -228,57 +253,55 @@ export const ImmunizationStockModule: React.FC = () => {
     setExpirationFilter("ALL");
   };
 
-  const selectedUnget = ungets.find(unget => unget.id === adminUngetId);
-  const scopeLabel = effectiveScope.ownerType === "IPRESS"
-    ? selectedFacility?.name || user?.facilityData?.name || effectiveScope.facilityCode || "Mi IPRESS"
-    : effectiveScope.ownerType === "UNGET"
-      ? selectedUnget?.name || "Mi almacén UNGET"
-      : effectiveScope.ownerType === "DIRESA"
-        ? "Almacen regional DIRESA"
-        : "Ámbito operativo pendiente";
-
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700"><Boxes className="h-6 w-6" /></div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl font-black text-slate-900">Stock Biológico</h2>
-                  <span className="rounded-lg border border-teal-100 bg-teal-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-teal-700">Periodo {currentPeriod}</span>
-                </div>
-                <p className="mt-1 text-sm text-slate-500">Control operativo del stock propio por producto, lote, vencimiento y valorización.</p>
-                {hasOperationalScope && (
-                  <div className="mt-2 flex items-center gap-1.5 text-xs font-bold text-slate-600"><MapPin className="h-3.5 w-3.5 text-teal-600" />{scopeLabel}</div>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => void loadStock()}
-              disabled={!hasOperationalScope || loading}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Actualizar
-            </button>
-          </div>
-
-          {hasOperationalScope && (
-            <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
-              <Metric label="Productos" value={totals.products} icon={<Syringe className="h-4 w-4" />} />
-              <Metric label="Lotes/capas" value={totals.lots} icon={<Boxes className="h-4 w-4" />} />
-              <Metric label="Frascos/unid." value={totals.units.toLocaleString("es-PE")} icon={<Package className="h-4 w-4" />} />
-              <Metric label="Valorización" value={`S/ ${totals.value.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<ShieldCheck className="h-4 w-4" />} />
-              <button type="button" onClick={() => setExpirationFilter("ALERTS")} disabled={!totals.alerts} className={`col-span-2 rounded-xl border p-4 text-left transition-colors lg:col-span-1 ${totals.alerts ? "border-red-100 bg-red-50 hover:bg-red-100" : "cursor-default border-slate-100 bg-slate-50"}`}>
-                <div className={`flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider ${totals.alerts ? "text-red-600" : "text-slate-400"}`}><AlertTriangle className="h-4 w-4" />Alertas vcto.</div>
-                <div className={`mt-1 text-xl font-black ${totals.alerts ? "text-red-700" : "text-slate-900"}`}>{totals.alerts}</div>
-                {totals.expired > 0 && <div className="mt-1 text-[10px] font-bold text-red-600">{totals.expired} vencidos</div>}
-              </button>
-            </div>
-          )}
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
+      {hasOperationalScope && (
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+          <ImmunizationKpiCard
+            label="Productos"
+            value={totals.products}
+            icon={<Syringe className="h-5 w-5" />}
+            tone="info"
+            hint="En catálogo activo"
+          />
+          <ImmunizationKpiCard
+            label="Lotes / Capas"
+            value={totals.lots}
+            icon={<Boxes className="h-5 w-5" />}
+            tone="neutral"
+            hint="Existencias registradas"
+          />
+          <ImmunizationKpiCard
+            label="Frascos / Unid."
+            value={totals.units.toLocaleString("es-PE")}
+            icon={<Package className="h-5 w-5" />}
+            tone="success"
+            hint="Saldo físico total"
+          />
+          <ImmunizationKpiCard
+            label="Valorización"
+            value={formatImmunizationCurrency(totals.value)}
+            icon={<ShieldCheck className="h-5 w-5" />}
+            tone="info"
+            hint="Costo total acumulado"
+          />
+          <ImmunizationKpiCard
+            label="Alertas Vcto."
+            value={totals.alerts}
+            icon={<AlertTriangle className="h-5 w-5" />}
+            tone={totals.alerts > 0 ? (totals.expired > 0 ? "danger" : "warning") : "neutral"}
+            hint={
+              totals.expired > 0
+                ? `${totals.expired} vencidos (bloqueados)`
+                : totals.alerts > 0
+                ? `${totals.alerts} lotes próx. a vencer`
+                : "Sin alertas de vencimiento"
+            }
+            onClick={totals.alerts > 0 ? () => setExpirationFilter(prev => prev === "ALERTS" ? "ALL" : "ALERTS") : undefined}
+            active={expirationFilter === "ALERTS"}
+          />
         </div>
-      </section>
+      )}
 
       {isGlobalAdmin && (
         <AdminOperationalScopeSelector
@@ -318,29 +341,41 @@ export const ImmunizationStockModule: React.FC = () => {
       {hasOperationalScope && (
         <>
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_220px_220px_auto]">
-              <label className="relative block">
-                <span className="sr-only">Buscar stock</span>
-                <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Código, descripción o lote..." className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm font-semibold outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100" />
-              </label>
-              <FilterSelect label="Tipo de producto" value={productType} onChange={value => setProductType(value as "ALL" | ImmunizationProductType)} options={[
-                { value: "ALL", label: "Todos los tipos" },
-                { value: "VACUNA", label: "Vacunas" },
-                { value: "JERINGA", label: "Jeringas" },
-                { value: "DILUYENTE", label: "Diluyentes" }
-              ]} />
-              <FilterSelect label="Vencimiento" value={expirationFilter} onChange={value => setExpirationFilter(value as ExpirationFilter)} options={[
-                { value: "ALL", label: "Todo vencimiento" },
-                { value: "ALERTS", label: "Todas las alertas" },
-                { value: "EXPIRED", label: "Vencidos" },
-                { value: "CRITICAL", label: "Hasta 40 días" },
-                { value: "UPCOMING", label: "Hasta 3 meses" },
-                { value: "VALID", label: "Vigentes" }
-              ]} />
-              <button type="button" onClick={clearFilters} disabled={!hasFilters} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
-                <FilterX className="h-4 w-4" /> Limpiar
-              </button>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center justify-between">
+              <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_180px_180px]">
+                <label className="relative block">
+                  <span className="sr-only">Buscar stock</span>
+                  <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                  <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Código, descripción o lote..." className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm font-semibold outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100" />
+                </label>
+                <FilterSelect label="Tipo de producto" value={productType} onChange={value => setProductType(value as "ALL" | ImmunizationProductType)} options={[
+                  { value: "ALL", label: "Todos los tipos" },
+                  { value: "VACUNA", label: "Vacunas" },
+                  { value: "JERINGA", label: "Jeringas" },
+                  { value: "DILUYENTE", label: "Diluyentes" }
+                ]} />
+                <FilterSelect label="Vencimiento" value={expirationFilter} onChange={value => setExpirationFilter(value as ExpirationFilter)} options={[
+                  { value: "ALL", label: "Todo vencimiento" },
+                  { value: "ALERTS", label: "Todas las alertas" },
+                  { value: "EXPIRED", label: "Vencidos" },
+                  { value: "CRITICAL", label: "Hasta 40 días" },
+                  { value: "UPCOMING", label: "Hasta 3 meses" },
+                  { value: "VALID", label: "Vigentes" }
+                ]} />
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button type="button" onClick={clearFilters} disabled={!hasFilters} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
+                  <FilterX className="h-4 w-4" /> Limpiar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void loadStock()}
+                  disabled={!hasOperationalScope || loading}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3.5 text-xs font-black text-teal-700 hover:bg-teal-100/80 shadow-2xs disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Actualizar
+                </button>
+              </div>
             </div>
             <div className="mt-3 text-xs text-slate-500"><span className="font-black text-slate-700">{grouped.length}</span> productos y <span className="font-black text-slate-700">{filteredLayers.length}</span> lotes visibles</div>
           </section>
@@ -356,68 +391,55 @@ export const ImmunizationStockModule: React.FC = () => {
             </div>
           ) : (
             <section className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}`}>
-              <div className="hidden grid-cols-[130px_minmax(280px,1fr)_110px_120px_150px_150px_160px_32px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-500 lg:grid">
-                <span>Código</span><span>Producto</span><span>Tipo</span><span>Dosis/Unidad</span><span>Saldo</span><span>Valorización</span><span>Vencimiento próximo</span><span />
-              </div>
-              <div className="divide-y divide-slate-100">
-                {grouped.map(group => {
-                  const isOpen = expanded[group.productId] || false;
-                  const expirationStatus = group.nearest ? getExpirationStatus(group.nearest) : null;
-                  return (
-                    <article key={group.productId}>
-                      <button
-                        type="button"
-                        aria-expanded={isOpen}
-                        onClick={() => setExpanded(previous => ({ ...previous, [group.productId]: !isOpen }))}
-                        className="grid w-full grid-cols-2 gap-3 p-4 text-left transition-colors hover:bg-slate-50 lg:grid-cols-[130px_minmax(280px,1fr)_110px_120px_150px_150px_160px_32px] lg:items-center"
-                      >
-                        <span className="w-fit rounded-lg border border-teal-100 bg-teal-50 px-2 py-1 font-mono text-xs font-black text-teal-700">{group.codigo}</span>
-                        <span className="col-span-2 min-w-0 lg:col-span-1">
-                          <span className="block text-[13px] font-bold leading-5 text-slate-900">{group.descripcion}</span>
-                          <span className="mt-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">{group.layers.length} {group.layers.length === 1 ? "lote" : "lotes"}</span>
-                        </span>
-                        <span className="text-xs font-black text-slate-700"><span className="mb-1 block text-[9px] uppercase text-slate-400 lg:hidden">Tipo</span>{group.tipo || "—"}</span>
-                        <span className="text-sm font-black text-slate-800"><span className="mb-1 block text-[9px] uppercase text-slate-400 lg:hidden">Dosis/Unidad</span>{group.dosis.toLocaleString("es-PE")}</span>
-                        <span className="text-sm font-black text-slate-800"><span className="mb-1 block text-[9px] uppercase text-slate-400 lg:hidden">Saldo</span>{group.total.toLocaleString("es-PE")} <span className="font-medium text-slate-400">fco/unid.</span></span>
-                        <span className="text-sm font-bold text-slate-600"><span className="mb-1 block text-[9px] uppercase text-slate-400 lg:hidden">Valorización</span>S/ {group.value.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        {expirationStatus && <span className={`w-fit rounded-lg border px-2 py-1 text-[10px] font-black uppercase ${expirationStatus.className}`}>{expirationStatus.label}</span>}
-                        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                      </button>
-
-                      {isOpen && (
-                        <div className="bg-slate-50/70 px-3 pb-4 sm:px-4">
-                          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                            <table className="w-full min-w-[760px] divide-y divide-slate-100">
-                              <thead className="bg-slate-50">
-                                <tr>
-                                  <TableHeader>Lote</TableHeader><TableHeader>Vencimiento</TableHeader><TableHeader align="right">Saldo</TableHeader><TableHeader align="right">Precio</TableHeader><TableHeader align="right">Valor</TableHeader><TableHeader>Fuente</TableHeader><TableHeader>Suministro</TableHeader>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100">
-                                {group.layers.map((layer, index) => {
-                                  const status = getExpirationStatus(layer.expirationDate);
-                                  return (
-                                    <tr key={layer.id} className="hover:bg-slate-50">
-                                      <td className="px-3 py-3 text-xs font-black text-slate-800">{layer.lote}{index === 0 && <span className="ml-2 rounded bg-violet-50 px-1.5 py-0.5 text-[9px] font-black text-violet-700">MÁS PRÓXIMO</span>}</td>
-                                      <td className="px-3 py-3"><span className={`rounded-lg border px-2 py-1 text-[10px] font-black uppercase ${status.className}`}>{layer.expirationDate} · {status.shortLabel}</span></td>
-                                      <td className="px-3 py-3 text-right text-xs font-black text-slate-900">{layer.currentQuantity.toLocaleString("es-PE")}</td>
-                                      <td className="px-3 py-3 text-right text-xs font-bold text-slate-600">S/ {layer.unitPrice.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
-                                      <td className="px-3 py-3 text-right text-xs font-black text-slate-700">S/ {(layer.currentQuantity * layer.unitPrice).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                      <td className="px-3 py-3 text-xs text-slate-600">{layer.fundingSource}</td>
-                                      <td className="px-3 py-3 text-xs text-slate-600">{layer.supplyType}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
-                    </article>
-                  );
-                })}
+              <div className="overflow-x-auto">
+                <div className="min-w-0 lg:min-w-[925px]">
+                  <div className="hidden grid-cols-[80px_minmax(240px,1fr)_80px_90px_100px_110px_130px_95px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-wide text-slate-500 lg:grid">
+                    <span>Código</span><span>Producto</span><span>Tipo</span><span>Dosis/Unidad</span><span>Saldo</span><span>Valorización</span><span>Vencimiento próximo</span><span className="text-right">Acción</span>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {grouped.map((group, index) => {
+                      const expirationStatus = group.nearest ? getExpirationStatus(group.nearest) : null;
+                      return (
+                        <article key={group.productId}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedModalIndex(index)}
+                            className="group grid w-full grid-cols-2 gap-3 p-4 text-left transition-colors hover:bg-teal-50/40 lg:grid-cols-[80px_minmax(240px,1fr)_80px_90px_100px_110px_130px_95px] lg:items-center"
+                          >
+                            <span className="w-fit rounded-lg border border-teal-100 bg-teal-50 px-2 py-1 font-mono text-xs font-black text-teal-700 group-hover:bg-teal-100 transition-colors">{group.codigo}</span>
+                            <span className="col-span-2 min-w-0 lg:col-span-1">
+                              <span className="block text-[13px] font-bold leading-5 text-slate-900 group-hover:text-teal-900 transition-colors">{group.descripcion}</span>
+                              <span className="mt-1 block text-[10px] font-black uppercase tracking-wide text-slate-400">{group.layers.length} {group.layers.length === 1 ? "lote" : "lotes"}</span>
+                            </span>
+                            <span className="text-xs font-black text-slate-700"><span className="mb-1 block text-[9px] uppercase text-slate-400 lg:hidden">Tipo</span>{group.tipo || "—"}</span>
+                            <span className="text-sm font-black text-slate-800"><span className="mb-1 block text-[9px] uppercase text-slate-400 lg:hidden">Dosis/Unidad</span>{group.dosis.toLocaleString("es-PE")}</span>
+                            <span className="text-sm font-black text-slate-800"><span className="mb-1 block text-[9px] uppercase text-slate-400 lg:hidden">Saldo</span>{group.total.toLocaleString("es-PE")} <span className="font-medium text-slate-400">fco/unid.</span></span>
+                            <span className="text-sm font-bold text-slate-600"><span className="mb-1 block text-[9px] uppercase text-slate-400 lg:hidden">Valorización</span>S/ {group.value.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            {expirationStatus && <span className={`w-fit rounded-lg border px-2 py-1 text-[10px] font-black uppercase ${expirationStatus.className}`}>{expirationStatus.label}</span>}
+                            <div className="flex justify-end">
+                              <span className="inline-flex items-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-black text-teal-700 group-hover:bg-teal-600 group-hover:text-white transition-all shadow-2xs">
+                                <Eye className="h-3.5 w-3.5" /> Ver lotes
+                              </span>
+                            </div>
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </section>
+          )}
+
+          {selectedModalIndex !== null && grouped[selectedModalIndex] && (
+            <LotDetailModal
+              group={grouped[selectedModalIndex]}
+              currentIndex={selectedModalIndex}
+              totalProducts={grouped.length}
+              onPrev={() => setSelectedModalIndex(prev => (prev !== null && prev > 0 ? prev - 1 : prev))}
+              onNext={() => setSelectedModalIndex(prev => (prev !== null && prev < grouped.length - 1 ? prev + 1 : prev))}
+              onClose={() => setSelectedModalIndex(null)}
+            />
           )}
         </>
       )}
@@ -482,22 +504,245 @@ const AdminOperationalScopeSelector: React.FC<AdminOperationalScopeSelectorProps
   );
 };
 
-const Metric: React.FC<{ label: string; value: React.ReactNode; icon: React.ReactNode }> = ({ label, value, icon }) => (
-  <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-    <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">{icon}{label}</div>
-    <div className="mt-1 truncate text-xl font-black text-slate-900">{value}</div>
-  </div>
-);
-
 const FilterSelect: React.FC<{ label: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }> }> = ({ label, value, onChange, options }) => (
-  <label className="block">
+  <div className="w-full">
     <span className="sr-only">{label}</span>
-    <select value={value} onChange={event => onChange(event.target.value)} title={label} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100">
-      {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-    </select>
-  </label>
+    <CustomSelect
+      value={value}
+      onChange={onChange}
+      options={options}
+      ariaLabel={label}
+      placeholder={label}
+      className="h-10 border-slate-200"
+    />
+  </div>
 );
 
 const TableHeader: React.FC<{ children: React.ReactNode; align?: "left" | "right" }> = ({ children, align = "left" }) => (
   <th className={`px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-500 ${align === "right" ? "text-right" : "text-left"}`}>{children}</th>
 );
+
+interface LotDetailModalProps {
+  group: StockProductGroup;
+  currentIndex: number;
+  totalProducts: number;
+  onPrev: () => void;
+  onNext: () => void;
+  onClose: () => void;
+}
+
+const LotDetailModal: React.FC<LotDetailModalProps> = ({
+  group,
+  currentIndex,
+  totalProducts,
+  onPrev,
+  onNext,
+  onClose
+}) => {
+  const expirationStatus = group.nearest ? getExpirationStatus(group.nearest) : null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200000] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs sm:p-6 animate-in fade-in duration-200" onClick={onClose}>
+      <div
+        className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl animate-in zoom-in-95 duration-200"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 p-4 text-white sm:px-6 sm:py-5 shrink-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <span className="shrink-0 rounded-xl border border-teal-500/30 bg-teal-500/20 px-3 py-1.5 font-mono text-xs font-black text-teal-300">
+              {group.codigo}
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-base font-black text-white sm:text-lg">{group.descripcion}</h3>
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mt-0.5">
+                <span>{group.tipo || "Sin tipo"}</span>
+                <span>•</span>
+                <span>{group.layers.length} {group.layers.length === 1 ? "lote registrado" : "lotes registrados"}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Nav Controls */}
+            <div className="flex items-center gap-1.5 rounded-2xl border border-slate-700 bg-slate-800 p-1">
+              <button
+                type="button"
+                onClick={onPrev}
+                disabled={currentIndex === 0}
+                title="Producto anterior (Flecha izquierda ←)"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="px-2 font-mono text-xs font-bold text-slate-300 select-none">
+                {currentIndex + 1} / {totalProducts}
+              </span>
+              <button
+                type="button"
+                onClick={onNext}
+                disabled={currentIndex === totalProducts - 1}
+                title="Producto siguiente (Flecha derecha →)"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              title="Cerrar modal (ESC)"
+              className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Summary Bar */}
+        <div className="grid grid-cols-2 gap-3 border-b border-slate-200 bg-slate-50 p-4 sm:grid-cols-4 sm:px-6 shrink-0">
+          <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs">
+            <span className="block text-[10px] font-black uppercase text-slate-400">Dosis / Unidad</span>
+            <span className="mt-0.5 block text-sm font-black text-slate-800">{group.dosis.toLocaleString("es-PE")}</span>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs">
+            <span className="block text-[10px] font-black uppercase text-slate-400">Saldo Físico</span>
+            <span className="mt-0.5 block text-sm font-black text-slate-900">{group.total.toLocaleString("es-PE")} <span className="text-xs font-normal text-slate-500">fco/unid.</span></span>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs">
+            <span className="block text-[10px] font-black uppercase text-slate-400">Valorización Acumulada</span>
+            <span className="mt-0.5 block text-sm font-black text-slate-800">S/ {group.value.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs">
+            <span className="block text-[10px] font-black uppercase text-slate-400">Vencimiento Próximo</span>
+            <div className="mt-0.5">
+              {expirationStatus ? (
+                <span className={`inline-block rounded-md border px-2 py-0.5 text-[10px] font-black uppercase ${expirationStatus.className}`}>
+                  {expirationStatus.label}
+                </span>
+              ) : (
+                <span className="text-xs text-slate-400">—</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Lots Content Table */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-700">
+              <Boxes className="h-4 w-4 text-teal-600" /> Detalle de Lotes y Capas Existentes
+            </h4>
+            <span className="text-xs text-slate-400 font-medium hidden sm:inline">Ordenado por regla FEFO (vencimiento próximo)</span>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
+            <table className="w-full min-w-[700px] divide-y divide-slate-100">
+              <thead className="bg-slate-50">
+                <tr>
+                  <TableHeader>LOTE</TableHeader>
+                  <TableHeader>VENCIMIENTO</TableHeader>
+                  <TableHeader>ESTADO</TableHeader>
+                  <TableHeader align="right">SALDO</TableHeader>
+                  <TableHeader align="right">PRECIO</TableHeader>
+                  <TableHeader align="right">TOTAL</TableHeader>
+                  <TableHeader>F. FINAN</TableHeader>
+                  <TableHeader>T. SUM</TableHeader>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {group.layers.map((layer, index) => {
+                  const status = getExpirationStatus(layer.expirationDate);
+                  const isNextToExpire = index === 0;
+                  
+                  // Elevate color level if it is the closest one to expire (FEFO) to highlight as alert compared to others
+                  let badgeClassName = status.className;
+                  if (isNextToExpire) {
+                    if (status.key === "VALID") {
+                      badgeClassName = "bg-amber-50 text-amber-700 border-amber-200 ring-1 ring-amber-300/30";
+                    } else if (status.key === "UPCOMING") {
+                      badgeClassName = "bg-rose-50 text-rose-700 border-rose-200 ring-1 ring-rose-300/30";
+                    }
+                  }
+
+                  return (
+                    <tr key={layer.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-3.5 py-3 text-xs font-black text-slate-800">
+                        {layer.lote}
+                      </td>
+                      <td className="px-3.5 py-3 text-xs font-bold text-slate-600">
+                        {formatImmunizationDate(layer.expirationDate)}
+                      </td>
+                      <td className="px-3.5 py-3">
+                        <span className={`inline-flex items-center rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase whitespace-nowrap ${badgeClassName}`}>
+                          {status.label}
+                        </span>
+                      </td>
+                      <td className="px-3.5 py-3 text-right text-xs font-black text-slate-900">
+                        {layer.currentQuantity.toLocaleString("es-PE")}
+                      </td>
+                      <td className="px-3.5 py-3 text-right text-xs font-bold text-slate-600">
+                        S/ {layer.unitPrice.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                      </td>
+                      <td className="px-3.5 py-3 text-right text-xs font-black text-slate-700">
+                        S/ {(layer.currentQuantity * layer.unitPrice).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3.5 py-3 text-xs font-semibold text-slate-600">{layer.fundingSource}</td>
+                      <td className="px-3.5 py-3 text-xs font-semibold text-slate-600">{layer.supplyType}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 p-4 sm:px-6 text-xs text-slate-500 shrink-0">
+          <div className="hidden sm:flex items-center gap-3">
+            <span className="flex items-center gap-1.5 font-semibold">
+              <kbd className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-mono font-black text-slate-700 shadow-2xs">←</kbd>
+              <kbd className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-mono font-black text-slate-700 shadow-2xs">→</kbd>
+              <span className="text-slate-600">Navegar entre productos</span>
+            </span>
+            <span className="text-slate-300">•</span>
+            <span className="flex items-center gap-1.5 font-semibold">
+              <kbd className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-mono font-black text-slate-700 shadow-2xs">ESC</kbd>
+              <span className="text-slate-600">Cerrar</span>
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 sm:hidden w-full justify-between">
+            <button
+              type="button"
+              onClick={onPrev}
+              disabled={currentIndex === 0}
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-30"
+            >
+              <ChevronLeft className="h-4 w-4" /> Anterior
+            </button>
+            <span className="font-mono text-xs font-bold text-slate-600">{currentIndex + 1} / {totalProducts}</span>
+            <button
+              type="button"
+              onClick={onNext}
+              disabled={currentIndex === totalProducts - 1}
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-30"
+            >
+              Siguiente <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="hidden sm:inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-100 transition-colors"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};

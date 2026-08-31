@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import { getImmunizationScope, immunizationApi } from "../services/immunizationApi";
+import { CustomSelect } from "./ui/CustomSelect";
 import { expirationKeyFor, ImmunizationExpirationKey } from "../services/immunizationProgressService";
 import { HealthFacility, ImmunizationStockLayer, Unget } from "../types";
 import {
@@ -225,24 +226,23 @@ export const ImmunizationStockQueryModule: React.FC = () => {
   const detalle = vista === "ESTABLECIMIENTO";
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      <ImmunizationPageHeader
-        icon={<PackageSearch className="h-7 w-7" />}
-        title="Consulta de Stock Biológico"
-        description="Consulta territorial de solo lectura. No registra ni modifica movimientos."
-        scopeLabel={esUnget ? `Ámbito: ${nombreUnget(scope.ungetId)} y sus IPRESS` : "Ámbito: toda la región"}
-        badges={<ImmunizationStatusChip label="SOLO LECTURA" tone="info" />}
-        actions={
-          <button
-            type="button"
-            onClick={() => void cargar()}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Actualizar
-          </button>
-        }
-      />
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <ImmunizationStatusChip label="SOLO LECTURA" tone="info" />
+          <span className="text-xs font-black text-teal-700">
+            {esUnget ? `Ámbito: ${nombreUnget(scope.ungetId)} y sus IPRESS` : "Ámbito: toda la región"}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => void cargar()}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-2xs transition hover:bg-slate-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          Actualizar
+        </button>
+      </div>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <ImmunizationKpiCard label="Productos" value={numero(totales.productos)} icon={<Boxes className="h-5 w-5" />} tone="info" />
@@ -288,39 +288,55 @@ export const ImmunizationStockQueryModule: React.FC = () => {
             />
           </label>
 
-          <select
+          <CustomSelect
             value={ungetFiltro}
-            onChange={e => { setUngetFiltro(e.target.value); setFacilityFiltro(""); }}
-            className={inputClassName}
+            onChange={val => { setUngetFiltro(val); setFacilityFiltro(""); }}
+            options={[
+              { value: "", label: "Todas las UNGET" },
+              ...ungetsDisponibles.map(u => ({ value: u.id, label: u.name }))
+            ]}
             disabled={esUnget}
-          >
-            <option value="">Todas las UNGET</option>
-            {ungetsDisponibles.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
+            ariaLabel="Todas las UNGET"
+            className="h-10 border-slate-200"
+          />
 
-          <select value={facilityFiltro} onChange={e => setFacilityFiltro(e.target.value)} className={inputClassName}>
-            <option value="">Todas las IPRESS</option>
-            {facilitiesDisponibles.map(f => <option key={f.code} value={f.code}>{f.code} - {f.name}</option>)}
-          </select>
+          <CustomSelect
+            value={facilityFiltro}
+            onChange={setFacilityFiltro}
+            options={[
+              { value: "", label: "Todas las IPRESS" },
+              ...facilitiesDisponibles.map(f => ({ value: f.code, label: `${f.code} - ${f.name}` }))
+            ]}
+            ariaLabel="Todas las IPRESS"
+            className="h-10 border-slate-200"
+          />
 
-          <select value={tipoFiltro} onChange={e => setTipoFiltro(e.target.value)} className={inputClassName}>
-            <option value="">Todos los tipos</option>
-            {tiposProducto.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <CustomSelect
+            value={tipoFiltro}
+            onChange={setTipoFiltro}
+            options={[
+              { value: "", label: "Todos los tipos" },
+              ...tiposProducto.map(t => ({ value: t, label: t }))
+            ]}
+            ariaLabel="Todos los tipos"
+            className="h-10 border-slate-200"
+          />
 
           <div className="flex gap-2">
-            <select
+            <CustomSelect
               value={vencimientoFiltro}
-              onChange={e => setVencimientoFiltro(e.target.value as typeof vencimientoFiltro)}
-              className={inputClassName}
-            >
-              <option value="">Todo vencimiento</option>
-              <option value="ALERTAS">Con alerta</option>
-              <option value="EXPIRED">Vencidos</option>
-              <option value="CRITICAL">Hasta 40 días</option>
-              <option value="UPCOMING">Hasta 90 días</option>
-              <option value="VALID">Vigentes</option>
-            </select>
+              onChange={val => setVencimientoFiltro(val as typeof vencimientoFiltro)}
+              options={[
+                { value: "", label: "Todo vencimiento" },
+                { value: "ALERTAS", label: "Con alerta" },
+                { value: "EXPIRED", label: "Vencidos" },
+                { value: "CRITICAL", label: "Hasta 40 días" },
+                { value: "UPCOMING", label: "Hasta 90 días" },
+                { value: "VALID", label: "Vigentes" }
+              ]}
+              ariaLabel="Todo vencimiento"
+              className="h-10 border-slate-200"
+            />
             {hayFiltros && (
               <button
                 type="button"

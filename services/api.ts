@@ -673,34 +673,158 @@ export const api = {
         return MOCK_DB.facilities;
     },
 
-    saveFacility: async (facility: HealthFacility): Promise<{ success: boolean; message?: string }> => {
+    saveFacility: async (facility: HealthFacility, originalCode?: string): Promise<{ success: boolean; message?: string }> => {
         try {
+            const cleanCode = (facility.code || '').trim();
+            const cleanName = (facility.name || '').trim();
+            const origCode = originalCode ? originalCode.trim() : '';
+
+            if (!cleanCode) {
+                return { success: false, message: "El código RENIPRESS es obligatorio." };
+            }
+            if (!cleanName) {
+                return { success: false, message: "El nombre del establecimiento es obligatorio." };
+            }
+
+            const payload = {
+                code: cleanCode,
+                name: cleanName,
+                category: (facility.category || '').trim(),
+                type: facility.type || null,
+                unget_id: facility.ungetId || null,
+                microred_id: facility.microredId || null,
+                ogess_id: facility.ogessId || null,
+                diresa_id: facility.diresaId || null,
+                legal_address: facility.legalAddress || null,
+                website: facility.website || null,
+                social_media: facility.socialMedia || null,
+                phone: facility.phone || null,
+                email: facility.email || null,
+                department: facility.department || null,
+                province: facility.province || null,
+                district: facility.district || null
+            };
+
             if (supabase) {
-                const { error } = await supabase.from('facilities').upsert({
-                    code: facility.code,
-                    name: facility.name,
-                    category: facility.category,
-                    type: facility.type || null,
-                    unget_id: facility.ungetId || null,
-                    microred_id: facility.microredId || null,
-                    ogess_id: facility.ogessId || null,
-                    diresa_id: facility.diresaId || null,
-                    legal_address: facility.legalAddress || null,
-                    website: facility.website || null,
-                    social_media: facility.socialMedia || null,
-                    phone: facility.phone || null,
-                    email: facility.email || null,
-                    department: facility.department || null,
-                    province: facility.province || null,
-                    district: facility.district || null
-                });
-                if (error) throw error;
+                // Modo EDICIÓN: se proporcionó originalCode
+                if (origCode) {
+                    if (origCode === cleanCode) {
+                        // El código RENIPRESS no cambió: omitimos 'code' del update para evitar revisiones innecesarias de FK en Postgres
+                        const { code: _c, ...updateFields } = payload;
+                        const { error } = await supabase
+                            .from('facilities')
+                            .update(updateFields)
+                            .eq('code', origCode);
+                        if (error) throw error;
+                        return { success: true };
+                    } else {
+                        // El código RENIPRESS cambió: verificar primero con RPC o actualización directa
+                        try {
+                            const { data: rpcRes, error: rpcErr } = await supabase.rpc('update_health_facility', {
+                                p_original_code: origCode,
+                                p_new_code: cleanCode,
+                                p_name: cleanName,
+                                p_category: payload.category,
+                                p_type: payload.type,
+                                p_unget_id: payload.unget_id,
+                                p_microred_id: payload.microred_id,
+                                p_ogess_id: payload.ogess_id,
+                                p_diresa_id: payload.diresa_id,
+                                p_legal_address: payload.legal_address,
+                                p_website: payload.website,
+                                p_social_media: payload.social_media,
+                                p_phone: payload.phone,
+                                p_email: payload.email,
+                                p_department: payload.department,
+                                p_province: payload.province,
+                                p_district: payload.district
+                            });
+
+                            if (!rpcErr && rpcRes) {
+                                if (rpcRes.success) return { success: true };
+                                return { success: false, message: rpcRes.message };
+                            }
+                        } catch {
+                            // RPC no existe todavía, intentar update directo
+                        }
+
+                        // Verificar si el nuevo código ya pertenece a otro establecimiento
+                        const { data: existing, error: checkErr } = await supabase
+                            .from('facilities')
+                            .select('code')
+                            .eq('code', cleanCode)
+                            .maybeSingle();
+                        if (checkErr) throw checkErr;
+                        if (existing) {
+                            return { success: false, message: `El código RENIPRESS "${cleanCode}" ya pertenece a otro establecimiento registrado.` };
+                        }
+
+                        // Actualizar la fila en facilities
+                        const { error: updateErr } = await supabase
+                            .from('facilities')
+                            .update(payload)
+                            .eq('code', origCode);
+                        
+                        if (updateErr) {
+                            if (updateErr.message && updateErr.message.includes('violates foreign key constraint')) {
+                                return {
+                                    success: false,
+                                    message: `No se puede cambiar el código RENIPRESS porque existen registros vinculados (personal, existencias o movimientos). Para habilitar el cambio en cascada, ejecute la migración SQL 'SUPABASE_MIGRATION_FACILITIES_CASCADE_UPDATE.sql' en Supabase.`
+                                };
+                            }
+                            throw updateErr;
+                        }
+
+                        // Cascada complementaria en tablas de frontend si no tienen cascade
+                        try {
+                            await supabase.from('personnel').update({ facility_code: cleanCode }).eq('facility_code', origCode);
+                        } catch (e) {
+                            console.warn("No se pudo actualizar cascada en personnel:", e);
+                        }
+                        try {
+                            await supabase.from('stock_assignments').update({ facility_code: cleanCode }).eq('facility_code', origCode);
+                        } catch (e) {
+                            console.warn("No se pudo actualizar cascada en stock_assignments:", e);
+                        }
+
+                        return { success: true };
+                    }
+                } else {
+                    // Modo CREACIÓN: verificar si ya existe
+                    const { data: existing, error: checkErr } = await supabase
+                        .from('facilities')
+                        .select('code')
+                        .eq('code', cleanCode)
+                        .maybeSingle();
+                    if (checkErr) throw checkErr;
+                    if (existing) {
+                        return { success: false, message: `Ya existe un establecimiento registrado con el código RENIPRESS "${cleanCode}". Para modificarlo, selecciónelo en la lista y presione Editar.` };
+                    }
+
+                    const { error: insertErr } = await supabase
+                        .from('facilities')
+                        .insert(payload);
+                    if (insertErr) throw insertErr;
+                    return { success: true };
+                }
+            } else {
+                // Fallback local
+                const existingIdx = MOCK_DB.facilities.findIndex(f => f.code === (origCode || cleanCode));
+                const item: HealthFacility = {
+                    ...facility,
+                    code: cleanCode,
+                    name: cleanName
+                };
+                if (existingIdx >= 0) {
+                    MOCK_DB.facilities[existingIdx] = item;
+                } else {
+                    MOCK_DB.facilities.push(item);
+                }
                 return { success: true };
             }
         } catch(e: any) {
-            return { success: false, message: e.message };
+            return { success: false, message: e.message || "Error al guardar el establecimiento" };
         }
-        return { success: false, message: "No Supabase connected" };
     },
 
     deleteFacility: async (code: string): Promise<{ success: boolean; message?: string }> => {
@@ -1146,15 +1270,10 @@ export const api = {
                 // Validation: A health facility (establishment) cannot be assigned to two or more sheets at the same time
                 const { data: existingFacility, error: errFac } = await supabase
                     .from('facility_stock_assignments')
-                    .select('id, facility_code')
+                    .select('id, facility_code, sheet_url, sheet_name')
                     .eq('facility_code', assignment.facilityCode)
                     .maybeSingle();
-                // Si la validación no se pudo consultar, se corta aquí: seguir sin
-                // respuesta permitiría crear el duplicado que esta comprobación evita.
                 if (errFac) throw errFac;
-                if (existingFacility) {
-                    return { success: false, message: `El establecimiento solicitado ya tiene una hoja de cálculo vinculada.` };
-                }
 
                 // Validation: A single sheet (sheetUrl + sheetName) cannot be assigned to multiple facilities at the same time
                 const { data: existingSheet, error: errSheet } = await supabase
@@ -1164,8 +1283,24 @@ export const api = {
                     .eq('sheet_name', assignment.sheetName)
                     .maybeSingle();
                 if (errSheet) throw errSheet;
-                if (existingSheet) {
+                
+                if (existingSheet && existingSheet.facility_code !== assignment.facilityCode) {
                     return { success: false, message: `La hoja "${assignment.sheetName}" de esa conexión ya se encuentra vinculada a otro establecimiento (Código: ${existingSheet.facility_code}).` };
+                }
+
+                if (existingFacility) {
+                    // Si ya existe vinculación para esta IPRESS, actualizarla
+                    const { error } = await supabase
+                        .from('facility_stock_assignments')
+                        .update({
+                            admin_username: assignment.adminUsername,
+                            sheet_name: assignment.sheetName,
+                            sheet_url: assignment.sheetUrl,
+                            visible_columns: assignment.visibleColumns
+                        })
+                        .eq('id', existingFacility.id);
+                    if (error) throw error;
+                    return { success: true };
                 }
 
                 const { error } = await supabase.from('facility_stock_assignments').insert({

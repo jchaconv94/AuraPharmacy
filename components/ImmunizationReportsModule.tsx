@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
+import { CustomSelect } from "./ui/CustomSelect";
 import {
   getCurrentImmunizationPeriod,
   getImmunizationScope,
@@ -227,35 +228,11 @@ export const ImmunizationReportsModule: React.FC = () => {
       : `${visibleUngets.length} UNGET del ámbito`;
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-700">
-              <BarChart3 className="h-7 w-7" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-black text-slate-900">Reportes Inmunizaciones</h2>
-                <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-black text-indigo-700">
-                  PERIODO {period}
-                </span>
-                <span
-                  className={`rounded-full border px-2.5 py-1 text-xs font-black ${summary.isDefinitive
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-amber-200 bg-amber-50 text-amber-700"}`}
-                >
-                  {summary.isDefinitive ? "DEFINITIVO" : "PRELIMINAR"}
-                </span>
-              </div>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-600">
-                Avance operativo del cierre mensual. Los archivos del movimiento biológico se descargan desde Cierre Mensual.
-              </p>
-              <p className="mt-2 text-xs font-black text-indigo-700">Ámbito: {scopeLabel}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black uppercase text-slate-500">Periodo:</span>
             <input
               type="month"
               value={period}
@@ -268,19 +245,30 @@ export const ImmunizationReportsModule: React.FC = () => {
                 }
                 setPeriod(next);
               }}
-              className={`${inputClassName} h-11 sm:w-44`}
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 shadow-2xs focus:border-teal-500 focus:outline-hidden"
             />
-            <button
-              type="button"
-              onClick={() => void loadData()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              Actualizar
-            </button>
           </div>
+          <span
+            className={`rounded-full border px-2.5 py-1 text-xs font-black ${summary.isDefinitive
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-amber-200 bg-amber-50 text-amber-700"}`}
+          >
+            {summary.isDefinitive ? "DEFINITIVO" : "PRELIMINAR"}
+          </span>
+          <span className="text-xs font-bold text-slate-600">
+            Ámbito: <span className="font-black text-indigo-700">{scopeLabel}</span>
+          </span>
         </div>
-      </section>
+
+        <button
+          type="button"
+          onClick={() => void loadData()}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-2xs transition hover:bg-slate-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          Actualizar
+        </button>
+      </div>
 
       {!loading && !summary.isDefinitive && summary.totalUngets > 0 && (
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800 shadow-sm">
@@ -392,13 +380,14 @@ export const ImmunizationReportsModule: React.FC = () => {
                     className={`${inputClassName} pl-10`}
                   />
                 </label>
-                <select
-                  value={statusFilter}
-                  onChange={event => setStatusFilter(event.target.value as ImmunizationClosureStatusFilter)}
-                  className={`${inputClassName} sm:w-48`}
-                >
-                  {statusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
+                <div className="sm:w-48">
+                  <CustomSelect
+                    value={statusFilter}
+                    onChange={val => setStatusFilter(val as ImmunizationClosureStatusFilter)}
+                    options={statusOptions}
+                    className="h-10 border-slate-200"
+                  />
+                </div>
               </div>
             </div>
 

@@ -142,6 +142,7 @@ export const AdminOrganizationModule: React.FC = () => {
     const [isMicroredModalOpen, setIsMicroredModalOpen] = useState(false);
     const [isFacilityModalOpen, setIsFacilityModalOpen] = useState(false);
     const [facilityModalStep, setFacilityModalStep] = useState(1);
+    const [editingFacilityOriginalCode, setEditingFacilityOriginalCode] = useState<string | null>(null);
 
     // Multi-step States
     const [diresaModalStep, setDiresaModalStep] = useState(1);
@@ -169,8 +170,10 @@ export const AdminOrganizationModule: React.FC = () => {
         if (!code) return;
         const found = facilities.find(f => f.code === code);
         if (found) {
-            setFacilityForm(found);
+            setEditingFacilityOriginalCode(found.code);
+            setFacilityForm({ ...found });
         } else {
+            setEditingFacilityOriginalCode(null);
             setFacilityForm({ code, name });
         }
         setFacilityModalStep(4);
@@ -652,21 +655,26 @@ export const AdminOrganizationModule: React.FC = () => {
         return list;
     }, [visibleMicroredes, facilityForm.ungetId]);
 
-    const fetchData = async () => {
-        setIsLoading(true);
-        const [dir, ogs, ung, mic, facs] = await Promise.all([
-            api.getDiresas(),
-            api.getOgess(),
-            api.getUngets(),
-            api.getMicroredes(),
-            api.getFacilities()
-        ]);
-        setDiresas(dir);
-        setOgess(ogs);
-        setUngets(ung);
-        setMicroredes(mic);
-        setFacilities(facs);
-        setIsLoading(false);
+    const fetchData = async (silent = false) => {
+        if (!silent) setIsLoading(true);
+        try {
+            const [dir, ogs, ung, mic, facs] = await Promise.all([
+                api.getDiresas(),
+                api.getOgess(),
+                api.getUngets(),
+                api.getMicroredes(),
+                api.getFacilities()
+            ]);
+            setDiresas(dir);
+            setOgess(ogs);
+            setUngets(ung);
+            setMicroredes(mic);
+            setFacilities(facs);
+        } catch (e) {
+            console.error("Error fetching organization data:", e);
+        } finally {
+            if (!silent) setIsLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -676,8 +684,20 @@ export const AdminOrganizationModule: React.FC = () => {
     // --- DIRESA CRUD --- //
     const handleSaveDiresa = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        const res = await api.saveDiresa(diresaForm);
-        if (res.success) { toast.success('Guardado correctamente'); setIsDiresaModalOpen(false); fetchData(); }
+        const savedData = { ...diresaForm };
+        const res = await api.saveDiresa(savedData);
+        if (res.success) { 
+            // Inmediate UI update
+            setDiresas(prev => {
+                if (savedData.id) {
+                    return prev.map(d => d.id === savedData.id ? (savedData as Diresa) : d);
+                }
+                return [...prev, { ...savedData, id: savedData.id || crypto.randomUUID() } as Diresa];
+            });
+            toast.success('Guardado correctamente'); 
+            setIsDiresaModalOpen(false); 
+            await fetchData(true); 
+        }
         else toast.error(res.message);
     };
     const handleDeleteDiresa = async (id: string) => {
@@ -688,9 +708,10 @@ export const AdminOrganizationModule: React.FC = () => {
             action: {
                 label: "Eliminar",
                 onClick: async () => {
+                    setDiresas(prev => prev.filter(d => d.id !== id));
                     const res = await api.deleteDiresa(id);
-                    if (res.success) { toast.success('DIRESA eliminada'); fetchData(); }
-                    else toast.error(res.message);
+                    if (res.success) { toast.success('DIRESA eliminada'); await fetchData(true); }
+                    else { toast.error(res.message); await fetchData(true); }
                 }
             }
         });
@@ -699,8 +720,20 @@ export const AdminOrganizationModule: React.FC = () => {
     // --- OGESS CRUD --- //
     const handleSaveOgess = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        const res = await api.saveOgess(ogessForm);
-        if (res.success) { toast.success('Guardado correctamente'); setIsOgessModalOpen(false); fetchData(); }
+        const savedData = { ...ogessForm };
+        const res = await api.saveOgess(savedData);
+        if (res.success) { 
+            // Inmediate UI update
+            setOgess(prev => {
+                if (savedData.id) {
+                    return prev.map(o => o.id === savedData.id ? (savedData as Ogess) : o);
+                }
+                return [...prev, { ...savedData, id: savedData.id || crypto.randomUUID() } as Ogess];
+            });
+            toast.success('Guardado correctamente'); 
+            setIsOgessModalOpen(false); 
+            await fetchData(true); 
+        }
         else toast.error(res.message);
     };
     const handleDeleteOgess = async (id: string) => {
@@ -711,9 +744,10 @@ export const AdminOrganizationModule: React.FC = () => {
             action: {
                 label: "Eliminar",
                 onClick: async () => {
+                    setOgess(prev => prev.filter(o => o.id !== id));
                     const res = await api.deleteOgess(id);
-                    if (res.success) { toast.success('OGESS eliminada'); fetchData(); }
-                    else toast.error(res.message);
+                    if (res.success) { toast.success('OGESS eliminada'); await fetchData(true); }
+                    else { toast.error(res.message); await fetchData(true); }
                 }
             }
         });
@@ -722,8 +756,20 @@ export const AdminOrganizationModule: React.FC = () => {
     // --- UNGET CRUD --- //
     const handleSaveUnget = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        const res = await api.saveUnget(ungetForm);
-        if (res.success) { toast.success('Guardado correctamente'); setIsUngetModalOpen(false); fetchData(); }
+        const savedData = { ...ungetForm };
+        const res = await api.saveUnget(savedData);
+        if (res.success) { 
+            // Inmediate UI update
+            setUngets(prev => {
+                if (savedData.id) {
+                    return prev.map(u => u.id === savedData.id ? (savedData as Unget) : u);
+                }
+                return [...prev, { ...savedData, id: savedData.id || crypto.randomUUID() } as Unget];
+            });
+            toast.success('Guardado correctamente'); 
+            setIsUngetModalOpen(false); 
+            await fetchData(true); 
+        }
         else toast.error(res.message);
     };
     const handleDeleteUnget = async (id: string) => {
@@ -734,9 +780,10 @@ export const AdminOrganizationModule: React.FC = () => {
             action: {
                 label: "Eliminar",
                 onClick: async () => {
+                    setUngets(prev => prev.filter(u => u.id !== id));
                     const res = await api.deleteUnget(id);
-                    if (res.success) { toast.success('UNGET eliminada'); fetchData(); }
-                    else toast.error(res.message);
+                    if (res.success) { toast.success('UNGET eliminada'); await fetchData(true); }
+                    else { toast.error(res.message); await fetchData(true); }
                 }
             }
         });
@@ -745,8 +792,20 @@ export const AdminOrganizationModule: React.FC = () => {
     // --- MICRORED CRUD --- //
     const handleSaveMicrored = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        const res = await api.saveMicrored(microredForm);
-        if (res.success) { toast.success('Guardado correctamente'); setIsMicroredModalOpen(false); fetchData(); }
+        const savedData = { ...microredForm };
+        const res = await api.saveMicrored(savedData);
+        if (res.success) { 
+            // Inmediate UI update
+            setMicroredes(prev => {
+                if (savedData.id) {
+                    return prev.map(m => m.id === savedData.id ? (savedData as Microred) : m);
+                }
+                return [...prev, { ...savedData, id: savedData.id || crypto.randomUUID() } as Microred];
+            });
+            toast.success('Guardado correctamente'); 
+            setIsMicroredModalOpen(false); 
+            await fetchData(true); 
+        }
         else toast.error(res.message);
     };
     const handleDeleteMicrored = async (id: string) => {
@@ -757,9 +816,10 @@ export const AdminOrganizationModule: React.FC = () => {
             action: {
                 label: "Eliminar",
                 onClick: async () => {
+                    setMicroredes(prev => prev.filter(m => m.id !== id));
                     const res = await api.deleteMicrored(id);
-                    if (res.success) { toast.success('MICRORED eliminada'); fetchData(); }
-                    else toast.error(res.message);
+                    if (res.success) { toast.success('MICRORED eliminada'); await fetchData(true); }
+                    else { toast.error(res.message); await fetchData(true); }
                 }
             }
         });
@@ -953,8 +1013,10 @@ export const AdminOrganizationModule: React.FC = () => {
         if (e) e.preventDefault();
         
         // 1. Save Health Facility First
-        const res = await api.saveFacility(facilityForm as HealthFacility);
+        const res = await api.saveFacility(facilityForm as HealthFacility, editingFacilityOriginalCode || undefined);
         if (res.success) { 
+            const finalCode = (facilityForm.code || editingFacilityOriginalCode || "").trim();
+
             // 2. Save Stock Assignment if we are on step 4 or if link details are filled
             if (linkConnectionUrl && linkSheetName) {
                 if (linkVisibleColumns.length === 0) {
@@ -962,10 +1024,18 @@ export const AdminOrganizationModule: React.FC = () => {
                     return;
                 }
                 
-                const existingAssigList = await api.getMyStockAssignments(facilityForm.code || "");
+                // Buscar si existe asignación previa con el código anterior o el nuevo
+                let existingAssigList = editingFacilityOriginalCode 
+                    ? await api.getMyStockAssignments(editingFacilityOriginalCode)
+                    : [];
+                
+                if ((!existingAssigList || existingAssigList.length === 0) && finalCode) {
+                    existingAssigList = await api.getMyStockAssignments(finalCode);
+                }
+
                 const assigData = {
                     adminUsername: user?.username || "",
-                    facilityCode: facilityForm.code || "",
+                    facilityCode: finalCode,
                     sheetName: linkSheetName,
                     sheetUrl: linkConnectionUrl,
                     visibleColumns: linkVisibleColumns
@@ -973,10 +1043,10 @@ export const AdminOrganizationModule: React.FC = () => {
 
                 let assigRes;
                 if (existingAssigList && existingAssigList.length > 0) {
-                    // Update existing
+                    // Update existing assignment by ID
                     assigRes = await api.updateStockAssignment(existingAssigList[0].id, assigData);
                 } else {
-                    // Save new
+                    // Save new / upsert assignment
                     assigRes = await api.saveStockAssignment(assigData);
                 }
 
@@ -987,16 +1057,51 @@ export const AdminOrganizationModule: React.FC = () => {
             } else if (!linkConnectionUrl && !linkSheetName) {
                 // If they cleared it, we can delete any existing assignment to avoid ghost data
                 try {
-                    const existingAssigList = await api.getMyStockAssignments(facilityForm.code || "");
-                    if (existingAssigList && existingAssigList.length > 0) {
-                        await api.deleteStockAssignment(existingAssigList[0].id);
+                    const lookupCode = editingFacilityOriginalCode || finalCode;
+                    if (lookupCode) {
+                        const existingAssigList = await api.getMyStockAssignments(lookupCode);
+                        if (existingAssigList && existingAssigList.length > 0) {
+                            await api.deleteStockAssignment(existingAssigList[0].id);
+                        }
                     }
                 } catch(e) {}
             }
 
-            toast.success('IPRESS y Vinculación guardadas correctamente'); 
+            // Immediate reactive update in memory
+            const updatedItem: HealthFacility = {
+                code: finalCode,
+                name: (facilityForm.name || '').trim(),
+                category: (facilityForm.category || '').trim(),
+                type: facilityForm.type || undefined,
+                ungetId: facilityForm.ungetId || undefined,
+                microredId: facilityForm.microredId || undefined,
+                ogessId: facilityForm.ogessId || undefined,
+                diresaId: facilityForm.diresaId || undefined,
+                legalAddress: facilityForm.legalAddress || undefined,
+                website: facilityForm.website || undefined,
+                socialMedia: facilityForm.socialMedia || undefined,
+                phone: facilityForm.phone || undefined,
+                email: facilityForm.email || undefined,
+                department: facilityForm.department || undefined,
+                province: facilityForm.province || undefined,
+                district: facilityForm.district || undefined
+            };
+
+            setFacilities(prev => {
+                const orig = editingFacilityOriginalCode || finalCode;
+                const idx = prev.findIndex(f => f.code === orig);
+                if (idx >= 0) {
+                    const next = [...prev];
+                    next[idx] = updatedItem;
+                    return next;
+                }
+                return [...prev, updatedItem];
+            });
+
+            toast.success(editingFacilityOriginalCode ? 'IPRESS actualizada correctamente' : 'IPRESS registrada correctamente'); 
             setIsFacilityModalOpen(false); 
-            fetchData(); 
+            setEditingFacilityOriginalCode(null);
+            await fetchData(true); 
         }
         else toast.error(res.message);
     };
@@ -1008,9 +1113,10 @@ export const AdminOrganizationModule: React.FC = () => {
             action: {
                 label: "Eliminar",
                 onClick: async () => {
+                    setFacilities(prev => prev.filter(f => f.code !== code));
                     const res = await api.deleteFacility(code);
-                    if (res.success) { toast.success('IPRESS eliminada'); fetchData(); }
-                    else toast.error(res.message);
+                    if (res.success) { toast.success('IPRESS eliminada'); await fetchData(true); }
+                    else { toast.error(res.message); await fetchData(true); }
                 }
             }
         });
@@ -1148,7 +1254,8 @@ export const AdminOrganizationModule: React.FC = () => {
         else if (tab === 'UNGET') { setUngetForm(item); setUngetModalStep(1); setIsUngetModalOpen(true); }
         else if (tab === 'MICRORED') { setMicroredForm(item); setIsMicroredModalOpen(true); }
         else if (tab === 'IPRESS') { 
-            setFacilityForm(item); 
+            setEditingFacilityOriginalCode(item.code || null);
+            setFacilityForm({ ...item }); 
             setFacilityModalStep(1); 
             setIsFacilityModalOpen(true); 
             prepareFacilityStep4(item.code, item.name);
@@ -1381,6 +1488,7 @@ export const AdminOrganizationModule: React.FC = () => {
                                                 }
                                             }
                                         }
+                                        setEditingFacilityOriginalCode(null);
                                         setFacilityForm(initialFacility); 
                                         setFacilityModalStep(1);
                                         prepareFacilityStep4("", "");
@@ -3252,9 +3360,13 @@ export const AdminOrganizationModule: React.FC = () => {
                             <div>
                                 <h3 className="font-extrabold text-xl text-gray-900 tracking-tight flex items-center gap-2">
                                     <Building2 className="h-5 w-5 text-teal-600" />
-                                    Mantenimiento de IPRESS
+                                    {editingFacilityOriginalCode ? 'Editar Establecimiento (IPRESS)' : 'Nuevo Establecimiento (IPRESS)'}
                                 </h3>
-                                <p className="text-xs text-gray-500 mt-1">Configure los datos de identificación, jurisdicción y canales de contacto de la IPRESS.</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {editingFacilityOriginalCode 
+                                        ? `Actualizando datos de la IPRESS [Código Original: ${editingFacilityOriginalCode}]` 
+                                        : 'Configure los datos de identificación, jurisdicción y canales de contacto de la IPRESS.'}
+                                </p>
                             </div>
                             <button 
                                 type="button"
@@ -3322,13 +3434,17 @@ export const AdminOrganizationModule: React.FC = () => {
                                             
                                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                                 <div className="sm:col-span-1">
-                                                    <label className="block text-xs font-bold text-gray-700 mb-1">Código (RENIPRESS) *</label>
+                                                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                                                        Código (RENIPRESS) *
+                                                        {editingFacilityOriginalCode && (
+                                                            <span className="ml-1 text-[10px] text-teal-600 font-semibold">(Existente)</span>
+                                                        )}
+                                                    </label>
                                                     <input 
                                                         required 
-                                                        disabled={!!facilityForm.code && facilityForm.code !== '' && !isFacilityModalOpen} 
                                                         type="text" 
                                                         placeholder="Código RENIPRESS" 
-                                                        className="w-full border border-gray-200 p-2.5 rounded-lg text-sm bg-white disabled:bg-slate-100 text-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" 
+                                                        className="w-full border border-gray-200 p-2.5 rounded-lg text-sm bg-white text-gray-800 focus:ring-2 focus:ring-teal-500 outline-none" 
                                                         value={facilityForm.code || ''} 
                                                         onChange={e => setFacilityForm({...facilityForm, code: e.target.value})} 
                                                     />
@@ -3677,7 +3793,7 @@ export const AdminOrganizationModule: React.FC = () => {
                                         onClick={() => handleSaveFacility()}
                                         className="px-6 py-2.5 text-sm font-black text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all flex items-center gap-2 shadow-lg hover:shadow-teal-100"
                                     >
-                                        <Save className="h-4 w-4" /> Guardar IPRESS
+                                        <Save className="h-4 w-4" /> {editingFacilityOriginalCode ? 'Actualizar IPRESS' : 'Guardar IPRESS'}
                                     </button>
                                 )}
                             </div>

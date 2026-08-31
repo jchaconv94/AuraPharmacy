@@ -112,6 +112,7 @@ const normalizeInventory = (row: any): ImmunizationInitialInventory => ({
   period: row.period,
   status: row.status,
   sourceType: row.source_type,
+  isInitialProvision: Boolean(row.is_initial_provision || row.isInitialProvision),
   createdBy: row.created_by || undefined,
   closedBy: row.closed_by || undefined,
   closedAt: row.closed_at || undefined,
@@ -422,6 +423,7 @@ const normalizeDistributionBatch = (row: any): ImmunizationDistributionBatch => 
   destinationFacilityCode: row.destination_facility_code || "",
   period: row.period,
   criterion: row.criterion || "REGULAR",
+  isInitialProvision: Boolean(row.is_initial_provision || row.isInitialProvision),
   status: row.status,
   referenceDocument: row.reference_document || undefined,
   observation: row.observation || undefined,
@@ -871,6 +873,9 @@ export const immunizationApi = {
       if (scope.level !== "IPRESS" || !scope.facilityCode || !scope.ungetId) {
         return { success: false, message: "Solo una IPRESS vinculada a una UNGET puede realizar el precierre." };
       }
+      if (!await immunizationApi.isFacilityInitialized(scope)) {
+        return { success: false, message: "El establecimiento no cuenta con inventario inicial cerrado ni remesa inicial recibida. Complete su apertura para poder precerrar el periodo." };
+      }
       if (!period || !/^[0-9]{4}-[0-9]{2}$/.test(period)) {
         return { success: false, message: "Periodo inválido." };
       }
@@ -1169,6 +1174,175 @@ export const immunizationApi = {
     }
   },
 
+  importProductsBatch: async (
+    productsToImport: Array<{
+      codigoSismed: string;
+      descripcion: string;
+      tipoProducto: string;
+      dosisUnidad: number;
+      isActive: boolean;
+      observacion?: string;
+    }>,
+    mode: "SKIP_EXISTING" | "UPDATE_EXISTING" = "SKIP_EXISTING",
+    username?: string
+  ): Promise<{
+    success: boolean;
+    insertedCount: number;
+    updatedCount: number;
+    skippedCount: number;
+    message?: string;
+  }> => {
+    try {
+      if (!productsToImport || productsToImport.length === 0) {
+        return { success: true, insertedCount: 0, updatedCount: 0, skippedCount: 0, message: "No hay productos para importar." };
+      }
+
+      if (supabase) {
+        // Consultar productos actuales en BD
+        const { data: existingRows, error: fetchErr } = await supabase
+          .from("immunization_products")
+          .select("id, codigo_sismed, descripcion");
+
+        if (fetchErr) throw fetchErr;
+
+        const dbMapByCode = new Map<string, any>();
+        (existingRows || []).forEach(r => {
+          dbMapByCode.set(normalizeCatalogText(r.codigo_sismed), r);
+        });
+
+        let insertedCount = 0;
+        let updatedCount = 0;
+        let skippedCount = 0;
+
+        const toUpsert: any[] = [];
+        const now = new Date().toISOString();
+
+        for (const item of productsToImport) {
+          const normCode = normalizeCatalogText(item.codigoSismed);
+          const existing = dbMapByCode.get(normCode);
+
+          if (existing) {
+            if (mode === "SKIP_EXISTING") {
+              skippedCount++;
+              continue;
+            } else {
+              // UPDATE_EXISTING
+              toUpsert.push({
+                id: existing.id,
+                codigo_sismed: item.codigoSismed.trim(),
+                descripcion: item.descripcion.trim(),
+                tipo_producto: item.tipoProducto.trim(),
+                dosis_unidad: Number(item.dosisUnidad) || 1,
+                is_active: item.isActive,
+                observacion: item.observacion || null,
+                updated_by: username || null,
+                updated_at: now
+              });
+              updatedCount++;
+            }
+          } else {
+            // NEW
+            toUpsert.push({
+              codigo_sismed: item.codigoSismed.trim(),
+              descripcion: item.descripcion.trim(),
+              tipo_producto: item.tipoProducto.trim(),
+              dosis_unidad: Number(item.dosisUnidad) || 1,
+              is_active: item.isActive,
+              observacion: item.observacion || null,
+              created_by: username || null,
+              updated_by: username || null,
+              created_at: now,
+              updated_at: now
+            });
+            insertedCount++;
+          }
+        }
+
+        if (toUpsert.length > 0) {
+          const { error: upsertErr } = await supabase
+            .from("immunization_products")
+            .upsert(toUpsert, { onConflict: "codigo_sismed" });
+
+          if (upsertErr) throw upsertErr;
+        }
+
+        return {
+          success: true,
+          insertedCount,
+          updatedCount,
+          skippedCount,
+          message: `Importación completada: ${insertedCount} nuevos, ${updatedCount} actualizados, ${skippedCount} omitidos.`
+        };
+      }
+
+      // Fallback Local
+      const current = getCachedList<ImmunizationProduct>(PRODUCTS_CACHE_KEY);
+      const dbMapByCode = new Map<string, ImmunizationProduct>();
+      current.forEach(p => dbMapByCode.set(normalizeCatalogText(p.codigoSismed), p));
+
+      let insertedCount = 0;
+      let updatedCount = 0;
+      let skippedCount = 0;
+
+      let nextList = [...current];
+      const now = new Date().toISOString();
+
+      for (const item of productsToImport) {
+        const normCode = normalizeCatalogText(item.codigoSismed);
+        const existing = dbMapByCode.get(normCode);
+
+        if (existing) {
+          if (mode === "SKIP_EXISTING") {
+            skippedCount++;
+            continue;
+          } else {
+            const updated: ImmunizationProduct = {
+              ...existing,
+              codigoSismed: item.codigoSismed.trim(),
+              descripcion: item.descripcion.trim(),
+              tipoProducto: item.tipoProducto.trim(),
+              dosisUnidad: Number(item.dosisUnidad) || 1,
+              isActive: item.isActive,
+              observacion: item.observacion || existing.observacion,
+              updatedBy: username,
+              updatedAt: now
+            };
+            nextList = nextList.map(p => p.id === existing.id ? updated : p);
+            updatedCount++;
+          }
+        } else {
+          const newProd: ImmunizationProduct = {
+            id: makeLocalId("imm-prod"),
+            codigoSismed: item.codigoSismed.trim(),
+            descripcion: item.descripcion.trim(),
+            tipoProducto: item.tipoProducto.trim(),
+            dosisUnidad: Number(item.dosisUnidad) || 1,
+            isActive: item.isActive,
+            observacion: item.observacion || undefined,
+            createdBy: username,
+            updatedBy: username,
+            createdAt: now,
+            updatedAt: now
+          };
+          nextList.push(newProd);
+          insertedCount++;
+        }
+      }
+
+      setCachedList(PRODUCTS_CACHE_KEY, nextList);
+
+      return {
+        success: true,
+        insertedCount,
+        updatedCount,
+        skippedCount,
+        message: `Importación local completada: ${insertedCount} nuevos, ${updatedCount} actualizados, ${skippedCount} omitidos.`
+      };
+    } catch (e: any) {
+      return { success: false, insertedCount: 0, updatedCount: 0, skippedCount: 0, message: e.message || "Error al importar productos por lote." };
+    }
+  },
+
   toggleProductStatus: async (id: string, isActive: boolean, username?: string): Promise<{ success: boolean; message?: string }> => {
     try {
       if (supabase) {
@@ -1204,6 +1378,45 @@ export const immunizationApi = {
       if (scope.level === "UNGET") return inv.ownerType === "UNGET" && inv.ungetId === scope.ungetId;
       return true;
     });
+  },
+
+  isFacilityInitialized: async (scope: { ownerType?: string; level?: string; ungetId?: string; facilityCode?: string }): Promise<boolean> => {
+    try {
+      const ownerType = scope.ownerType || (scope.facilityCode ? "IPRESS" : scope.level === "UNGET" ? "UNGET" : "DIRESA");
+      if (ownerType === "DIRESA") return true;
+
+      if (supabase) {
+        let query = supabase
+          .from("immunization_initial_inventories")
+          .select("id, status")
+          .eq("status", "CLOSED");
+
+        if (ownerType === "IPRESS" && scope.facilityCode) {
+          query = query.eq("owner_type", "IPRESS").eq("facility_code", scope.facilityCode);
+        } else if (ownerType === "UNGET" && scope.ungetId) {
+          query = query.eq("owner_type", "UNGET").eq("unget_id", scope.ungetId);
+        } else {
+          return true;
+        }
+
+        const { data, error } = await query.limit(1);
+        if (error) throw error;
+        return Boolean(data && data.length > 0);
+      }
+    } catch (e) {
+      console.warn("Fallback local isFacilityInitialized", e);
+    }
+
+    const inventories = getCachedList<ImmunizationInitialInventory>(INVENTORIES_CACHE_KEY);
+    const ownerType = scope.ownerType || (scope.facilityCode ? "IPRESS" : scope.level === "UNGET" ? "UNGET" : "DIRESA");
+    if (ownerType === "DIRESA") return true;
+    if (ownerType === "IPRESS" && scope.facilityCode) {
+      return inventories.some(inv => inv.ownerType === "IPRESS" && inv.facilityCode === scope.facilityCode && inv.status === "CLOSED");
+    }
+    if (ownerType === "UNGET" && scope.ungetId) {
+      return inventories.some(inv => inv.ownerType === "UNGET" && inv.ungetId === scope.ungetId && inv.status === "CLOSED");
+    }
+    return true;
   },
 
   getInitialInventoryItems: async (inventoryId: string): Promise<ImmunizationInitialInventoryItem[]> => {
@@ -1494,6 +1707,133 @@ export const immunizationApi = {
       return { success: true };
     } catch (e: any) {
       return { success: false, message: e.message || "Error al eliminar la fila del inventario." };
+    }
+  },
+
+  replaceInitialInventoryDraft: async (
+    inventoryId: string,
+    items: ImmunizationInitialInventoryItem[],
+    _username?: string
+  ): Promise<{ success: boolean; inventory?: ImmunizationInitialInventory; message?: string }> => {
+    try {
+      if (items.some(item => item.quantity < 0 || item.unitPrice < 0)) {
+        return { success: false, message: "El saldo y el precio no pueden ser negativos." };
+      }
+      const consolidatedItems = consolidateItemsByCompositeKey(items);
+
+      if (supabase) {
+        const { data: inventoryRow, error: inventoryError } = await supabase
+          .from("immunization_initial_inventories")
+          .select("*")
+          .eq("id", inventoryId)
+          .single();
+        if (inventoryError) throw inventoryError;
+        if (inventoryRow.status !== "DRAFT") {
+          return { success: false, message: "El inventario ya está cerrado y no se puede modificar." };
+        }
+
+        const { error: delError } = await supabase
+          .from("immunization_initial_inventory_items")
+          .delete()
+          .eq("inventory_id", inventoryId);
+        if (delError) throw delError;
+
+        if (consolidatedItems.length > 0) {
+          const { error: itemError } = await supabase.from("immunization_initial_inventory_items").insert(consolidatedItems.map(item => ({
+            inventory_id: inventoryId,
+            product_id: item.productId,
+            codigo_sismed_snapshot: item.codigoSismedSnapshot,
+            excel_description_snapshot: item.excelDescriptionSnapshot || null,
+            lote: item.lote,
+            expiration_date: item.expirationDate,
+            quantity: item.quantity,
+            unit_price: item.unitPrice,
+            funding_source: item.fundingSource,
+            supply_type: item.supplyType,
+            observation: item.observation || null
+          })));
+          if (itemError) throw itemError;
+        }
+
+        const { data: updatedInv, error: updateError } = await supabase
+          .from("immunization_initial_inventories")
+          .update({
+            source_type: "EXCEL",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", inventoryId)
+          .select()
+          .single();
+        if (updateError) throw updateError;
+
+        return { success: true, inventory: normalizeInventory(updatedInv) };
+      }
+
+      const inventories = getCachedList<ImmunizationInitialInventory>(INVENTORIES_CACHE_KEY);
+      const inventory = inventories.find(row => row.id === inventoryId);
+      if (!inventory) return { success: false, message: "Inventario no encontrado." };
+      if (inventory.status !== "DRAFT") return { success: false, message: "El inventario está cerrado y no admite cambios." };
+
+      const cachedItems = getCachedList<ImmunizationInitialInventoryItem>(INVENTORY_ITEMS_CACHE_KEY);
+      const otherItems = cachedItems.filter(row => row.inventoryId !== inventoryId);
+      const newItemsWithIds = consolidatedItems.map(item => ({
+        ...item,
+        id: item.id || makeLocalId("imm-inv-item"),
+        inventoryId
+      }));
+      setCachedList(INVENTORY_ITEMS_CACHE_KEY, [...otherItems, ...newItemsWithIds]);
+
+      const updatedInventory: ImmunizationInitialInventory = {
+        ...inventory,
+        sourceType: "EXCEL",
+        updatedAt: new Date().toISOString()
+      };
+      setCachedList(INVENTORIES_CACHE_KEY, inventories.map(row => row.id === inventoryId ? updatedInventory : row));
+      return { success: true, inventory: updatedInventory };
+    } catch (e: any) {
+      return { success: false, message: e.message || "Error al actualizar el inventario inicial." };
+    }
+  },
+
+  deleteInitialInventoryDraft: async (
+    inventoryId: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    try {
+      if (supabase) {
+        const { data: inventoryRow, error: inventoryError } = await supabase
+          .from("immunization_initial_inventories")
+          .select("status")
+          .eq("id", inventoryId)
+          .single();
+        if (inventoryError) throw inventoryError;
+        if (inventoryRow.status !== "DRAFT") {
+          return { success: false, message: "El inventario ya está cerrado y no se puede eliminar." };
+        }
+
+        await supabase
+          .from("immunization_initial_inventory_items")
+          .delete()
+          .eq("inventory_id", inventoryId);
+
+        const { error } = await supabase
+          .from("immunization_initial_inventories")
+          .delete()
+          .eq("id", inventoryId);
+        if (error) throw error;
+        return { success: true };
+      }
+
+      const inventories = getCachedList<ImmunizationInitialInventory>(INVENTORIES_CACHE_KEY);
+      const inventory = inventories.find(row => row.id === inventoryId);
+      if (!inventory) return { success: false, message: "Inventario no encontrado." };
+      if (inventory.status !== "DRAFT") return { success: false, message: "El inventario está cerrado y no admite cambios." };
+
+      const cachedItems = getCachedList<ImmunizationInitialInventoryItem>(INVENTORY_ITEMS_CACHE_KEY);
+      setCachedList(INVENTORY_ITEMS_CACHE_KEY, cachedItems.filter(row => row.inventoryId !== inventoryId));
+      setCachedList(INVENTORIES_CACHE_KEY, inventories.filter(row => row.id !== inventoryId));
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e.message || "Error al descartar el inventario borrador." };
     }
   },
 
@@ -2299,6 +2639,13 @@ export const immunizationApi = {
       if (flow === "UNGET_IPRESS" && (!originUngetId || !distribution.destinationFacilityCode || originOwner !== "UNGET" || destinationOwner !== "IPRESS")) {
         return { success: false, message: "Seleccione la UNGET origen y la IPRESS destino." };
       }
+      const isInitialProvision = Boolean(distribution.isInitialProvision);
+      if (flow === "UNGET_IPRESS" && !isInitialProvision) {
+        const isDestInitialized = await immunizationApi.isFacilityInitialized({ ownerType: "IPRESS", facilityCode: distribution.destinationFacilityCode });
+        if (!isDestInitialized) {
+          return { success: false, message: "El establecimiento destino aún no tiene inventario inicial cerrado. Para una IPRESS nueva, debe marcar la distribución como 'Remesa Inicial'." };
+        }
+      }
       if (!distribution.criterion) {
         return { success: false, message: "Seleccione el criterio de distribucion." };
       }
@@ -2339,6 +2686,7 @@ export const immunizationApi = {
             destination_facility_code: flow === "UNGET_IPRESS" ? distribution.destinationFacilityCode : null,
             period: distribution.period,
             criterion: distribution.criterion,
+            is_initial_provision: isInitialProvision,
             status: "DRAFT",
             reference_document: distribution.referenceDocument?.trim() || null,
             observation: distribution.observation?.trim() || null,
@@ -2380,6 +2728,7 @@ export const immunizationApi = {
         ungetId: flow === "DIRESA_UNGET" ? destinationUngetId! : originUngetId!,
         destinationFacilityCode: flow === "UNGET_IPRESS" ? distribution.destinationFacilityCode : "",
         criterion: distribution.criterion || "REGULAR",
+        isInitialProvision,
         status: "DRAFT",
         referenceDocument: distribution.referenceDocument?.trim() || undefined,
         observation: distribution.observation?.trim() || undefined,
@@ -2578,6 +2927,12 @@ export const immunizationApi = {
           if (await immunizationApi.isPeriodLocked(destinationScope, batchForLock.period)) {
             return { success: false, message: "El periodo del destino ya está cerrado. No se puede aceptar la distribución." };
           }
+          if (destinationOwner === "IPRESS" && !batchForLock.isInitialProvision) {
+            const destInit = await immunizationApi.isFacilityInitialized({ ownerType: "IPRESS", facilityCode: batchForLock.destinationFacilityCode });
+            if (!destInit) {
+              return { success: false, message: "El establecimiento destino aún no cuenta con inventario inicial cerrado ni habilitación por remesa inicial." };
+            }
+          }
         }
 
         const { error } = await supabase.rpc("receive_immunization_distribution", {
@@ -2633,6 +2988,12 @@ export const immunizationApi = {
         : { level: "UNGET", ownerType: "UNGET", ungetId: getDestinationUngetId(batch) };
       if (await immunizationApi.isPeriodLocked(destinationScopeForLock, batch.period)) {
         return { success: false, message: "El periodo del destino ya está cerrado. No se puede aceptar la distribución." };
+      }
+      if (destinationOwnerForLock === "IPRESS" && !batch.isInitialProvision) {
+        const destInit = await immunizationApi.isFacilityInitialized({ ownerType: "IPRESS", facilityCode: batch.destinationFacilityCode });
+        if (!destInit) {
+          return { success: false, message: "El establecimiento destino aún no cuenta con inventario inicial cerrado ni habilitación por remesa inicial." };
+        }
       }
       if (batch.status !== "SENT") return { success: false, message: "La distribucion no esta pendiente de recepcion." };
       const items = getCachedList<ImmunizationDistributionItem>(DISTRIBUTION_ITEMS_CACHE_KEY).filter(item => item.distributionId === distributionId);
@@ -2756,6 +3117,48 @@ export const immunizationApi = {
         receptionObservation: receptionObservation || undefined,
         updatedAt: now
       };
+      if (batch.isInitialProvision && destinationOwner === "IPRESS" && batch.destinationFacilityCode) {
+        const inventories = getCachedList<ImmunizationInitialInventory>(INVENTORIES_CACHE_KEY);
+        const existingInv = inventories.find(inv => inv.ownerType === "IPRESS" && inv.facilityCode === batch.destinationFacilityCode);
+        if (!existingInv) {
+          const invId = makeLocalId("imm-inv-init-prov");
+          const initialInventory: ImmunizationInitialInventory = {
+            id: invId,
+            ownerType: "IPRESS",
+            ungetId: batch.ungetId,
+            facilityCode: batch.destinationFacilityCode,
+            period: batch.period,
+            status: "CLOSED",
+            sourceType: "INITIAL_PROVISION",
+            isInitialProvision: true,
+            createdBy: username || batch.createdBy,
+            closedBy: username,
+            closedAt: now,
+            createdAt: now,
+            updatedAt: now
+          };
+          setCachedList(INVENTORIES_CACHE_KEY, [initialInventory, ...inventories]);
+
+          const initialInventoryItems: ImmunizationInitialInventoryItem[] = completedReceptionItems
+            .filter(({ receivedQuantity }) => receivedQuantity > 0)
+            .map(({ item, receivedQuantity }) => ({
+              id: makeLocalId("imm-inv-item"),
+              inventoryId: invId,
+              productId: item.productId,
+              codigoSismedSnapshot: item.codigoSismedSnapshot,
+              lote: item.lote.trim(),
+              expirationDate: item.expirationDate,
+              quantity: receivedQuantity,
+              unitPrice: item.unitPrice,
+              fundingSource: item.fundingSource.trim(),
+              supplyType: item.supplyType.trim(),
+              createdAt: now,
+              updatedAt: now
+            }));
+          setCachedList(INVENTORY_ITEMS_CACHE_KEY, [...getCachedList<ImmunizationInitialInventoryItem>(INVENTORY_ITEMS_CACHE_KEY), ...initialInventoryItems]);
+        }
+      }
+
       setCachedList(STOCK_CACHE_KEY, layers);
       setCachedList(MOVEMENTS_CACHE_KEY, movements);
       setCachedList(DISTRIBUTION_ITEMS_CACHE_KEY, nextDistributionItems);
@@ -2819,6 +3222,9 @@ export const immunizationApi = {
     try {
       if (scope.level !== "IPRESS" || !scope.facilityCode) {
         return { success: false, message: "Solo una IPRESS puede registrar consumos." };
+      }
+      if (!await immunizationApi.isFacilityInitialized(scope)) {
+        return { success: false, message: "El establecimiento aún no cuenta con inventario inicial cerrado ni remesa inicial recibida. Complete su apertura para poder registrar consumos." };
       }
       const quantity = Number(input.consumptionQuantity);
       const dosesApplied = Number(input.dosesApplied);
@@ -3009,6 +3415,9 @@ export const immunizationApi = {
     try {
       if (scope.level !== "IPRESS" || !scope.facilityCode) {
         return { success: false, message: "Solo una IPRESS puede registrar consumos." };
+      }
+      if (!await immunizationApi.isFacilityInitialized(scope)) {
+        return { success: false, message: "El establecimiento aún no cuenta con inventario inicial cerrado ni remesa inicial recibida. Complete su apertura para poder registrar consumos." };
       }
       if (!input.period || !/^[0-9]{4}-[0-9]{2}$/.test(input.period)) {
         return { success: false, message: "Periodo inválido." };
@@ -3330,6 +3739,9 @@ export const immunizationApi = {
     try {
       if (scope.level !== "IPRESS" || !scope.facilityCode || !scope.ungetId) {
         return { success: false, message: "Solo una IPRESS vinculada a una UNGET puede registrar bajas o devoluciones." };
+      }
+      if (!await immunizationApi.isFacilityInitialized(scope)) {
+        return { success: false, message: "El establecimiento aún no cuenta con inventario inicial cerrado ni remesa inicial recibida. Complete su apertura para poder registrar bajas o devoluciones." };
       }
       if (!["DISPOSAL", "RETURN", "TRANSFER"].includes(batch.returnType)) {
         return { success: false, message: "Seleccione el tipo de operacion." };
@@ -3909,6 +4321,9 @@ export const immunizationApi = {
       const adjustmentScope: ImmunizationScope = adjustment.ownerType === "IPRESS"
         ? { level: "IPRESS", ownerType: "IPRESS", ungetId: adjustment.ungetId, facilityCode: adjustment.facilityCode }
         : { level: "UNGET", ownerType: "UNGET", ungetId: adjustment.ungetId };
+      if (!await immunizationApi.isFacilityInitialized(adjustmentScope)) {
+        return { success: false, message: "El establecimiento o almacén aún no cuenta con inventario inicial cerrado. Complete su apertura para poder registrar reajustes de stock." };
+      }
       if (await immunizationApi.isPeriodLocked(adjustmentScope, adjustment.period)) {
         return { success: false, message: "El periodo ya está cerrado para este ámbito. No se pueden registrar reajustes." };
       }

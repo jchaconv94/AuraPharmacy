@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
+import { CustomSelect } from "./ui/CustomSelect";
 import {
   getCurrentImmunizationPeriod,
   getImmunizationScope,
@@ -308,34 +309,27 @@ export const ImmunizationIncomesModule: React.FC = () => {
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700"><ArrowDownToLine className="h-6 w-6" /></div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-black text-slate-900">Ingresos Regionales</h2>
-                <span className="rounded-lg border border-teal-100 bg-teal-50 px-2 py-1 text-[10px] font-black uppercase text-teal-700">Periodo {currentPeriod}</span>
-              </div>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">
-                Registra ingresos nuevos al almacen regional de inmunizaciones de DIRESA.
-              </p>
-              {canOperate && <p className="mt-2 text-xs font-bold text-slate-600">Almacen operativo <span className="text-teal-700">Regional DIRESA</span></p>}
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={() => void loadIncomes()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Actualizar
-            </button>
-            {canOperate && (
-              <button type="button" onClick={() => void openForm()} disabled={loadingForm} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60">
-                {loadingForm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{loadingForm ? "Preparando..." : "Nuevo ingreso"}
-              </button>
-            )}
-          </div>
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-lg border border-teal-100 bg-teal-50 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-teal-700">Periodo {currentPeriod}</span>
+          {canOperate && (
+            <span className="text-xs font-bold text-slate-600">
+              Almacén: <span className="font-black text-teal-700">Regional DIRESA</span>
+            </span>
+          )}
         </div>
-      </section>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => void loadIncomes()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-2xs disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Actualizar
+          </button>
+          {canOperate && (
+            <button type="button" onClick={() => void openForm()} disabled={loadingForm} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60">
+              {loadingForm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{loadingForm ? "Preparando..." : "Nuevo ingreso"}
+            </button>
+          )}
+        </div>
+      </div>
 
       {!canOperate && (
         <section className={`flex items-start gap-3 rounded-2xl px-5 py-4 ${isSupervisorView ? "border border-blue-200 bg-blue-50 text-blue-950" : "border border-amber-200 bg-amber-50 text-amber-950"}`}>
@@ -366,30 +360,62 @@ export const ImmunizationIncomesModule: React.FC = () => {
           </div>
 
           {isSupervisorView && (
-            <select value={ungetFilter} onChange={event => setUngetFilter(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 xl:w-52" aria-label="Filtrar por UNGET">
-              <option value="">Todas las UNGET</option>
-              {availableFilterUngets.map(unget => <option key={unget.id} value={unget.id}>{unget.name}</option>)}
-            </select>
+            <div className="xl:w-52">
+              <CustomSelect
+                value={ungetFilter}
+                onChange={setUngetFilter}
+                options={[
+                  { value: "", label: "Todas las UNGET" },
+                  ...availableFilterUngets.map(unget => ({ value: unget.id, label: unget.name }))
+                ]}
+                ariaLabel="Filtrar por UNGET"
+                className="h-10"
+              />
+            </div>
           )}
 
-          <select value={periodFilter} onChange={event => setPeriodFilter(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 xl:w-36" aria-label="Filtrar por periodo">
-            <option value="ALL">Todos los meses</option>
-            {periodOptions.map(period => <option key={period} value={period}>{period}</option>)}
-          </select>
+          <div className="xl:w-36">
+            <CustomSelect
+              value={periodFilter}
+              onChange={setPeriodFilter}
+              options={[
+                { value: "ALL", label: "Todos los meses" },
+                ...periodOptions.map(period => ({ value: period, label: period }))
+              ]}
+              ariaLabel="Filtrar por periodo"
+              className="h-10"
+            />
+          </div>
 
-          <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as "ALL" | ImmunizationIncomeBatch["status"])} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 xl:w-44" aria-label="Filtrar por estado">
-            <option value="ALL">Todos los estados</option>
-            <option value="APPLIED">Aplicados</option>
-            <option value="DRAFT">Borradores</option>
-            <option value="VOIDED">Anulados</option>
-          </select>
+          <div className="xl:w-44">
+            <CustomSelect
+              value={statusFilter}
+              onChange={val => setStatusFilter(val as "ALL" | ImmunizationIncomeBatch["status"])}
+              options={[
+                { value: "ALL", label: "Todos los estados" },
+                { value: "APPLIED", label: "Aplicados" },
+                { value: "DRAFT", label: "Borradores" },
+                { value: "VOIDED", label: "Anulados" }
+              ]}
+              ariaLabel="Filtrar por estado"
+              className="h-10"
+            />
+          </div>
 
-          <select value={sourceFilter} onChange={event => setSourceFilter(event.target.value as "ALL" | ImmunizationIncomeSourceType)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 xl:w-48" aria-label="Filtrar por origen">
-            <option value="ALL">Todos los orígenes</option>
-            <option value="CENARES">CENARES</option>
-            <option value="OGESS">OGESS</option>
-            <option value="OTHER">Otro</option>
-          </select>
+          <div className="xl:w-48">
+            <CustomSelect
+              value={sourceFilter}
+              onChange={val => setSourceFilter(val as "ALL" | ImmunizationIncomeSourceType)}
+              options={[
+                { value: "ALL", label: "Todos los orígenes" },
+                { value: "CENARES", label: "CENARES" },
+                { value: "OGESS", label: "OGESS" },
+                { value: "OTHER", label: "Otro" }
+              ]}
+              ariaLabel="Filtrar por origen"
+              className="h-10"
+            />
+          </div>
 
           <button type="button" onClick={() => setShowAdvancedFilters(current => !current)} className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black transition-colors ${dateFrom || dateTo || showAdvancedFilters ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
             <CalendarDays className="h-4 w-4" /> Fechas

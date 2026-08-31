@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
+import { CustomSelect } from "./ui/CustomSelect";
 import {
   getCurrentImmunizationPeriod,
   getImmunizationScope,
@@ -430,34 +431,27 @@ export const ImmunizationDistributionsModule: React.FC = () => {
     : `UNGET ${selectedUnget?.name || "operativa"}`;
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-sky-50 p-3 text-sky-700"><ArrowRightLeft className="h-6 w-6" /></div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-black text-slate-900">{pageTitle}</h2>
-                <span className="rounded-lg border border-teal-100 bg-teal-50 px-2 py-1 text-[10px] font-black uppercase text-teal-700">Periodo {currentPeriod}</span>
-              </div>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">
-                {pageDescription}
-              </p>
-              {(canCreate || isIpressUser) && <p className="mt-2 text-xs font-bold text-slate-600">Operacion: <span className="text-teal-700">{operationLabel}</span></p>}
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={() => void loadDistributions()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Actualizar
-            </button>
-            {canCreate && (
-              <button type="button" onClick={() => void openForm()} disabled={loadingForm} className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-700 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-sky-800 disabled:opacity-60">
-                {loadingForm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{loadingForm ? "Preparando..." : operationFlow === "DIRESA_UNGET" ? "Nueva distribucion regional" : "Nueva distribucion"}
-              </button>
-            )}
-          </div>
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-lg border border-teal-100 bg-teal-50 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-teal-700">Periodo {currentPeriod}</span>
+          {(canCreate || isIpressUser) && (
+            <span className="text-xs font-bold text-slate-600">
+              Operación: <span className="font-black text-teal-700">{operationLabel}</span>
+            </span>
+          )}
         </div>
-      </section>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => void loadDistributions()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-2xs disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Actualizar
+          </button>
+          {canCreate && (
+            <button type="button" onClick={() => void openForm()} disabled={loadingForm} className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-700 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-sky-800 disabled:opacity-60">
+              {loadingForm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{loadingForm ? "Preparando..." : operationFlow === "DIRESA_UNGET" ? "Nueva distribución regional" : "Nueva distribución"}
+            </button>
+          )}
+        </div>
+      </div>
 
       {!canCreate && !isIpressUser && (
         <section className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-blue-950">
@@ -494,41 +488,81 @@ export const ImmunizationDistributionsModule: React.FC = () => {
           </div>
 
           {isSupervisorView && (
-            <select value={ungetFilter} onChange={event => setUngetFilter(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 xl:w-52" aria-label="Filtrar por UNGET">
-              <option value="">Todas las UNGET</option>
-              {availableFilterUngets.map(unget => <option key={unget.id} value={unget.id}>{unget.name}</option>)}
-            </select>
+            <div className="xl:w-52">
+              <CustomSelect
+                value={ungetFilter}
+                onChange={setUngetFilter}
+                options={[
+                  { value: "", label: "Todas las UNGET" },
+                  ...availableFilterUngets.map(unget => ({ value: unget.id, label: unget.name }))
+                ]}
+                ariaLabel="Filtrar por UNGET"
+                className="h-10"
+              />
+            </div>
           )}
 
           {isSupervisorView && (
-            <select value={facilityFilter} onChange={event => setFacilityFilter(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 xl:w-56" aria-label="Filtrar por IPRESS">
-              <option value="">Todas las IPRESS</option>
-              {availableFilterFacilities.map(facility => <option key={facility.code} value={facility.code}>{facility.name}</option>)}
-            </select>
+            <div className="xl:w-56">
+              <CustomSelect
+                value={facilityFilter}
+                onChange={setFacilityFilter}
+                options={[
+                  { value: "", label: "Todas las IPRESS" },
+                  ...availableFilterFacilities.map(facility => ({ value: facility.code, label: facility.name }))
+                ]}
+                ariaLabel="Filtrar por IPRESS"
+                className="h-10"
+              />
+            </div>
           )}
 
-          <select value={periodFilter} onChange={event => setPeriodFilter(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 xl:w-36" aria-label="Filtrar por periodo">
-            <option value="ALL">Todos los meses</option>
-            {periodOptions.map(period => <option key={period} value={period}>{period}</option>)}
-          </select>
+          <div className="xl:w-36">
+            <CustomSelect
+              value={periodFilter}
+              onChange={setPeriodFilter}
+              options={[
+                { value: "ALL", label: "Todos los meses" },
+                ...periodOptions.map(period => ({ value: period, label: period }))
+              ]}
+              ariaLabel="Filtrar por periodo"
+              className="h-10"
+            />
+          </div>
 
-          <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as "ALL" | ImmunizationDistributionStatus)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 xl:w-44" aria-label="Filtrar por estado">
-            <option value="ALL">Todos los estados</option>
-            <option value="SENT">Pendiente recepcion</option>
-            <option value="RECEIVED">Recibidas</option>
-            <option value="DRAFT">Borradores</option>
-            <option value="OBSERVED">Observadas</option>
-            <option value="VOIDED">Anuladas</option>
-          </select>
+          <div className="xl:w-44">
+            <CustomSelect
+              value={statusFilter}
+              onChange={val => setStatusFilter(val as "ALL" | ImmunizationDistributionStatus)}
+              options={[
+                { value: "ALL", label: "Todos los estados" },
+                { value: "SENT", label: "Pendiente recepción" },
+                { value: "RECEIVED", label: "Recibidas" },
+                { value: "DRAFT", label: "Borradores" },
+                { value: "OBSERVED", label: "Observadas" },
+                { value: "VOIDED", label: "Anuladas" }
+              ]}
+              ariaLabel="Filtrar por estado"
+              className="h-10"
+            />
+          </div>
 
-          <select value={criterionFilter} onChange={event => setCriterionFilter(event.target.value as "ALL" | ImmunizationDistributionCriterion)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 xl:w-44" aria-label="Filtrar por criterio">
-            <option value="ALL">Todos los criterios</option>
-            <option value="REGULAR">Regular</option>
-            <option value="CONSUMPTION">Consumo</option>
-            <option value="AVAILABILITY">Disponibilidad</option>
-            <option value="CAMPAIGN">Campaña</option>
-            <option value="OTHER">Otro</option>
-          </select>
+          <div className="xl:w-44">
+            <CustomSelect
+              value={criterionFilter}
+              onChange={val => setCriterionFilter(val as "ALL" | ImmunizationDistributionCriterion)}
+              options={[
+                { value: "ALL", label: "Todos los criterios" },
+                { value: "REGULAR", label: "Regular" },
+                { value: "CONSUMPTION", label: "Consumo" },
+                { value: "AVAILABILITY", label: "Disponibilidad" },
+                { value: "CAMPAIGN", label: "Campaña" },
+                { value: "OTHER", label: "Otro" }
+              ]}
+              ariaLabel="Filtrar por criterio"
+              className="h-10"
+            />
+          </div>
 
           <button type="button" onClick={() => setShowDateFilters(current => !current)} className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black transition-colors ${dateFrom || dateTo || showDateFilters ? "border-sky-200 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
             <CalendarDays className="h-4 w-4" /> Fechas
@@ -588,7 +622,14 @@ export const ImmunizationDistributionsModule: React.FC = () => {
                   <article key={distribution.id} className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-black text-slate-900">{destinationLabel}</p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="text-sm font-black text-slate-900">{destinationLabel}</p>
+                          {distribution.isInitialProvision && (
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-800">
+                              Remesa Inicial
+                            </span>
+                          )}
+                        </div>
                         <p className="mt-0.5 font-mono text-[10px] text-slate-400">{destinationMeta || "-"}</p>
                       </div>
                       <StatusBadge status={distribution.status} />
@@ -671,7 +712,17 @@ export const ImmunizationDistributionsModule: React.FC = () => {
                     <tr className="hover:bg-slate-50/70">
                       <td className="px-4 py-3"><p className="text-xs font-black text-slate-800">{formatDate(distribution.sentAt || distribution.createdAt)}</p><p className="mt-1 font-mono text-[10px] font-bold text-teal-700">{distribution.period}</p></td>
                       <td className="px-4 py-3"><p className="text-xs font-black text-slate-800">{originLabel}</p><p className="mt-1 text-[10px] font-black uppercase tracking-wide text-slate-400">{originMeta}</p></td>
-                      <td className="max-w-xs px-4 py-3"><p className="line-clamp-1 text-xs font-black text-slate-800">{destinationLabel}</p><p className="mt-1 font-mono text-[10px] text-slate-400">{destinationMeta || "-"}</p></td>
+                      <td className="max-w-xs px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="line-clamp-1 text-xs font-black text-slate-800">{destinationLabel}</p>
+                          {distribution.isInitialProvision && (
+                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-800">
+                              Remesa Inicial
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 font-mono text-[10px] text-slate-400">{destinationMeta || "-"}</p>
+                      </td>
                       <td className="px-4 py-3 text-xs font-bold text-slate-600">{criterionLabel(distribution.criterion)}</td>
                       <td className="max-w-xs px-4 py-3"><p className="line-clamp-1 text-xs font-bold text-slate-600">{distribution.referenceDocument || "-"}</p>{distribution.observation && <p className="mt-1 line-clamp-1 text-[10px] text-slate-500">{distribution.observation}</p>}</td>
                       <td className="px-4 py-3 text-xs text-slate-500">{distribution.receivedBy || distribution.sentBy || distribution.createdBy || "-"}</td>
@@ -773,6 +824,9 @@ function DistributionModal({
   const [facilityResultsOpen, setFacilityResultsOpen] = useState(false);
   const [activeFacilityIndex, setActiveFacilityIndex] = useState(0);
   const [criterion, setCriterion] = useState<ImmunizationDistributionCriterion>("REGULAR");
+  const [isInitialProvision, setIsInitialProvision] = useState(false);
+  const [destinationInitialized, setDestinationInitialized] = useState<boolean | null>(null);
+  const [checkingFacility, setCheckingFacility] = useState(false);
   const [referenceDocument, setReferenceDocument] = useState("");
   const [observation, setObservation] = useState("");
   const [items, setItems] = useState<DistributionItemDraft[]>([]);
@@ -793,6 +847,9 @@ function DistributionModal({
     setFacilityResultsOpen(false);
     setActiveFacilityIndex(0);
     setCriterion("REGULAR");
+    setIsInitialProvision(false);
+    setDestinationInitialized(null);
+    setCheckingFacility(false);
     setReferenceDocument("");
     setObservation("");
     setItems([]);
@@ -808,6 +865,31 @@ function DistributionModal({
     const timer = window.setTimeout(() => facilitySearchRef.current?.focus(), 80);
     return () => window.clearTimeout(timer);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!destinationFacilityCode || flow === "DIRESA_UNGET") {
+      setDestinationInitialized(null);
+      setCheckingFacility(false);
+      return;
+    }
+    let active = true;
+    setCheckingFacility(true);
+    immunizationApi.isFacilityInitialized({ ownerType: "IPRESS", facilityCode: destinationFacilityCode })
+      .then(isInit => {
+        if (!active) return;
+        setDestinationInitialized(isInit);
+        if (!isInit) {
+          setIsInitialProvision(true);
+        }
+      })
+      .catch(() => {
+        if (active) setDestinationInitialized(null);
+      })
+      .finally(() => {
+        if (active) setCheckingFacility(false);
+      });
+    return () => { active = false; };
+  }, [destinationFacilityCode, flow]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1049,6 +1131,7 @@ function DistributionModal({
       destinationFacilityCode: isRegionalFlow ? "" : destinationFacilityCode,
       period,
       criterion,
+      isInitialProvision: !isRegionalFlow ? isInitialProvision : false,
       status: "DRAFT",
       referenceDocument: referenceDocument.trim() || undefined,
       observation: observation.trim() || undefined,
@@ -1173,6 +1256,47 @@ function DistributionModal({
                   </select>
                 </Field>
               </div>
+
+              {!isRegionalFlow && selectedDestination && (
+                <div className={`mt-4 rounded-2xl border p-4 transition-colors ${isInitialProvision ? "border-amber-200 bg-amber-50/80" : "border-slate-200 bg-white"}`}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <label htmlFor="is-initial-provision" className="text-xs font-black uppercase tracking-wide text-slate-800 cursor-pointer">
+                          Entrega Especial / Remesa Inicial
+                        </label>
+                        {isInitialProvision && (
+                          <span className="rounded-md bg-amber-200/80 px-2 py-0.5 text-[10px] font-black uppercase text-amber-900">
+                            Habilitación de IPRESS
+                          </span>
+                        )}
+                        {checkingFacility && (
+                          <span className="flex items-center gap-1 text-[11px] font-bold text-slate-400">
+                            <Loader2 className="h-3 w-3 animate-spin" /> Verificando apertura...
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600">
+                        {destinationInitialized === false
+                          ? "⚠️ Esta IPRESS aún no tiene inventario inicial cerrado. Marcar como Remesa Inicial le permitirá recepcionar los biológicos y cerrará automáticamente su apertura de inventario."
+                          : "Marque esta opción únicamente si se trata de una entrega de apertura para una IPRESS nueva que aún no realizó su inventario inicial."}
+                      </p>
+                    </div>
+                    <label className="relative inline-flex cursor-pointer items-center shrink-0">
+                      <input
+                        id="is-initial-provision"
+                        type="checkbox"
+                        checked={isInitialProvision}
+                        onChange={e => setIsInitialProvision(e.target.checked)}
+                        disabled={isSaving}
+                        className="peer sr-only"
+                      />
+                      <div className="peer h-6 w-11 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-amber-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-300" />
+                    </label>
+                  </div>
+                </div>
+              )}
+
               <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <Field label="Referencia interna">
                   <input value={referenceDocument} onChange={event => setReferenceDocument(event.target.value)} disabled={isSaving} className={inputClassName} placeholder="Opcional" />
@@ -1443,6 +1567,22 @@ function ReceptionModal({
 
         <form onSubmit={submit}>
           <div className="max-h-[72vh] space-y-4 overflow-y-auto overflow-x-hidden p-5 sm:p-7">
+            {distribution.isInitialProvision && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">🌟</span>
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wide text-amber-900">
+                      Remesa Inicial para Apertura de IPRESS
+                    </h3>
+                    <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+                      Esta entrega especial corresponde a la remesa inicial de biológicos. Al confirmar esta recepción, el sistema creará y cerrará automáticamente el <strong>Inventario Inicial</strong> de su establecimiento con las cantidades recibidas, habilitando a su IPRESS para todas sus operaciones regulares (consumos, devoluciones, reajustes y cierre mensual).
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <section className="grid gap-3 md:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Periodo</p>

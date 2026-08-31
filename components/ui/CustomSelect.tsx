@@ -16,16 +16,26 @@ interface CustomSelectProps {
     disabled?: boolean;
     className?: string; // Optional class for the trigger button
     loading?: boolean;  // Display a loading spinner
+    searchable?: boolean; // Force show/hide search input. If undefined, shows if options.length > 5
+    ariaLabel?: string;
 }
 
 export const CustomSelect: React.FC<CustomSelectProps> = ({
-    value, onChange, options, placeholder = "Seleccionar...", disabled = false, className = "", loading = false
+    value,
+    onChange,
+    options,
+    placeholder = "Seleccionar...",
+    disabled = false,
+    className = "",
+    loading = false,
+    searchable,
+    ariaLabel
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const { triggerRef, menuStyles } = useDropdownPosition(isOpen, { align: 'left' });
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // Ajustes dinamicos para que el menú tenga el mismo ancho que el trigger
+    // Dynamic width alignment with trigger
     const [dynamicStyles, setDynamicStyles] = useState<React.CSSProperties>({});
 
     useEffect(() => {
@@ -33,7 +43,8 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             const rect = triggerRef.current.getBoundingClientRect();
             setDynamicStyles({
                 ...menuStyles,
-                width: rect.width // Igualar el ancho del select
+                minWidth: Math.max(rect.width, 160),
+                width: rect.width
             });
         }
     }, [menuStyles, isOpen]);
@@ -84,7 +95,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         return '';
     };
 
+    const isSearchable = searchable !== undefined ? searchable : options.length > 5;
+
     const filteredOptions = options.filter(option => {
+        if (!isSearchable || !searchQuery.trim()) return true;
         const text = getOptionText(option.label).toLowerCase();
         return text.includes(searchQuery.toLowerCase());
     });
@@ -92,17 +106,17 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     const dropdownContent = isOpen && !disabled && (
         <div 
             ref={menuRef}
-            className="bg-white border border-gray-200 rounded-xl shadow-xl z-[200000] py-1 flex flex-col fixed overflow-hidden"
+            className="bg-white border border-slate-200 rounded-2xl shadow-xl z-[200000] py-1 flex flex-col fixed overflow-hidden animate-in fade-in-50 zoom-in-95 duration-100"
             style={dynamicStyles}
         >
-            {options.length > 1 && (
-                <div className="px-3 py-2 border-b border-gray-100 shrink-0">
+            {isSearchable && (
+                <div className="px-2.5 py-1.5 border-b border-slate-100 shrink-0">
                     <div className="relative flex items-center">
-                        <Search className="w-3.5 h-3.5 absolute left-2.5 text-gray-400" />
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 text-slate-400" />
                         <input
                             type="text"
                             placeholder="Buscar..."
-                            className="w-full pl-8 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 focus:outline-none bg-gray-50 text-gray-900"
+                            className="w-full pl-8 pr-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-100 focus:outline-none bg-slate-50 text-slate-800 font-semibold"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
@@ -111,25 +125,28 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                     </div>
                 </div>
             )}
-            <div className="max-h-60 overflow-y-auto custom-scrollbar">
+            <div className="max-h-56 overflow-y-auto p-1 space-y-0.5 custom-scrollbar">
                 {filteredOptions.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-gray-500 italic text-center">Sin resultados</div>
+                    <div className="px-4 py-3 text-xs text-slate-400 italic text-center">Sin resultados</div>
                 ) : (
                     filteredOptions.map(option => {
                         const isSelected = String(option.value) === String(value);
                         return (
                             <button
-                                key={option.value}
+                                key={String(option.value)}
+                                type="button"
                                 onClick={() => {
                                     onChange(option.value);
                                     setIsOpen(false);
                                 }}
-                                className={`flex items-center justify-between w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                                    isSelected ? 'bg-teal-50 text-teal-700 font-bold' : 'text-gray-700 hover:bg-gray-50 hover:text-teal-600 font-medium'
+                                className={`flex items-center justify-between w-full text-left px-3 py-2 text-xs rounded-xl transition-all ${
+                                    isSelected 
+                                        ? 'bg-teal-50 text-teal-800 font-bold border border-teal-100/60' 
+                                        : 'text-slate-700 hover:bg-slate-50 hover:text-teal-700 font-medium'
                                 }`}
                             >
                                 <span className="truncate">{option.label}</span>
-                                {isSelected && <Check className="h-4 w-4 shrink-0 text-teal-600" />}
+                                {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-teal-600 ml-1.5" />}
                             </button>
                         );
                     })
@@ -139,26 +156,27 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     );
 
     return (
-        <div className="relative" ref={triggerRef}>
+        <div className="relative w-full" ref={triggerRef}>
             <button
                 type="button"
                 disabled={disabled}
+                aria-label={ariaLabel}
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full flex items-center justify-between border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 outline-none transition-all shadow-sm ${
+                className={`w-full flex items-center justify-between border rounded-xl px-3 py-2 text-xs font-bold outline-none transition-all shadow-2xs ${
                     disabled 
-                        ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed' 
+                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' 
                         : isOpen 
-                            ? 'bg-white border-teal-500 ring-2 ring-teal-500/20 text-gray-900' 
-                            : 'bg-white border-gray-300 text-gray-900 hover:bg-gray-50'
+                            ? 'bg-white border-teal-500 ring-4 ring-teal-100 text-slate-900' 
+                            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50/50'
                 } ${className}`}
             >
-                <span className="truncate mr-2 font-medium">
-                    {selectedOption ? selectedOption.label : <span className="text-gray-400 font-normal">{placeholder}</span>}
+                <span className="truncate mr-2 font-bold text-left">
+                    {selectedOption ? selectedOption.label : <span className="text-slate-400 font-normal">{placeholder}</span>}
                 </span>
                 {loading ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-teal-600" />
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-teal-600" />
                 ) : (
-                    <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-teal-600' : 'text-gray-400'}`} />
+                    <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-teal-600' : 'text-slate-400'}`} />
                 )}
             </button>
             {createPortal(dropdownContent, document.body)}

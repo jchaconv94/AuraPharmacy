@@ -157,7 +157,7 @@ export const ImmunizationIncomeOriginsModule: React.FC<ImmunizationIncomeOrigins
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
       {onBack && (
         <button
           type="button"
@@ -168,34 +168,21 @@ export const ImmunizationIncomeOriginsModule: React.FC<ImmunizationIncomeOrigins
           Volver a Configuraciones
         </button>
       )}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-teal-50 p-3 text-teal-700">
-              <ShieldCheck className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-black text-slate-900">Orígenes de Ingreso</h2>
-                <span className="rounded-lg border border-teal-100 bg-teal-50 px-2 py-1 text-[10px] font-black uppercase text-teal-700">Catálogo DIRESA</span>
-              </div>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">
-                Administra la lista que se usa al registrar ingresos regionales de biológicos.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={() => void loadOrigins()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Actualizar
-            </button>
-            {canManage && (
-              <button type="button" onClick={openCreate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-teal-700">
-                <Plus className="h-4 w-4" />Nuevo origen
-              </button>
-            )}
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-lg border border-teal-100 bg-teal-50 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-teal-700">Catálogo DIRESA</span>
         </div>
-      </section>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => void loadOrigins()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-2xs disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Actualizar
+          </button>
+          {canManage && (
+            <button type="button" onClick={openCreate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-teal-700">
+              <Plus className="h-4 w-4" />Nuevo origen
+            </button>
+          )}
+        </div>
+      </div>
 
       {!canManage && (
         <section className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950">

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { CustomSelect } from './ui/CustomSelect';
 import { api } from '../services/api';
 
 export const UserProfile: React.FC = () => {
@@ -694,29 +695,29 @@ export const UserProfile: React.FC = () => {
                                         <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-gray-150 pt-4 mt-2">
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-700 mb-1">Régimen Laboral</label>
-                                                <select 
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
+                                                <CustomSelect 
                                                     value={formData.laborRegimeId}
-                                                    onChange={(e) => setFormData({...formData, laborRegimeId: e.target.value})}
-                                                >
-                                                    <option value="">Seleccione Régimen...</option>
-                                                    {laborRegimes.map(r => (
-                                                        <option key={r.id} value={r.id}>{r.name}</option>
-                                                    ))}
-                                                </select>
+                                                    onChange={(val) => setFormData({...formData, laborRegimeId: val})}
+                                                    options={[
+                                                        { value: "", label: "Seleccione Régimen..." },
+                                                        ...laborRegimes.map(r => ({ value: r.id, label: r.name }))
+                                                    ]}
+                                                    ariaLabel="Régimen Laboral"
+                                                    className="h-10 border-gray-300"
+                                                />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-700 mb-1">Profesión</label>
-                                                <select 
-                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none bg-white text-gray-900 transition-shadow"
+                                                <CustomSelect 
                                                     value={formData.professionId}
-                                                    onChange={(e) => setFormData({...formData, professionId: e.target.value})}
-                                                >
-                                                    <option value="">Seleccione Profesión...</option>
-                                                    {professions.map(p => (
-                                                        <option key={p.id} value={p.id}>{p.name}</option>
-                                                    ))}
-                                                </select>
+                                                    onChange={(val) => setFormData({...formData, professionId: val})}
+                                                    options={[
+                                                        { value: "", label: "Seleccione Profesión..." },
+                                                        ...professions.map(p => ({ value: p.id, label: p.name }))
+                                                    ]}
+                                                    ariaLabel="Profesión"
+                                                    className="h-10 border-gray-300"
+                                                />
                                             </div>
                                         </div>
                                     </div>

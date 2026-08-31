@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
+import { CustomSelect } from "./ui/CustomSelect";
 import {
   getCurrentImmunizationPeriod,
   getImmunizationScope,
@@ -63,7 +64,7 @@ import {
   Unget
 } from "../types";
 import { distributionFlow } from "../services/immunizationDomain";
-import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, formatImmunizationDateTime as formatDateTime } from "./ui/immunization";
+import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, formatImmunizationDateTime as formatDateTime, ImmunizationUninitializedFacilityBanner } from "./ui/immunization";
 
 type DialogMode = "IPRESS_PRE_CLOSE" | "UNGET_FINAL_CLOSE" | "IPRESS_REOPEN" | null;
 type ClosureStatusFilter = ImmunizationClosureStatusFilter;
@@ -130,6 +131,7 @@ export const ImmunizationClosuresModule: React.FC = () => {
   const [returns, setReturns] = useState<ImmunizationReturnBatch[]>([]);
   const [stockLayers, setStockLayers] = useState<ImmunizationStockLayer[]>([]);
   const [stockMovements, setStockMovements] = useState<ImmunizationStockMovement[]>([]);
+  const [isInitialized, setIsInitialized] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -168,7 +170,7 @@ export const ImmunizationClosuresModule: React.FC = () => {
           : isSupervisor
             ? immunizationApi.getStockLayers({ level: "GLOBAL" })
             : immunizationApi.getStockLayers(scope);
-      const [closureRows, distributionRows, returnRows, stockRows, movementRows] = await Promise.all([
+      const [closureRows, distributionRows, returnRows, stockRows, movementRows, initialized] = await Promise.all([
         // Sin filtro de periodo: se necesita el historial completo. Cada consumidor de
         // `closures` filtra por el periodo seleccionado donde corresponde.
         immunizationApi.listMonthlyClosures(listScope),
@@ -185,7 +187,10 @@ export const ImmunizationClosuresModule: React.FC = () => {
                 : scope,
             period
           )
-          : Promise.resolve([])
+          : Promise.resolve([]),
+        isIpress
+          ? immunizationApi.isFacilityInitialized(scope)
+          : Promise.resolve(true)
       ]);
       setUngets([...ungetRows].sort((a, b) => a.name.localeCompare(b.name)));
       setFacilities([...facilityRows].sort((a, b) => a.name.localeCompare(b.name)));
@@ -194,6 +199,7 @@ export const ImmunizationClosuresModule: React.FC = () => {
       setReturns(returnRows);
       setStockLayers(stockRows);
       setStockMovements(movementRows);
+      setIsInitialized(initialized);
     } catch {
       toast.error("No se pudo cargar el cierre mensual.");
     } finally {
@@ -434,6 +440,10 @@ export const ImmunizationClosuresModule: React.FC = () => {
       toast.error("No se puede cerrar o precerrar un periodo futuro.");
       return;
     }
+    if (dialogMode === "IPRESS_PRE_CLOSE" && isInitialized === false) {
+      toast.error("El establecimiento aún no cuenta con inventario inicial cerrado ni remesa inicial recibida.");
+      return;
+    }
     if (dialogMode === "IPRESS_PRE_CLOSE" && periodConsumptionMovements.length === 0) {
       toast.error("No se puede precerrar: el periodo no tiene consumos IPRESS registrados.");
       return;
@@ -471,7 +481,7 @@ export const ImmunizationClosuresModule: React.FC = () => {
     }
   };
 
-  const canPrecloseIpress = isIpress && !isFuturePeriod && periodConsumptionMovements.length > 0 && !closureIsIpressReady(validOwnIpressClosure) && pendingIpressDistributions.length === 0 && periodReturns.length === 0;
+  const canPrecloseIpress = isIpress && !isFuturePeriod && isInitialized !== false && periodConsumptionMovements.length > 0 && !closureIsIpressReady(validOwnIpressClosure) && pendingIpressDistributions.length === 0 && periodReturns.length === 0;
   const canCloseUnget = isUnget && !isFuturePeriod && !closureIsUngetClosed(validOwnUngetClosure) && ungetFacilities.length > 0 && pendingIpressCount === 0 && pendingUngetDistributions.length === 0 && pendingUngetReturns.length === 0;
 
   const downloadMonthlyReport = async (format: "PDF" | "EXCEL") => {
@@ -586,28 +596,11 @@ export const ImmunizationClosuresModule: React.FC = () => {
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-teal-50 p-3 text-teal-700">
-              <CalendarCheck className="h-7 w-7" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-2xl font-black text-slate-900">Cierre Mensual</h2>
-                <span className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-black text-teal-700">
-                  PERIODO {period}
-                </span>
-              </div>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-600">
-                Controla el precierre IPRESS y el cierre definitivo UNGET. Un periodo precerrado o cerrado bloquea nuevos movimientos operativos.
-              </p>
-              <p className="mt-2 text-xs font-black text-teal-700">Ámbito operativo: {ownerLabel(scope, ungets, facilities)}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black uppercase text-slate-500">Periodo a consultar/cerrar:</span>
             <input
               type="month"
               value={period}
@@ -621,19 +614,23 @@ export const ImmunizationClosuresModule: React.FC = () => {
                 }
                 setPeriod(nextPeriod);
               }}
-              className={`${inputClassName} sm:w-44`}
+              className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 shadow-2xs focus:border-teal-500 focus:outline-hidden"
             />
-            <button
-              type="button"
-              onClick={() => void loadData()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              Actualizar
-            </button>
           </div>
+          <span className="text-xs font-bold text-slate-600">
+            Ámbito: <span className="font-black text-teal-700">{ownerLabel(scope, ungets, facilities)}</span>
+          </span>
         </div>
-      </section>
+
+        <button
+          type="button"
+          onClick={() => void loadData()}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-2xs transition hover:bg-slate-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          Actualizar
+        </button>
+      </div>
 
       {isFuturePeriod && (
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800 shadow-sm">
@@ -663,6 +660,15 @@ export const ImmunizationClosuresModule: React.FC = () => {
         </div>
       ) : (
         <div className={loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}>
+          {isIpress && isInitialized === false && (
+            <div className="mb-4">
+              <ImmunizationUninitializedFacilityBanner
+                ownerType="IPRESS"
+                facilityName={scope.facilityCode}
+              />
+            </div>
+          )}
+
           {isIpress && (
             <IpressClosurePanel
               closure={validOwnIpressClosure}
@@ -1112,9 +1118,12 @@ const UngetClosurePanel: React.FC<{
                 className={`${inputClassName} pl-11`}
               />
             </label>
-            <select value={statusFilter} onChange={event => onStatusFilter(event.target.value as ClosureStatusFilter)} className={inputClassName}>
-              {closureStatusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            <CustomSelect
+              value={statusFilter}
+              onChange={val => onStatusFilter(val as ClosureStatusFilter)}
+              options={closureStatusOptions}
+              className="h-11 border-slate-200"
+            />
             <button
               type="button"
               onClick={() => {
@@ -1320,13 +1329,21 @@ const SupervisorPanel: React.FC<{
             className={`${inputClassName} pl-11`}
           />
         </label>
-        <select value={ungetFilter} onChange={event => onUngetFilter(event.target.value)} className={inputClassName}>
-          <option value="">Todas las UNGET</option>
-          {ungets.map(unget => <option key={unget.id} value={unget.id}>{unget.name}</option>)}
-        </select>
-        <select value={statusFilter} onChange={event => onStatusFilter(event.target.value as ClosureStatusFilter)} className={inputClassName}>
-          {closureStatusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
+        <CustomSelect
+          value={ungetFilter}
+          onChange={onUngetFilter}
+          options={[
+            { value: "", label: "Todas las UNGET" },
+            ...ungets.map(unget => ({ value: unget.id, label: unget.name }))
+          ]}
+          className="h-11 border-slate-200"
+        />
+        <CustomSelect
+          value={statusFilter}
+          onChange={val => onStatusFilter(val as ClosureStatusFilter)}
+          options={closureStatusOptions}
+          className="h-11 border-slate-200"
+        />
         <button
           type="button"
           onClick={() => {

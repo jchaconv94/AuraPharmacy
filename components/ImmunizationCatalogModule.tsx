@@ -1,9 +1,17 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Boxes, CheckCircle2, Edit, Eye, Package, Plus, Search, Save, ShieldCheck, Syringe, ToggleLeft, ToggleRight, X } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Boxes, CheckCircle2, ChevronDown, Download, Edit, Eye, FileSpreadsheet, Package, Plus, Search, Save, ShieldCheck, Syringe, ToggleLeft, ToggleRight, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { immunizationApi } from "../services/immunizationApi";
+import {
+  downloadImmunizationCatalogTemplate,
+  ImmunizationProductImportPreview,
+  ImmunizationProductImportRow,
+  parseImmunizationCatalogExcel
+} from "../services/immunizationExcelService";
 import { ImmunizationProduct, ImmunizationProductType, ImmunizationProductTypeItem } from "../types";
+import { ImmunizationCatalogImportModal } from "./ImmunizationCatalogImportModal";
+import { CustomSelect } from "./ui/CustomSelect";
 import {
   ImmunizationEmptyState,
   ImmunizationField,
@@ -29,6 +37,7 @@ const emptyForm: ImmunizationProduct = {
 
 export const ImmunizationCatalogModule: React.FC = () => {
   const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [products, setProducts] = useState<ImmunizationProduct[]>([]);
   const [productTypes, setProductTypes] = useState<ImmunizationProductTypeItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -37,8 +46,23 @@ export const ImmunizationCatalogModule: React.FC = () => {
   const [form, setForm] = useState<ImmunizationProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [importingPreview, setImportingPreview] = useState<ImmunizationProductImportPreview | null>(null);
+  const [isProcessingImport, setIsProcessingImport] = useState(false);
+  const [isParsingExcel, setIsParsingExcel] = useState(false);
+  const [showExcelMenu, setShowExcelMenu] = useState(false);
+  const excelMenuRef = useRef<HTMLDivElement>(null);
 
   const canEdit = user?.role === "ADMIN" || (user?.role || "").toUpperCase().includes("DIRESA");
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (excelMenuRef.current && !excelMenuRef.current.contains(event.target as Node)) {
+        setShowExcelMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const loadData = async (showFullLoading = false) => {
     if (showFullLoading) setLoading(true);
@@ -60,6 +84,62 @@ export const ImmunizationCatalogModule: React.FC = () => {
     void loadData(true);
   }, []);
 
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsParsingExcel(true);
+    const tid = toast.loading(`Analizando "${file.name}"...`);
+    try {
+      const parsedPreview = await parseImmunizationCatalogExcel(file, products, productTypes);
+      setImportingPreview(parsedPreview);
+      if (parsedPreview.isInvalidFile) {
+        toast.error("El archivo no tiene el formato requerido", { id: tid });
+      } else {
+        toast.success(
+          `Archivo analizado: ${parsedPreview.newCount} nuevos, ${parsedPreview.duplicateCodeCount + parsedPreview.duplicateDescCount} duplicados.`,
+          { id: tid }
+        );
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Error al procesar archivo Excel", { id: tid });
+    } finally {
+      setIsParsingExcel(false);
+      if (event.target) event.target.value = "";
+    }
+  };
+
+  const handleConfirmImport = async (
+    selectedRows: ImmunizationProductImportRow[],
+    mode: "SKIP_EXISTING" | "UPDATE_EXISTING"
+  ) => {
+    setIsProcessingImport(true);
+    const tid = toast.loading(`Importando ${selectedRows.length} productos...`);
+    try {
+      const productsToSave = selectedRows.map(r => ({
+        codigoSismed: r.codigoSismed,
+        descripcion: r.descripcion,
+        tipoProducto: r.tipoProducto,
+        dosisUnidad: r.dosisUnidad,
+        isActive: r.isActive,
+        observacion: r.observacion
+      }));
+
+      const res = await immunizationApi.importProductsBatch(productsToSave, mode, user?.username);
+      if (res.success) {
+        toast.success(res.message || "Importación realizada exitosamente", { id: tid, duration: 4000 });
+        setImportingPreview(null);
+        await loadData(false);
+      } else {
+        toast.error(res.message || "Error en la importación por lote", { id: tid });
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Error inesperado al importar productos", { id: tid });
+    } finally {
+      setIsProcessingImport(false);
+    }
+  };
+
   const getTypeLabel = (typeVal: string) => {
     if (!typeVal) return "";
     const matched = productTypes.find(
@@ -80,6 +160,11 @@ export const ImmunizationCatalogModule: React.FC = () => {
     }
     return activeTypes.map(t => ({ value: t.code, label: t.name }));
   }, [productTypes]);
+
+  const selectTypeOptions = useMemo(() => [
+    { value: "ALL", label: "Todos los tipos" },
+    ...typeOptions
+  ], [typeOptions]);
 
   const filteredProducts = useMemo(() => {
     const query = normalizeImmunizationText(searchTerm);
@@ -194,23 +279,13 @@ export const ImmunizationCatalogModule: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 pb-16 animate-in fade-in duration-300">
-      <ImmunizationPageHeader
-        icon={<Syringe className="h-6 w-6" />}
-        title="Catálogo Biológico"
-        description="Catálogo maestro de productos biológicos."
-        actions={
-          canEdit ? (
-            <button
-              type="button"
-              onClick={() => setForm(emptyForm)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-700 shadow-sm transition-colors shrink-0"
-            >
-              <Plus className="h-4 w-4" />
-              Nuevo producto
-            </button>
-          ) : undefined
-        }
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".xlsx, .xls, .csv"
+        className="hidden"
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -268,15 +343,12 @@ export const ImmunizationCatalogModule: React.FC = () => {
               </div>
               <div className="md:col-span-2">
                 <ImmunizationField label="Tipo">
-                  <select
+                  <CustomSelect
                     value={form.tipoProducto}
-                    onChange={e => setForm({ ...form, tipoProducto: e.target.value as ImmunizationProductType })}
-                    className={immunizationSelectClass}
-                  >
-                    {typeOptions.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                    onChange={val => setForm({ ...form, tipoProducto: val as ImmunizationProductType })}
+                    options={typeOptions}
+                    className="w-full !h-11 !rounded-xl text-sm font-medium border-slate-300"
+                  />
                 </ImmunizationField>
               </div>
               <div className="md:col-span-2">
@@ -337,30 +409,32 @@ export const ImmunizationCatalogModule: React.FC = () => {
       )}
 
       <div className={`bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-6 ${loading ? "opacity-60 pointer-events-none transition-opacity duration-200" : "transition-opacity duration-200"}`}>
-        <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
-          <div className="relative flex-1 max-w-2xl">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar por código, descripción o tipo..."
-              className={`${immunizationFilterInputClass} pl-9`}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={typeFilter}
-              onChange={e => setTypeFilter(e.target.value as "ALL" | ImmunizationProductType)}
-              className="h-10 rounded-xl border border-slate-200 px-3 text-xs font-bold bg-white text-slate-700 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-            >
-              <option value="ALL">Todos los tipos</option>
-              {typeOptions.map(option => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+        <div className="p-4 border-b border-slate-100 flex flex-col xl:flex-row gap-3 xl:items-center justify-between">
+          {/* Grupo de Filtros */}
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 flex-1 min-w-0">
+            {/* Buscador */}
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <input
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Buscar por código, descripción o tipo..."
+                className={`${immunizationFilterInputClass} pl-9 w-full`}
+              />
+            </div>
+
+            {/* Filtro por Tipo */}
+            <div className="w-full sm:w-44 shrink-0">
+              <CustomSelect
+                value={typeFilter}
+                onChange={val => setTypeFilter(val as "ALL" | ImmunizationProductType)}
+                options={selectTypeOptions}
+                className="w-full !h-10 !rounded-xl text-xs font-bold border-slate-200"
+              />
+            </div>
 
             {/* Selector Segmentado de Estado */}
-            <div className="inline-flex items-center rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold shrink-0">
+            <div className="inline-flex items-center rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold shrink-0 self-start sm:self-auto">
               <button
                 type="button"
                 onClick={() => setStatusFilter("ACTIVE")}
@@ -399,18 +473,82 @@ export const ImmunizationCatalogModule: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Grupo de Acciones */}
+          <div className="flex items-center gap-2 shrink-0 self-end xl:self-auto pt-2 xl:pt-0 border-t border-slate-100 xl:border-t-0 w-full xl:w-auto justify-end">
+            <div className="relative" ref={excelMenuRef}>
+              <button
+                type="button"
+                onClick={() => setShowExcelMenu((prev) => !prev)}
+                className="inline-flex h-10 items-center justify-center gap-2 px-3.5 rounded-xl border border-teal-300 bg-teal-50/70 text-teal-900 text-xs font-bold hover:bg-teal-100/80 hover:border-teal-400 shadow-2xs transition-colors shrink-0"
+                title="Opciones Excel (Descargar plantilla e importar)"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-teal-700" />
+                <span>Opciones Excel</span>
+                <ChevronDown className={`h-3.5 w-3.5 text-teal-700 transition-transform ${showExcelMenu ? "rotate-180" : ""}`} />
+              </button>
+
+              {showExcelMenu && (
+                <div className="absolute right-0 mt-1.5 w-56 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl z-30 animate-in fade-in zoom-in-95 duration-150">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowExcelMenu(false);
+                      downloadImmunizationCatalogTemplate();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors"
+                  >
+                    <Download className="h-4 w-4 text-teal-600 shrink-0" />
+                    <div>
+                      <div>Descargar Plantilla</div>
+                      <div className="text-[10px] font-normal text-slate-500">Formato modelo en Excel</div>
+                    </div>
+                  </button>
+
+                  {canEdit && (
+                    <button
+                      type="button"
+                      disabled={isParsingExcel}
+                      onClick={() => {
+                        setShowExcelMenu(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-bold text-teal-900 hover:bg-teal-50 transition-colors disabled:opacity-50"
+                    >
+                      <Upload className="h-4 w-4 text-teal-700 shrink-0" />
+                      <div>
+                        <div>Importar Excel</div>
+                        <div className="text-[10px] font-normal text-slate-500">Cargar catálogo desde archivo</div>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setForm(emptyForm)}
+                className="inline-flex h-10 items-center justify-center gap-2 px-4 rounded-xl bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 shadow-xs transition-colors shrink-0"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Nuevo producto</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50">
               <tr>
-                <ImmunizationTableHeader>Código</ImmunizationTableHeader>
-                <ImmunizationTableHeader>Producto</ImmunizationTableHeader>
-                <ImmunizationTableHeader>Tipo</ImmunizationTableHeader>
-                <ImmunizationTableHeader align="right">Dosis/Unidad</ImmunizationTableHeader>
-                <ImmunizationTableHeader>Estado</ImmunizationTableHeader>
-                <ImmunizationTableHeader align="right">Acciones</ImmunizationTableHeader>
+                <ImmunizationTableHeader>CÓDIGO</ImmunizationTableHeader>
+                <ImmunizationTableHeader>PRODUCTO</ImmunizationTableHeader>
+                <ImmunizationTableHeader>TIPO</ImmunizationTableHeader>
+                <ImmunizationTableHeader align="right">DOSIS/UNIDAD</ImmunizationTableHeader>
+                <ImmunizationTableHeader>ESTADO</ImmunizationTableHeader>
+                <ImmunizationTableHeader align="right">ACCIONES</ImmunizationTableHeader>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
@@ -486,6 +624,16 @@ export const ImmunizationCatalogModule: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {importingPreview && (
+        <ImmunizationCatalogImportModal
+          preview={importingPreview}
+          productTypes={productTypes}
+          isSubmitting={isProcessingImport}
+          onClose={() => setImportingPreview(null)}
+          onConfirmImport={handleConfirmImport}
+        />
+      )}
     </div>
   );
 };

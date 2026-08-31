@@ -18,6 +18,7 @@ import {
 import { ImmunizationAdjustmentItem, ImmunizationProduct, ImmunizationStockLayer } from "../types";
 import { immunizationInputClass as inputClassName, ImmunizationField as Field, normalizeImmunizationText as normalizeSearchText } from "./ui/immunization";
 import { ConfirmationDialog } from "./ui/ConfirmationDialog";
+import { CustomSelect } from "./ui/CustomSelect";
 
 interface ImmunizationAdjustmentModalProps {
   isOpen: boolean;
@@ -505,7 +506,17 @@ export function ImmunizationAdjustmentModal({
               </section>
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <Field label="Motivo del reajuste" required><select value={reason} onChange={event => { setReason(event.target.value); clearError(); }} className={inputClassName}><option value="">Seleccione un motivo...</option>{adjustmentReasons.map(option => <option key={option} value={option}>{option}</option>)}</select></Field>
+                <Field label="Motivo del reajuste" required>
+                  <CustomSelect
+                    value={reason}
+                    onChange={val => { setReason(val); clearError(); }}
+                    options={[
+                      { value: "", label: "Seleccione un motivo..." },
+                      ...adjustmentReasons.map(option => ({ value: option, label: option }))
+                    ]}
+                    className="h-11 border-slate-200"
+                  />
+                </Field>
                 <div className="lg:col-span-2"><Field label="Observación / sustento" required><textarea value={observation} onChange={event => { setObservation(event.target.value); clearError(); }} rows={3} className={`${inputClassName} min-h-24 resize-y py-3`} placeholder="Describe el conteo físico, documento o circunstancia que sustenta el cambio..." /></Field></div>
               </div>
               {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div>}

@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
+import { CustomSelect } from "./ui/CustomSelect";
 import { downloadImmunizationAdjustmentPdf } from "../services/immunizationAdjustmentPdfService";
 import {
   getCurrentImmunizationPeriod,
@@ -32,7 +33,7 @@ import {
   ImmunizationStockLayer,
   Unget
 } from "../types";
-import { ImmunizationTableHeader as HeaderCell, formatImmunizationDate as formatDate, ImmunizationKpiCard, immunizationSelectClass as selectClassName } from "./ui/immunization";
+import { ImmunizationTableHeader as HeaderCell, formatImmunizationDate as formatDate, ImmunizationKpiCard, immunizationSelectClass as selectClassName, ImmunizationUninitializedFacilityBanner } from "./ui/immunization";
 import { ImmunizationAdjustmentModal } from "./ImmunizationAdjustmentModal";
 
 export function ImmunizationAdjustmentsModule() {
@@ -48,6 +49,7 @@ export function ImmunizationAdjustmentsModule() {
   const [detailByAdjustment, setDetailByAdjustment] = useState<Record<string, ImmunizationAdjustmentItem[]>>({});
   const [expandedId, setExpandedId] = useState("");
   const [loadingDetailId, setLoadingDetailId] = useState("");
+  const [isInitialized, setIsInitialized] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingForm, setLoadingForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -119,17 +121,28 @@ export function ImmunizationAdjustmentsModule() {
   const loadAdjustments = useCallback(async () => {
     setLoading(true);
     try {
+      const initPromise = effectiveScope.ownerType === "IPRESS" && effectiveScope.facilityCode
+        ? immunizationApi.isFacilityInitialized(effectiveScope)
+        : Promise.resolve(true);
+
       if (!isAdmin && userScope.level === "UNGET" && userScope.ungetId) {
         const facilityCodes = facilities.filter(facility => facility.ungetId === userScope.ungetId).map(facility => facility.code);
-        const [ownAdjustments, facilityAdjustments] = await Promise.all([
+        const [ownAdjustments, facilityAdjustments, initialized] = await Promise.all([
           immunizationApi.listAdjustments({ level: "UNGET", ownerType: "UNGET", ungetId: userScope.ungetId }),
           facilityCodes.length > 0
             ? immunizationApi.listAdjustments({ level: "IPRESS", ownerType: "IPRESS", facilityCodes })
-            : Promise.resolve([])
+            : Promise.resolve([]),
+          initPromise
         ]);
         setAdjustments([...ownAdjustments, ...facilityAdjustments].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")));
+        setIsInitialized(initialized);
       } else {
-        setAdjustments(await immunizationApi.listAdjustments(effectiveScope));
+        const [rows, initialized] = await Promise.all([
+          immunizationApi.listAdjustments(effectiveScope),
+          initPromise
+        ]);
+        setAdjustments(rows);
+        setIsInitialized(initialized);
       }
       setExpandedId("");
       setDetailByAdjustment({});
@@ -168,6 +181,10 @@ export function ImmunizationAdjustmentsModule() {
   const openForm = async () => {
     if (!canOperate) {
       toast.warning("Seleccione una UNGET o IPRESS operativa antes de registrar el reajuste.");
+      return;
+    }
+    if (effectiveScope.ownerType === "IPRESS" && isInitialized === false) {
+      toast.error("El establecimiento aún no cuenta con inventario inicial cerrado ni remesa inicial recibida.");
       return;
     }
     setLoadingForm(true);
@@ -263,37 +280,68 @@ export function ImmunizationAdjustmentsModule() {
   const locationCount = new Set(visibleAdjustments.map(adjustment => `${adjustment.ownerType}-${adjustment.ungetId || adjustment.facilityCode || ""}`)).size;
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-amber-50 p-3 text-amber-700"><Scale className="h-6 w-6" /></div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-black text-slate-900">Reajustes de Stock</h2>
-                <span className="rounded-lg border border-teal-100 bg-teal-50 px-2 py-1 text-[10px] font-black uppercase text-teal-700">Periodo {getCurrentImmunizationPeriod()}</span>
-              </div>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">Corrige cantidades o reclasifica lote, vencimiento, precio, fuente y suministro según lo encontrado físicamente.</p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={() => void loadAdjustments()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Actualizar</button>
-            {canOperate && (
-              <button type="button" onClick={() => void openForm()} disabled={loadingForm} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-amber-700 disabled:opacity-60">
-                {loadingForm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{loadingForm ? "Preparando..." : "Nuevo reajuste"}
-              </button>
-            )}
-          </div>
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
+      {effectiveScope.ownerType === "IPRESS" && isInitialized === false && (
+        <ImmunizationUninitializedFacilityBanner
+          ownerType="IPRESS"
+          facilityName={effectiveScope.facilityCode}
+        />
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-lg border border-teal-100 bg-teal-50 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-teal-700">Periodo {getCurrentImmunizationPeriod()}</span>
         </div>
-      </section>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => void loadAdjustments()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-2xs disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Actualizar</button>
+          {canOperate && (
+            <button
+              type="button"
+              onClick={() => void openForm()}
+              disabled={loadingForm || (effectiveScope.ownerType === "IPRESS" && isInitialized === false)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingForm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{loadingForm ? "Preparando..." : "Nuevo reajuste"}
+            </button>
+          )}
+        </div>
+      </div>
 
       {isAdmin && (
         <section className="rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-white p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-teal-700" /><h3 className="text-sm font-black text-slate-900">Ámbito operativo de soporte</h3><span className="rounded-md bg-teal-100 px-2 py-1 text-[9px] font-black uppercase text-teal-700">Solo administrador</span></div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <select aria-label="Tipo de ubicación" value={adminOwnerType} onChange={event => setAdminOwnerType(event.target.value as ImmunizationOwnerType)} className={selectClassName}><option value="IPRESS">IPRESS</option><option value="UNGET">UNGET</option></select>
-            <select aria-label="UNGET" value={adminUngetId} onChange={event => { setAdminUngetId(event.target.value); setAdminFacilityCode(""); }} className={selectClassName}><option value="">Seleccione UNGET...</option>{ungets.map(unget => <option key={unget.id} value={unget.id}>{unget.name}</option>)}</select>
-            <select aria-label="IPRESS" value={adminFacilityCode} onChange={event => setAdminFacilityCode(event.target.value)} disabled={adminOwnerType === "UNGET"} className={selectClassName}><option value="">Seleccione IPRESS...</option>{facilitiesForAdmin.map(facility => <option key={facility.code} value={facility.code}>{facility.code} · {facility.name}</option>)}</select>
+            <CustomSelect
+              ariaLabel="Tipo de ubicación"
+              value={adminOwnerType}
+              onChange={val => setAdminOwnerType(val as ImmunizationOwnerType)}
+              options={[
+                { value: "IPRESS", label: "IPRESS" },
+                { value: "UNGET", label: "UNGET" }
+              ]}
+              className="h-10 border-slate-200"
+            />
+            <CustomSelect
+              ariaLabel="UNGET"
+              value={adminUngetId}
+              onChange={val => { setAdminUngetId(val); setAdminFacilityCode(""); }}
+              options={[
+                { value: "", label: "Seleccione UNGET..." },
+                ...ungets.map(unget => ({ value: unget.id, label: unget.name }))
+              ]}
+              className="h-10 border-slate-200"
+            />
+            <CustomSelect
+              ariaLabel="IPRESS"
+              value={adminFacilityCode}
+              onChange={setAdminFacilityCode}
+              disabled={adminOwnerType === "UNGET"}
+              options={[
+                { value: "", label: "Seleccione IPRESS..." },
+                ...facilitiesForAdmin.map(facility => ({ value: facility.code, label: `${facility.code} · ${facility.name}` }))
+              ]}
+              className="h-10 border-slate-200"
+            />
           </div>
         </section>
       )}
@@ -306,19 +354,38 @@ export function ImmunizationAdjustmentsModule() {
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2"><Filter className="h-4 w-4 text-teal-600" /><h3 className="text-xs font-black uppercase tracking-wide text-slate-700">Filtrar auditoría por ámbito</h3></div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <select aria-label="Tipo de ámbito" value={auditOwnerFilter} onChange={event => { const value = event.target.value as "ALL" | ImmunizationOwnerType; setAuditOwnerFilter(value); if (value === "UNGET") setAuditFacilityFilter(""); }} className={selectClassName}>
-              <option value="ALL">UNGET e IPRESS</option>
-              <option value="UNGET">Solo almacenes UNGET</option>
-              <option value="IPRESS">Solo IPRESS</option>
-            </select>
-            <select aria-label="Filtrar por UNGET" value={auditUngetFilter} onChange={event => { setAuditUngetFilter(event.target.value); setAuditFacilityFilter(""); }} className={selectClassName}>
-              {userScope.level !== "UNGET" && <option value="">Todas las UNGET</option>}
-              {availableFilterUngets.map(unget => <option key={unget.id} value={unget.id}>{unget.name}</option>)}
-            </select>
-            <select aria-label="Filtrar por IPRESS" value={auditFacilityFilter} onChange={event => { setAuditFacilityFilter(event.target.value); if (event.target.value) setAuditOwnerFilter("IPRESS"); }} disabled={auditOwnerFilter === "UNGET"} className={selectClassName}>
-              <option value="">Todas las IPRESS</option>
-              {facilitiesForAudit.map(facility => <option key={facility.code} value={facility.code}>{facility.code} · {facility.name}</option>)}
-            </select>
+            <CustomSelect
+              ariaLabel="Tipo de ámbito"
+              value={auditOwnerFilter}
+              onChange={val => { const value = val as "ALL" | ImmunizationOwnerType; setAuditOwnerFilter(value); if (value === "UNGET") setAuditFacilityFilter(""); }}
+              options={[
+                { value: "ALL", label: "UNGET e IPRESS" },
+                { value: "UNGET", label: "Solo almacenes UNGET" },
+                { value: "IPRESS", label: "Solo IPRESS" }
+              ]}
+              className="h-10 border-slate-200"
+            />
+            <CustomSelect
+              ariaLabel="Filtrar por UNGET"
+              value={auditUngetFilter}
+              onChange={val => { setAuditUngetFilter(val); setAuditFacilityFilter(""); }}
+              options={[
+                ...(userScope.level !== "UNGET" ? [{ value: "", label: "Todas las UNGET" }] : []),
+                ...availableFilterUngets.map(unget => ({ value: unget.id, label: unget.name }))
+              ]}
+              className="h-10 border-slate-200"
+            />
+            <CustomSelect
+              ariaLabel="Filtrar por IPRESS"
+              value={auditFacilityFilter}
+              onChange={val => { setAuditFacilityFilter(val); if (val) setAuditOwnerFilter("IPRESS"); }}
+              disabled={auditOwnerFilter === "UNGET"}
+              options={[
+                { value: "", label: "Todas las IPRESS" },
+                ...facilitiesForAudit.map(facility => ({ value: facility.code, label: `${facility.code} · ${facility.name}` }))
+              ]}
+              className="h-10 border-slate-200"
+            />
           </div>
         </section>
       )}

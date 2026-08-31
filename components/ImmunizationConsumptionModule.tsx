@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
+import { CustomSelect } from "./ui/CustomSelect";
 import {
   getCurrentImmunizationPeriod,
   getImmunizationScope,
@@ -31,7 +32,7 @@ import {
   ImmunizationStockMovement
 } from "../types";
 import { sortLayersByFefo, periodFromDate } from "../services/immunizationDomain";
-import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, ImmunizationField as Field, formatImmunizationNumber as formatNumber, todayInputValue, ImmunizationTableHeader as HeaderCell, ImmunizationInfoPill as InfoPill } from "./ui/immunization";
+import { ImmunizationKpiCard, immunizationInputClass as inputClassName, normalizeImmunizationText as normalizeText, ImmunizationField as Field, formatImmunizationNumber as formatNumber, todayInputValue, ImmunizationTableHeader as HeaderCell, ImmunizationInfoPill as InfoPill, ImmunizationUninitializedFacilityBanner } from "./ui/immunization";
 
 type ConsumptionItemDraft = ImmunizationConsumptionItemInput & {
   tempId: string;
@@ -104,6 +105,7 @@ export const ImmunizationConsumptionModule: React.FC = () => {
   const [stockLayers, setStockLayers] = useState<ImmunizationStockLayer[]>([]);
   const [movements, setMovements] = useState<ImmunizationStockMovement[]>([]);
   const [products, setProducts] = useState<ImmunizationProduct[]>([]);
+  const [isInitialized, setIsInitialized] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [openingForm, setOpeningForm] = useState(false);
@@ -115,14 +117,18 @@ export const ImmunizationConsumptionModule: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [layers, history, catalog] = await Promise.all([
+      const [layers, history, catalog, initialized] = await Promise.all([
         immunizationApi.getStockLayers(scope),
         immunizationApi.listConsumptionMovements(scope),
-        immunizationApi.getProducts(false)
+        immunizationApi.getProducts(false),
+        scope.ownerType === "IPRESS" || scope.facilityCode
+          ? immunizationApi.isFacilityInitialized(scope)
+          : Promise.resolve(true)
       ]);
       setStockLayers(layers.filter(layer => layer.ownerType === "IPRESS"));
       setMovements(history);
       setProducts(catalog);
+      setIsInitialized(initialized);
     } catch {
       toast.error("No se pudo cargar el consumo IPRESS.");
     } finally {
@@ -254,6 +260,10 @@ export const ImmunizationConsumptionModule: React.FC = () => {
       toast.warning("Solo una IPRESS operativa puede registrar consumos.");
       return;
     }
+    if (isInitialized === false) {
+      toast.error("El establecimiento aún no cuenta con inventario inicial cerrado ni remesa inicial recibida.");
+      return;
+    }
     setOpeningForm(true);
     try {
       const locked = await immunizationApi.isPeriodLocked(scope, currentPeriod);
@@ -270,36 +280,39 @@ export const ImmunizationConsumptionModule: React.FC = () => {
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
-              <ReceiptText className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-black text-slate-900">Consumo IPRESS</h2>
-                <span className="rounded-lg border border-teal-100 bg-teal-50 px-2 py-1 text-[10px] font-black uppercase text-teal-700">Periodo {currentPeriod}</span>
-              </div>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">
-                Registra un movimiento de consumo con varios productos/lotes, similar a una receta. Al guardar, el sistema descuenta todos los ítems del stock.
-              </p>
-              {scope.facilityCode && <p className="mt-2 text-xs font-bold text-slate-600">IPRESS operativa: <span className="text-teal-700">{user?.facilityData?.name || scope.facilityCode}</span></p>}
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={() => void loadData()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Actualizar
-            </button>
-            {canRecord && (
-              <button type="button" onClick={() => void openConsumptionForm()} disabled={openingForm} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white shadow-sm hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-70">
-                {openingForm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{openingForm ? "Validando..." : "Nuevo registro"}
-              </button>
-            )}
-          </div>
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
+      {isInitialized === false && (
+        <ImmunizationUninitializedFacilityBanner
+          ownerType="IPRESS"
+          facilityName={user?.facilityData?.name || scope.facilityCode}
+        />
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-lg border border-teal-100 bg-teal-50 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-teal-700">Periodo {currentPeriod}</span>
+          {scope.facilityCode && (
+            <span className="text-xs font-bold text-slate-600">
+              IPRESS: <span className="font-black text-teal-700">{user?.facilityData?.name || scope.facilityCode}</span>
+            </span>
+          )}
         </div>
-      </section>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => void loadData()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-2xs disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Actualizar
+          </button>
+          {canRecord && (
+            <button
+              type="button"
+              onClick={() => void openConsumptionForm()}
+              disabled={openingForm || isInitialized === false}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {openingForm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{openingForm ? "Validando..." : "Nuevo registro"}
+            </button>
+          )}
+        </div>
+      </div>
 
       {!canRecord && (
         <section className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950">
@@ -327,10 +340,18 @@ export const ImmunizationConsumptionModule: React.FC = () => {
             <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
             <input value={search} onChange={event => setSearch(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100" placeholder="Buscar por registro, producto, lote o usuario..." />
           </div>
-          <select value={periodFilter} onChange={event => setPeriodFilter(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 lg:w-40" aria-label="Filtrar por periodo">
-            <option value="ALL">Todos los meses</option>
-            {periodOptions.map(period => <option key={period} value={period}>{period}</option>)}
-          </select>
+          <div className="lg:w-40">
+            <CustomSelect
+              value={periodFilter}
+              onChange={setPeriodFilter}
+              options={[
+                { value: "ALL", label: "Todos los meses" },
+                ...periodOptions.map(period => ({ value: period, label: period }))
+              ]}
+              ariaLabel="Filtrar por periodo"
+              className="h-10"
+            />
+          </div>
           <button type="button" onClick={() => { setSearch(""); setPeriodFilter(currentPeriod); }} disabled={!search && periodFilter === currentPeriod} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
             <FilterX className="h-4 w-4" />Limpiar
           </button>
@@ -733,9 +754,13 @@ function ConsumptionBatchModal({
                   <input value={referenceDocument} onChange={event => setReferenceDocument(event.target.value)} disabled={isSaving} className={inputClassName} placeholder="Ej. REC-000123" />
                 </Field>
                 <Field label="Tipo de actividad" required>
-                  <select value={activityType} onChange={event => setActivityType(event.target.value)} disabled={isSaving} className={inputClassName}>
-                    {activityOptions.map(option => <option key={option} value={option}>{option}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={activityType}
+                    onChange={setActivityType}
+                    options={activityOptions.map(option => ({ value: option, label: option }))}
+                    disabled={isSaving}
+                    className="h-11 border-slate-200"
+                  />
                 </Field>
                 <div className="md:col-span-2 xl:col-span-4">
                   <Field label="Observación general">
@@ -835,21 +860,19 @@ function ConsumptionBatchModal({
                       <InfoPill label="Estado FEFO" value={selectedIsFefo ? "Sugerido" : "Manual"} />
                     </div>
                     <Field label="Elegir lote">
-                      <select
+                      <CustomSelect
                         value={selectedLayerId}
-                        onChange={event => {
-                          const layer = selectableLayersForProduct.find(row => row.id === event.target.value);
+                        onChange={val => {
+                          const layer = selectableLayersForProduct.find(row => row.id === val);
                           if (layer) selectLayer(layer);
                         }}
+                        options={selectableLayersForProduct.map((layer, index) => ({
+                          value: layer.id,
+                          label: `${index === 0 ? "FEFO sugerido · " : "Manual · "}Lote ${layer.lote} · vence ${layer.expirationDate} · saldo ${layer.currentQuantity}`
+                        }))}
                         disabled={isSaving}
-                        className={inputClassName}
-                      >
-                        {selectableLayersForProduct.map((layer, index) => (
-                          <option key={layer.id} value={layer.id}>
-                            {index === 0 ? "FEFO sugerido · " : "Manual · "}Lote {layer.lote} · vence {layer.expirationDate} · saldo {layer.currentQuantity}
-                          </option>
-                        ))}
-                      </select>
+                        className="h-11 border-slate-200"
+                      />
                     </Field>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 border-t border-emerald-100 pt-3 md:grid-cols-3">

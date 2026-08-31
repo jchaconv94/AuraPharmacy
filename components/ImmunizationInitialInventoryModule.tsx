@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import {
   Activity,
   AlertTriangle,
+  Calendar,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   Coins,
   Download,
@@ -24,6 +26,7 @@ import { useAuth } from "../contexts/AuthContext";
 import {
   downloadImmunizationInventoryTemplate,
   ImmunizationImportPreview,
+  ImmunizationImportRow,
   parseImmunizationInventoryExcel,
   toInventoryItems
 } from "../services/immunizationExcelService";
@@ -35,6 +38,7 @@ import { formatImmunizationDate, ImmunizationKpiCard, normalizeImmunizationText 
 import { CustomSelect } from "./ui/CustomSelect";
 import { ConfirmationDialog } from "./ui/ConfirmationDialog";
 import { ImmunizationInventoryItemModal, InventoryItemFormData } from "./ImmunizationInventoryItemModal";
+import { ImmunizationInitialInventoryImportModal } from "./ImmunizationInitialInventoryImportModal";
 
 const currencyFormatter = new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" });
 
@@ -73,6 +77,11 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
   const [deletingItem, setDeletingItem] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [preview, setPreview] = useState<ImmunizationImportPreview | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [discardingDraft, setDiscardingDraft] = useState(false);
+  const [isExcelMenuOpen, setIsExcelMenuOpen] = useState(false);
+  const excelMenuRef = useRef<HTMLDivElement>(null);
   const [organizationsLoading, setOrganizationsLoading] = useState(false);
   const [ungets, setUngets] = useState<Unget[]>([]);
   const [facilities, setFacilities] = useState<HealthFacility[]>([]);
@@ -162,6 +171,16 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
   useEffect(() => {
     void loadInventoryItems(activeInventory?.id);
   }, [activeInventory?.id]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (excelMenuRef.current && !excelMenuRef.current.contains(event.target as Node)) {
+        setIsExcelMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const invalidRows = preview?.rows.filter(row => row.errors.length > 0) || [];
   const validRows = preview?.rows.filter(row => row.errors.length === 0) || [];
   const warningRows = preview?.rows.filter(row => row.warnings.length > 0) || [];
@@ -204,8 +223,9 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
 
   const processFile = async (file?: File) => {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".xlsx")) {
-      toast.error("Seleccione un archivo Excel con extension .xlsx");
+    const lowerName = file.name.toLowerCase();
+    if (!lowerName.endsWith(".xlsx") && !lowerName.endsWith(".xls") && !lowerName.endsWith(".csv")) {
+      toast.error("Seleccione un archivo Excel (.xlsx, .xls) o archivo .csv");
       return;
     }
     if (file.size > 15 * 1024 * 1024) {
@@ -218,23 +238,132 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
     }
 
     setProcessingFile(true);
-    setPreview(null);
     try {
       const products = await immunizationApi.getProducts(true);
-      const nextPreview = await parseImmunizationInventoryExcel(file, products);
+      const nextPreview = await parseImmunizationInventoryExcel(
+        file,
+        products,
+        activeInventory?.status === "DRAFT" ? inventoryItems : undefined
+      );
       setPreview(nextPreview);
+      setIsImportModalOpen(true);
       if (products.length === 0) {
-        toast.warning("El catalogo biologico esta vacio. Debe cargarlo antes de importar el inventario.");
-      } else if (nextPreview.missingColumns.length > 0) {
-        toast.error("El archivo no contiene todas las columnas obligatorias");
-      } else {
-        toast.success(`Archivo leido: ${nextPreview.rows.length} filas encontradas`);
+        toast.warning("El catálogo biológico está vacío. Debe cargarlo antes de importar el inventario.");
       }
     } catch (error: any) {
       toast.error(error?.message || "No se pudo leer el archivo Excel");
     } finally {
       setProcessingFile(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleConfirmImportFromModal = async (
+    selectedRows: ImmunizationImportRow[],
+    mode: "SKIP_EXISTING" | "UPDATE_EXISTING"
+  ) => {
+    if (selectedRows.length === 0) {
+      toast.warning("No hay registros seleccionados para guardar");
+      return;
+    }
+    if (!canSaveForScope || !effectiveScope.ownerType) {
+      toast.error("Para guardar, el usuario debe estar vinculado a una UNGET o IPRESS");
+      return;
+    }
+    if (activeInventory && activeInventory.status === "CLOSED") {
+      toast.error("El inventario inicial ya se encuentra cerrado");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const newItems = toInventoryItems(selectedRows);
+      let itemsToSave: ImmunizationInitialInventoryItem[];
+
+      if (activeInventory?.id && activeInventory.status === "DRAFT") {
+        if (mode === "SKIP_EXISTING") {
+          // Combinar items existentes del borrador con los nuevos seleccionados que no existían
+          const existingMap = new Map<string, ImmunizationInitialInventoryItem>();
+          inventoryItems.forEach(item => {
+            const key = getItemUniqueCompositeKey(item);
+            existingMap.set(key, item);
+          });
+          newItems.forEach(item => {
+            const key = getItemUniqueCompositeKey(item);
+            if (!existingMap.has(key)) {
+              existingMap.set(key, item);
+            }
+          });
+          itemsToSave = Array.from(existingMap.values());
+        } else {
+          // En modo UPDATE_EXISTING: los nuevos items del Excel sobreescriben los coincidentes
+          const existingMap = new Map<string, ImmunizationInitialInventoryItem>();
+          inventoryItems.forEach(item => {
+            const key = getItemUniqueCompositeKey(item);
+            existingMap.set(key, item);
+          });
+          newItems.forEach(item => {
+            const key = getItemUniqueCompositeKey(item);
+            existingMap.set(key, item);
+          });
+          itemsToSave = Array.from(existingMap.values());
+        }
+      } else {
+        itemsToSave = newItems;
+      }
+
+      let result: { success: boolean; inventory?: ImmunizationInitialInventory; message?: string };
+
+      if (activeInventory?.id && activeInventory.status === "DRAFT") {
+        result = await immunizationApi.replaceInitialInventoryDraft(activeInventory.id, itemsToSave, user?.username);
+      } else {
+        result = await immunizationApi.createInitialInventory({
+          ownerType: effectiveScope.ownerType,
+          ungetId: effectiveScope.ownerType === "UNGET" ? effectiveScope.ungetId : undefined,
+          facilityCode: effectiveScope.ownerType === "IPRESS" ? effectiveScope.facilityCode : undefined,
+          period: currentPeriod,
+          status: "DRAFT",
+          sourceType: "EXCEL",
+          createdBy: user?.username
+        }, itemsToSave);
+      }
+
+      if (!result.success) {
+        toast.error(result.message || "No se pudo guardar el inventario");
+        return;
+      }
+
+      toast.success(
+        activeInventory
+          ? `Inventario inicial actualizado exitosamente con ${itemsToSave.length} registros guardados.`
+          : `Inventario inicial guardado exitosamente con ${itemsToSave.length} productos.`
+      );
+      setIsImportModalOpen(false);
+      setPreview(null);
+      await loadInventories();
+    } catch (error: any) {
+      toast.error(error?.message || "Error al guardar el inventario");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDiscardDraft = async () => {
+    if (!activeInventory?.id || activeInventory.status !== "DRAFT") return;
+    setDiscardingDraft(true);
+    try {
+      const res = await immunizationApi.deleteInitialInventoryDraft(activeInventory.id);
+      if (!res.success) {
+        toast.error(res.message || "No se pudo descartar el borrador");
+        return;
+      }
+      toast.success("Borrador de inventario descartado correctamente.");
+      setShowDiscardConfirm(false);
+      await loadInventories();
+    } catch (error: any) {
+      toast.error(error?.message || "Error al descartar el borrador");
+    } finally {
+      setDiscardingDraft(false);
     }
   };
 
@@ -508,28 +637,7 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
   };
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-300">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-700 shrink-0">
-              <ClipboardList className="h-6 w-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-slate-900">Inventario Inicial</h2>
-              <p className="text-sm text-slate-500 mt-0.5 max-w-2xl">
-                Carga el stock fisico por lote de productos biologicos.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 font-medium shrink-0">
-            <span>{activeInventory ? "Cargado en" : "Periodo"}</span>
-            <span className="font-black text-teal-700">{activeInventory?.period || currentPeriod}</span>
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-4 pb-2 animate-in fade-in duration-300">
       {isGlobalAdmin && (
         <AdminInventoryScopeSelector
           ownerType={adminOwnerType}
@@ -552,7 +660,13 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
       )}
 
       {/* KPI Cards Grid */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <ImmunizationKpiCard
+          label={activeInventory ? "Cargado en" : "Periodo"}
+          value={activeInventory?.period || currentPeriod}
+          tone="info"
+          icon={<Calendar className="h-5 w-5" />}
+        />
         <ImmunizationKpiCard
           label="Productos/lotes"
           value={String(kpiProductsCount)}
@@ -587,46 +701,108 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
               <p className="text-xs text-slate-500 mt-0.5">{activeInventory ? "Revisa los productos guardados antes de cerrar y generar el stock." : "Primero validaremos las filas; nada se guarda automaticamente."}</p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2.5">
               {activeInventory && activeInventory.status === "CLOSED" && (
-                <span className="text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-100">
+                <span className="text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-100 shrink-0">
                   Cerrado
                 </span>
               )}
 
-              <button
-                type="button"
-                onClick={downloadImmunizationInventoryTemplate}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all border border-slate-200/80 shadow-2xs"
-                title="Usa las columnas oficiales para evitar observaciones durante la carga."
-              >
-                <Download className="h-3.5 w-3.5 text-slate-600" />
-                <span>Plantilla .xlsx</span>
-              </button>
+              {/* Dropdown de Opciones Excel */}
+              <div className="relative shrink-0" ref={excelMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsExcelMenuOpen(prev => !prev)}
+                  className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs sm:text-sm font-bold hover:bg-slate-50 hover:border-slate-400 shadow-2xs transition-colors shrink-0"
+                  title="Opciones de plantilla, importación y gestión de archivo Excel"
+                >
+                  <FileSpreadsheet className="h-4 w-4 text-teal-600" />
+                  <span>Opciones Excel</span>
+                  <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${isExcelMenuOpen ? "rotate-180 text-teal-600" : ""}`} />
+                </button>
 
+                {isExcelMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white border border-slate-200 shadow-xl p-1.5 z-30 animate-in fade-in slide-in-from-top-2 duration-150">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsExcelMenuOpen(false);
+                        downloadImmunizationInventoryTemplate();
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Download className="h-4 w-4 text-teal-600 shrink-0" />
+                      <div className="flex flex-col">
+                        <span>Descargar Plantilla</span>
+                        <span className="text-[10px] font-normal text-slate-400">Formato oficial .xlsx</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsExcelMenuOpen(false);
+                        fileInputRef.current?.click();
+                      }}
+                      disabled={!canSaveForScope || processingFile || inventoryIsClosed}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-teal-800 hover:bg-teal-50 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                      <Upload className="h-4 w-4 text-teal-600 shrink-0" />
+                      <div className="flex flex-col">
+                        <span>{activeInventory ? "Reimportar / Cargar Excel" : "Cargar archivo Excel"}</span>
+                        <span className="text-[10px] font-normal text-slate-400">Actualizar borrador desde .xlsx</span>
+                      </div>
+                    </button>
+
+                    {activeInventory && activeInventory.status === "DRAFT" && (
+                      <>
+                        <div className="my-1 border-t border-slate-100" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsExcelMenuOpen(false);
+                            setShowDiscardConfirm(true);
+                          }}
+                          disabled={!canSaveForScope || discardingDraft || closing}
+                          className="w-full text-left flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-rose-700 hover:bg-rose-50 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                        >
+                          <Trash2 className="h-4 w-4 text-rose-600 shrink-0" />
+                          <div className="flex flex-col">
+                            <span>Descartar borrador</span>
+                            <span className="text-[10px] font-normal text-rose-400">Eliminar registros del periodo</span>
+                          </div>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Botón Registro Manual */}
               <button
                 type="button"
                 onClick={() => void openManualItemModal()}
                 disabled={!canSaveForScope || inventoryIsClosed || manualSaving}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 disabled:opacity-50 disabled:pointer-events-none text-xs font-bold transition-all border border-teal-200/80 shadow-2xs"
-                title={inventoryIsClosed ? "El inventario ya esta cerrado." : "Agrega un producto o lote puntual al borrador antes del cierre."}
+                className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-teal-300 bg-teal-50/80 text-teal-900 text-xs sm:text-sm font-bold hover:bg-teal-100 hover:border-teal-400 shadow-2xs transition-colors shrink-0 disabled:opacity-50 disabled:pointer-events-none"
+                title={inventoryIsClosed ? "El inventario ya está cerrado." : "Agrega un producto o lote puntual al borrador antes del cierre."}
               >
-                <PackagePlus className="h-3.5 w-3.5 text-teal-700" />
+                <PackagePlus className="h-4 w-4 text-teal-700" />
                 <span>Registro manual</span>
               </button>
 
+              {/* Botón Cerrar y Generar Stock */}
               <button
                 type="button"
                 onClick={requestCloseInventory}
                 disabled={!activeInventory || activeInventory.status === "CLOSED" || inventoryItems.length === 0 || loadingItems || closing}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all border shadow-2xs ${
+                className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all border shadow-sm shrink-0 ${
                   activeInventory?.status === "CLOSED"
-                    ? "bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 disabled:opacity-50 disabled:pointer-events-none"
+                    ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-emerald-700/20 disabled:opacity-50 disabled:pointer-events-none"
                 }`}
-                title={activeInventory?.status === "CLOSED" ? "El inventario ya fue cerrado." : "Confirma el borrador y genera el stock biologico por lote."}
+                title={activeInventory?.status === "CLOSED" ? "El inventario ya fue cerrado." : "Confirma el borrador y genera el stock biológico por lote."}
               >
-                {closing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <LockKeyhole className="h-3.5 w-3.5" />}
+                {closing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
                 <span>
                   {activeInventory?.status === "CLOSED"
                     ? "Inventario cerrado"
@@ -637,6 +813,14 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
               </button>
             </div>
           </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+            className="hidden"
+            onChange={event => void processFile(event.target.files?.[0])}
+          />
 
           {loading && !activeInventory ? (
             <div className="py-16 flex flex-col items-center justify-center gap-2">
@@ -658,13 +842,6 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
                 />
               ) : !preview ? (
                 <div className="p-5 sm:p-8">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    className="hidden"
-                    onChange={event => void processFile(event.target.files?.[0])}
-                  />
                   <div
                     role="button"
                     tabIndex={inventoryIsClosed ? -1 : 0}
@@ -933,6 +1110,38 @@ export const ImmunizationInitialInventoryModule: React.FC = () => {
           </div>
         )}
       </ConfirmationDialog>
+
+      <ConfirmationDialog
+        isOpen={showDiscardConfirm}
+        title="¿Descartar borrador de inventario?"
+        description="Se eliminarán todos los productos y lotes guardados en este borrador. Podrás subir un nuevo archivo Excel desde cero o registrar manualmente."
+        confirmLabel="Sí, descartar borrador"
+        cancelLabel="Cancelar"
+        tone="danger"
+        isConfirming={discardingDraft}
+        onCancel={() => setShowDiscardConfirm(false)}
+        onConfirm={() => void handleDiscardDraft()}
+      >
+        {activeInventory && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4 text-xs text-rose-800">
+            <p className="font-bold">Periodo: {activeInventory.period}</p>
+            <p className="mt-1 font-medium">Se descartarán {inventoryItems.length} ítems guardados temporalmente.</p>
+          </div>
+        )}
+      </ConfirmationDialog>
+
+      <ImmunizationInitialInventoryImportModal
+        isOpen={isImportModalOpen}
+        preview={preview}
+        isSubmitting={saving}
+        onClose={() => {
+          if (!saving) {
+            setIsImportModalOpen(false);
+            setPreview(null);
+          }
+        }}
+        onConfirmImport={(selectedRows, mode) => void handleConfirmImportFromModal(selectedRows, mode)}
+      />
     </div>
   );
 };

@@ -94,7 +94,10 @@ export const ImmunizationKpiCard: React.FC<{
   tone?: ImmunizationTone;
   hint?: string;
   filled?: boolean;
-}> = ({ label, value, icon, tone = "neutral", hint, filled }) => {
+  compact?: boolean;
+  onClick?: () => void;
+  active?: boolean;
+}> = ({ label, value, icon, tone = "neutral", hint, filled, compact = false, onClick, active }) => {
   if (filled) {
     return (
       <div className={`rounded-2xl border px-3.5 py-3 ${toneFilled[tone]}`}>
@@ -107,8 +110,55 @@ export const ImmunizationKpiCard: React.FC<{
 
   const renderIcon = icon || defaultToneIcons[tone];
 
+  if (compact) {
+    const isInteractive = Boolean(onClick);
+    const Container = isInteractive ? "button" : "div";
+    return (
+      <Container
+        {...(isInteractive ? { type: "button", onClick } : {})}
+        className={`group relative overflow-hidden rounded-xl border bg-white px-3.5 py-2.5 shadow-2xs transition-all duration-150 text-left flex flex-col justify-between ${
+          active
+            ? "border-teal-500 ring-2 ring-teal-500/20 shadow-xs"
+            : "border-slate-200/90 hover:border-slate-300"
+        } ${isInteractive ? "cursor-pointer" : ""}`}
+      >
+        <div className={`absolute top-0 left-0 right-0 h-0.5 ${toneTopBar[tone]}`} />
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 truncate">
+              {label}
+            </p>
+            <p className="mt-0.5 truncate text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
+              {value}
+            </p>
+          </div>
+          {renderIcon && (
+            <div className={`shrink-0 rounded-lg p-1.5 shadow-2xs ${toneIcon[tone]}`}>
+              <div className="[&>svg]:h-4 [&>svg]:w-4">{renderIcon}</div>
+            </div>
+          )}
+        </div>
+        {hint && (
+          <div className="mt-1 pt-1 border-t border-slate-100 flex items-center text-[10px] font-medium text-slate-400">
+            <span className="truncate">{hint}</span>
+          </div>
+        )}
+      </Container>
+    );
+  }
+
+  const isInteractive = Boolean(onClick);
+  const Container = isInteractive ? "button" : "div";
+
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md flex flex-col justify-between h-full">
+    <Container
+      {...(isInteractive ? { type: "button", onClick } : {})}
+      className={`group relative overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all duration-200 text-left flex flex-col justify-between h-full ${
+        active
+          ? "border-teal-500 ring-2 ring-teal-500/20 shadow-md -translate-y-0.5"
+          : "border-slate-200/90 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+      } ${isInteractive ? "cursor-pointer" : ""}`}
+    >
       {/* Dynamic top color accent line */}
       <div className={`absolute top-0 left-0 right-0 h-1 ${toneTopBar[tone]}`} />
 
@@ -134,7 +184,7 @@ export const ImmunizationKpiCard: React.FC<{
           <span className="truncate">{hint}</span>
         </div>
       )}
-    </div>
+    </Container>
   );
 };
 
@@ -268,3 +318,56 @@ export const ImmunizationEmptyState: React.FC<{
     {action}
   </div>
 );
+
+/** Banner de bloqueo informativo cuando el establecimiento aún no cuenta con inventario inicial cerrado ni remesa inicial recibida. */
+export const ImmunizationUninitializedFacilityBanner: React.FC<{
+  ownerType?: "IPRESS" | "UNGET";
+  facilityName?: string;
+  onNavigateToInventory?: () => void;
+  onNavigateToDistributions?: () => void;
+}> = ({ ownerType = "IPRESS", facilityName, onNavigateToInventory, onNavigateToDistributions }) => (
+  <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6 text-amber-900 shadow-sm">
+    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-start gap-3.5">
+        <div className="rounded-xl bg-amber-200/80 p-2.5 text-amber-800 shrink-0">
+          <AlertTriangle className="h-6 w-6" />
+        </div>
+        <div>
+          <h3 className="text-base font-black text-amber-950">
+            {ownerType === "IPRESS"
+              ? `Establecimiento ${facilityName ? `(${facilityName}) ` : ""}pendiente de apertura`
+              : "UNGET pendiente de inventario inicial"}
+          </h3>
+          <p className="mt-1 text-sm leading-relaxed text-amber-800">
+            {ownerType === "IPRESS"
+              ? "Para registrar operaciones (consumos, devoluciones, reajustes y cierre mensual), el establecimiento debe contar con su Inventario Inicial cerrado, o recibir una Remesa Inicial de apertura enviada por su UNGET."
+              : "Para registrar operaciones en la UNGET, se requiere registrar y cerrar el Inventario Inicial biológico."}
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 shrink-0">
+        {onNavigateToInventory && (
+          <button
+            type="button"
+            onClick={onNavigateToInventory}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-amber-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-800"
+          >
+            <Package className="h-4 w-4" />
+            Ir a Inventario Inicial
+          </button>
+        )}
+        {onNavigateToDistributions && ownerType === "IPRESS" && (
+          <button
+            type="button"
+            onClick={onNavigateToDistributions}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400 bg-white px-4 py-2.5 text-xs font-bold text-amber-900 shadow-sm transition hover:bg-amber-100"
+          >
+            <Activity className="h-4 w-4" />
+            Ver Distribuciones
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+);
+

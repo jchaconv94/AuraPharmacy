@@ -5,7 +5,12 @@ import { MedicationInput, AuraAnalysisResult, StockStatus, AdditionalItem, AppMo
 import { api } from './services/api';
 import { analyzeInventoryWithAura } from './services/auraService';
 import { generateFullReportPDF } from './services/pdfService';
-import { Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, Building2, Calendar, Clock, Network } from 'lucide-react';
+import { 
+  Info, FileText, Lock, ShieldCheck, ShieldAlert, ListFilter, Building2, Calendar, Clock, Network,
+  BarChart2, FilterX, RefreshCw, Search, Database, Activity, Syringe, ClipboardList, Package,
+  PackageSearch, ArrowDownLeft, Truck, Receipt, RotateCcw, SlidersHorizontal, CalendarCheck,
+  Settings, Users, Shield, Building, FolderKanban, DatabaseBackup, FileSpreadsheet, Smartphone, User
+} from 'lucide-react';
 
 // NEW IMPORTS
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -191,6 +196,72 @@ const AuthenticatedApp: React.FC = () => {
         }
     }, [currentView, isAuthenticated, isLoading, user, hasPermission]);
 
+    const moduleHeaderInfo = useMemo(() => {
+        switch (currentView) {
+            case 'DASHBOARD':
+                return { title: 'Análisis de Requerimiento', description: 'Vista principal y resumen de indicadores de requerimiento', icon: <BarChart2 className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'ANALYSIS_EXCLUSIONS':
+                return { title: 'Lista de Exclusiones', description: 'Medicamentos excluidos del análisis por establecimiento', icon: <FilterX className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" /> };
+            case 'REDISTRIBUTION':
+                return { title: 'Módulo de Redistribución', description: 'Redistribución y transferencia de medicamentos entre IPRESS', icon: <RefreshCw className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'SIG_SEARCH':
+                return { title: 'Consulta Stock', description: 'Buscador de existencias en el catálogo SIG', icon: <Search className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IPRESS_STOCK':
+                return { title: 'Stock SISMED', description: 'Stock propio de la IPRESS, sincronizado o asignado por hoja (solo lectura)', icon: <Database className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'STOCK_MONITORING':
+                return { title: 'Monitoreo de Stock SISMED', description: 'Directorio territorial del stock sincronizado de los establecimientos', icon: <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_CATALOG':
+                return { title: 'Catálogo Biológico', description: 'Catálogo maestro de vacunas, jeringas y diluyentes', icon: <Syringe className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_INITIAL_INVENTORY':
+                return { title: 'Inventario Inicial', description: 'Carga el stock físico por lote de productos biológicos.', icon: <ClipboardList className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_STOCK':
+                return { title: 'Stock Biológico', description: 'Stock de inmunizaciones agrupado por producto y detallado por lote', icon: <Package className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_STOCK_QUERY':
+                return { title: 'Consulta de Stock Biológico', description: 'Consulta territorial de solo lectura del stock de UNGET e IPRESS', icon: <PackageSearch className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_INCOMES':
+                return { title: 'Ingresos Regionales', description: 'Registro de ingresos nuevos de biológicos al almacén regional DIRESA', icon: <ArrowDownLeft className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_INCOME_ORIGINS':
+                return { title: 'Orígenes de Ingreso', description: 'Catálogo administrable de orígenes para ingresos regionales', icon: <Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_DISTRIBUTIONS':
+                return { title: 'Distribuciones', description: 'Distribución jerárquica de biológicos DIRESA -> UNGET -> IPRESS', icon: <Truck className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_CONSUMPTION':
+                return { title: 'Consumo IPRESS', description: 'Registro de consumos por comprobante con varios productos/lotes', icon: <Receipt className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_RETURNS':
+                return { title: 'Devoluciones y Bajas', description: 'Registro de bajas, devoluciones y transferencias IPRESS hacia UNGET', icon: <RotateCcw className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_ADJUSTMENTS':
+                return { title: 'Reajustes de Stock', description: 'Correcciones auditadas por conteo físico', icon: <SlidersHorizontal className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_CLOSURES':
+                return { title: 'Cierre Mensual', description: 'Precierre IPRESS y cierre definitivo mensual por UNGET', icon: <CalendarCheck className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_REPORTS':
+                return { title: 'Reportes Inmunizaciones', description: 'Reportes parciales y consolidados del movimiento biológico', icon: <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'IMMUNIZATION_CONFIG':
+                return { title: 'Configuración Inmunizaciones', description: 'Configuraciones y catálogos auxiliares de inmunizaciones', icon: <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'ADMIN_USERS':
+                return { title: 'Gestión de Usuarios', description: 'Administración de cuentas de usuario y credenciales', icon: <Users className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'ADMIN_ROLES':
+                return { title: 'Configuración de Roles', description: 'Gestión de roles y permisos del sistema', icon: <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'ADMIN_FACILITIES':
+                return { title: 'Establecimientos', description: 'Gestión de la organización y establecimientos', icon: <Building className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'ADMIN_CATALOGS':
+                return { title: 'Regímenes y Profesiones', description: 'Gestión de regímenes laborales y profesiones del personal', icon: <FolderKanban className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'ADMIN_PARAMS':
+                return { title: 'Parámetros del Sistema', description: 'Configuraciones generales del sistema', icon: <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'ADMIN_MIGRATION':
+                return { title: 'Migración (Supabase)', description: 'Herramientas de migración y verificación de datos', icon: <DatabaseBackup className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'ADMIN_STOCK_ASSIGN':
+                return { title: 'Asignar Stock a IPRESS', description: 'Asignación de vistas de stock a usuarios IPRESS', icon: <FileSpreadsheet className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'ADMIN_SYNC_DEVICES':
+                return { title: 'Dispositivos Sync', description: 'Gestión de dispositivos autorizados de Sync SISMED 2.0', icon: <Smartphone className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            case 'PROFILE':
+                return { title: 'Perfil de Usuario', description: 'Configuración de perfil e información personal', icon: <User className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+            default:
+                if (currentView.startsWith('ADMIN')) {
+                    return { title: 'Panel de Administración', description: 'Módulo de administración y configuración', icon: <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+                }
+                return { title: 'ToolKit SISMED', description: 'Sistema de Gestión de Inmunizaciones y Medicamentos', icon: <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-teal-600" /> };
+        }
+    }, [currentView]);
+
     // If loading, show spinner
     if (isLoading) {
         return (
@@ -229,42 +300,31 @@ const AuthenticatedApp: React.FC = () => {
             </div>
 
             <div className="flex-1 flex flex-col h-[100dvh] overflow-hidden relative">
-                {/* Simplified Header for context */}
-                <header className="bg-white/80 border-b border-gray-200 sticky top-0 z-[1000] backdrop-blur-sm shadow-sm h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 transition-all duration-300 shrink-0">
-                     <div className="flex items-center gap-3">
-                        <h2 className="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
-                           {currentView === 'DASHBOARD' && 'Análisis de Requerimiento'}
-                           {currentView === 'ANALYSIS_EXCLUSIONS' && 'Lista de Exclusiones de Requerimiento'}
-                           {currentView === 'REDISTRIBUTION' && 'Módulo de Redistribución'}
-                           {currentView === 'SIG_SEARCH' && 'Consulta Stock'}
-                           {currentView === 'IPRESS_STOCK' && 'Stock SISMED'}
-                           {currentView === 'STOCK_MONITORING' && 'Monitoreo de Stock SISMED'}
-                           {currentView === 'IMMUNIZATION_CATALOG' && 'Catálogo Biológico'}
-                           {currentView === 'IMMUNIZATION_INITIAL_INVENTORY' && 'Inventario Inicial'}
-                           {currentView === 'IMMUNIZATION_STOCK' && 'Stock Biológico'}
-                           {currentView === 'IMMUNIZATION_STOCK_QUERY' && 'Consulta de Stock Biológico'}
-	                           {currentView === 'IMMUNIZATION_INCOMES' && 'Ingresos Regionales'}
-	                           {currentView === 'IMMUNIZATION_INCOME_ORIGINS' && 'Orígenes de Ingreso'}
-                           {currentView === 'IMMUNIZATION_DISTRIBUTIONS' && 'Distribuciones'}
-                           {currentView === 'IMMUNIZATION_CONSUMPTION' && 'Consumo IPRESS'}
-                           {currentView === 'IMMUNIZATION_RETURNS' && 'Devoluciones y Bajas'}
-                           {currentView === 'IMMUNIZATION_ADJUSTMENTS' && 'Reajustes de Stock'}
-                           {currentView === 'IMMUNIZATION_CLOSURES' && 'Cierre Mensual'}
-                           {currentView === 'IMMUNIZATION_REPORTS' && 'Reportes Inmunizaciones'}
-                           {currentView === 'IMMUNIZATION_CONFIG' && 'Configuración Inmunizaciones'}
-                           {currentView === 'ADMIN_STOCK_ASSIGN' && 'Asignar Stock a IPRESS'}
-                           {currentView.startsWith('ADMIN') && currentView !== 'ADMIN_STOCK_ASSIGN' && 'Panel de Administración'}
-                           {currentView === 'PROFILE' && 'Perfil de Usuario'}
-                        </h2>
+                {/* Global Header */}
+                <header className="bg-white/90 border-b border-gray-200 sticky top-0 z-[1000] backdrop-blur-sm shadow-xs min-h-[52px] py-1.5 sm:py-2 px-4 sm:px-6 flex items-center justify-between transition-all duration-300 shrink-0">
+                     <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-1.5 sm:p-2 rounded-xl bg-teal-50 text-teal-700 border border-teal-100/80 shrink-0 shadow-2xs">
+                            {moduleHeaderInfo.icon}
+                        </div>
+                        <div className="min-w-0">
+                            <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight truncate">
+                                {moduleHeaderInfo.title}
+                            </h2>
+                            {moduleHeaderInfo.description && (
+                                <p className="text-xs text-slate-500 font-medium truncate hidden sm:block mt-0.5">
+                                    {moduleHeaderInfo.description}
+                                </p>
+                            )}
+                        </div>
                      </div>
-                     <div className="flex items-center gap-3 text-xs sm:text-sm text-gray-500 font-medium bg-gray-100/80 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-gray-200 shadow-inner">
-                         <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-teal-500 animate-[pulse_2s_ease-in-out_infinite] shadow-[0_0_8px_rgba(20,184,166,0.6)]"></span>
-                         <span className="truncate max-w-[150px] sm:max-w-[200px]">{user?.facilityData?.name || 'ToolKit SISMED'}</span>
+                     <div className="flex items-center gap-2.5 text-xs sm:text-sm text-gray-500 font-medium bg-slate-100/80 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-slate-200/80 shadow-2xs shrink-0 ml-3">
+                         <span className="w-2 h-2 rounded-full bg-teal-500 animate-[pulse_2s_ease-in-out_infinite] shadow-[0_0_8px_rgba(20,184,166,0.6)]"></span>
+                         <span className="truncate max-w-[130px] sm:max-w-[220px] font-bold text-slate-700">{user?.facilityData?.name || 'ToolKit SISMED'}</span>
                      </div>
                 </header>
 
                 {/* CONTENT AREA SWITCHER */}
-                <main className="flex-1 overflow-y-auto w-full p-4 2xl:p-6 pb-24 md:pb-6">
+                <main className="flex-1 overflow-y-auto w-full px-3 sm:px-5 2xl:px-6 pt-2.5 sm:pt-3 pb-16 md:pb-6 lg:pb-6">
                     <div className="mx-auto max-w-[1600px] h-full">
                         <ErrorBoundary>
                             <Suspense fallback={<SuspenseFallback />}>

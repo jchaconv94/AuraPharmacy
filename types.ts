@@ -197,7 +197,7 @@ export interface ImmunizationProductTypeItem {
 }
 export type ImmunizationOwnerType = 'DIRESA' | 'UNGET' | 'IPRESS';
 export type ImmunizationInventoryStatus = 'DRAFT' | 'CLOSED';
-export type ImmunizationInventorySourceType = 'MANUAL' | 'EXCEL' | 'MIXED';
+export type ImmunizationInventorySourceType = 'MANUAL' | 'EXCEL' | 'MIXED' | 'INITIAL_PROVISION';
 export type ImmunizationMonthlyClosureOwnerType = 'UNGET' | 'IPRESS';
 export type ImmunizationMonthlyClosureStatus = 'PRE_CLOSED' | 'FINAL_CLOSED' | 'REOPENED';
 
@@ -223,6 +223,7 @@ export interface ImmunizationInitialInventory {
   period: string;
   status: ImmunizationInventoryStatus;
   sourceType: ImmunizationInventorySourceType;
+  isInitialProvision?: boolean;
   createdBy?: string;
   closedBy?: string;
   closedAt?: string;
@@ -398,6 +399,7 @@ export interface ImmunizationDistributionBatch {
   period: string;
   criterion: ImmunizationDistributionCriterion;
   status: ImmunizationDistributionStatus;
+  isInitialProvision?: boolean;
   referenceDocument?: string;
   observation?: string;
   createdBy?: string;
