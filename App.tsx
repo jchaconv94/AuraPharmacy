@@ -1065,6 +1065,13 @@ const AnalysisModule: React.FC = () => {
     if (excludeNoSupply) {
         finalMedications = finalMedications.filter(m => m.quantityToOrder > 0);
     }
+
+    // Ordenar alfabéticamente por DESCRIPCIÓN (A - Z)
+    finalMedications.sort((a, b) => {
+        const comp = (a.name || '').trim().localeCompare((b.name || '').trim(), 'es', { sensitivity: 'base', numeric: true });
+        if (comp !== 0) return comp;
+        return (a.id || '').localeCompare(b.id || '');
+    });
     
     const establishmentName = user?.facilityData?.name || 'ESTABLECIMIENTO DE SALUD';
     const responsibleName = user?.personnelData ? `${user.personnelData.firstName} ${user.personnelData.lastName}` : (user?.username || '');

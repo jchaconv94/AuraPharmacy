@@ -520,7 +520,13 @@ export const generateFullReportPDF = async (
         { header: 'REQ', dataKey: 'req' },
       ];
 
-      const itemsToRender = filteredTableItems || result.medications;
+      const rawItems = filteredTableItems || result.medications;
+      // Garantizar orden alfabético estricto A-Z por DESCRIPCIÓN en todas las hojas del reporte PDF
+      const itemsToRender = [...rawItems].sort((a, b) => {
+        const comp = (a.name || '').trim().localeCompare((b.name || '').trim(), 'es', { sensitivity: 'base', numeric: true });
+        if (comp !== 0) return comp;
+        return (a.id || '').localeCompare(b.id || '');
+      });
 
       const tableData = itemsToRender.map(item => {
         // --- KEY CHANGE: Use Dynamic Metrics + Projected Requisition for PDF Report ---
@@ -807,7 +813,14 @@ export const generateFullReportPDF = async (
           // FIX: Align Right to prevent overlap
           doc.text("ÍTEMS AGREGADOS MANUALMENTE", pageWidth - 15, 16, { align: "right" });
 
-          const addTableData = additionalItems.map((item, index) => ({
+          // Ordenar ítems adicionales alfabéticamente por descripción
+          const sortedAdditionalItems = [...additionalItems].sort((a, b) => {
+              const comp = (a.name || '').trim().localeCompare((b.name || '').trim(), 'es', { sensitivity: 'base', numeric: true });
+              if (comp !== 0) return comp;
+              return (a.sismedCode || '').localeCompare(b.sismedCode || '');
+          });
+
+          const addTableData = sortedAdditionalItems.map((item, index) => ({
               idx: index + 1,
               code: item.sismedCode || '-',
               name: item.name,
